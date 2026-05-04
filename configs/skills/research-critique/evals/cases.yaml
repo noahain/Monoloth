@@ -1,0 +1,93 @@
+cases:
+  - id: critique_paper_general
+    prompt: "Critique this paper on transformer attention mechanisms"
+    fixtures: []
+    rubric:
+      - "produces a coherent analytical response, not a numbered checklist of weaknesses"
+      - "identifies what the paper contributes before identifying weaknesses"
+      - "distinguishes between core-threatening limitations and standard field limitations"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(contribut|advance|finding)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(evidence|claim|support)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(limitation|weakness|concern)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(survives|holds up|what remains)"
+        weight: 0.6
+      - type: not_contains
+        target: "Weakness 1:"
+        weight: 0.3
+
+  - id: evaluate_methodology
+    prompt: "Is the methodology in this study sound? The sample size is small but the effect sizes are large"
+    fixtures: []
+    rubric:
+      - "evaluates whether the limitation undermines the specific contribution"
+      - "applies proportionality — does not treat small sample size as automatic disqualification"
+      - "considers the realistic state of the field, not a platonic ideal"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(sample size|effect size)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(proportional|context|field)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(power|statistical|significance)"
+        weight: 0.6
+      - type: not_contains
+        target: "automatically disqualif"
+        weight: 0.3
+
+  - id: assess_research_claims
+    prompt: "Does the evidence in this preprint actually support what the authors claim?"
+    fixtures: []
+    rubric:
+      - "separates mechanism claims from evidence claims"
+      - "identifies where claims outrun evidence with specificity"
+      - "closes with an honest assessment of what survives"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(mechanism|evidence|claim)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(support|demonstrate|establish)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(survives|holds|contribut)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(outrun|exceed|overstate|overclaim)"
+        weight: 0.6
+      - type: not_contains
+        target: "TODO"
+        weight: 0.3
+
+  - id: pre_submission_formatting
+    prompt: "Check the formatting and citations in my paper before I submit it"
+    fixtures: []
+    rubric:
+      - "formatting and citation hygiene is manuscript-review territory, not research critique"
+    trigger_expected: false
+
+  - id: write_literature_review
+    prompt: "Write a literature review section about reinforcement learning from human feedback"
+    fixtures: []
+    rubric:
+      - "writing new manuscript content is outside critique scope"
+    trigger_expected: false
+
+  - id: provenance_check
+    prompt: "Verify that the figures in my manuscript are generated from the analysis scripts"
+    fixtures: []
+    rubric:
+      - "computational provenance verification is manuscript-provenance territory, not research critique"
+    trigger_expected: false

@@ -1,0 +1,157 @@
+cases:
+  - id: systematic_review
+    prompt: "Conduct a literature review on retrieval augmented generation techniques"
+    fixtures: []
+    rubric:
+      - "defines scope with research question and inclusion/exclusion criteria"
+      - "searches arXiv and/or other academic sources"
+      - "produces structured synthesis with themes, comparisons, or chronology"
+      - "identifies gaps in the existing research"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)research question|scope"
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)inclusion|exclusion|criteria"
+        weight: 0.8
+      - type: contains
+        target: "References"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)gap|limitation"
+        weight: 0.6
+      - type: matches_regex
+        target: "et al\\.|\\(\\d{4}\\)"
+        weight: 0.6
+
+  - id: related_work_section
+    prompt: "Help me write a related work section about chain-of-thought prompting for my paper"
+    fixtures: []
+    rubric:
+      - "searches for relevant papers on the topic"
+      - "organizes findings to position the user's contribution"
+      - "produces narrative synthesis, not paper-by-paper summary"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "et al\\.|\\(\\d{4}\\)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)chain.of.thought"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)related work|prior work"
+        weight: 0.6
+      - type: not_contains
+        target: "No papers found"
+        weight: 0.6
+
+  - id: research_landscape
+    prompt: "What is the current state of research on multimodal large language models?"
+    fixtures: []
+    rubric:
+      - "surveys recent publications on the topic"
+      - "identifies major themes, approaches, and trends"
+      - "notes gaps or open questions"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)multimodal"
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)theme|trend|approach"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)gap|open question|limitation"
+        weight: 0.6
+      - type: matches_regex
+        target: "et al\\.|\\(\\d{4}\\)"
+        weight: 0.6
+
+  - id: compare_approaches
+    prompt: "Compare the different approaches to knowledge distillation in the literature"
+    fixtures: []
+    rubric:
+      - "identifies multiple approaches from published work"
+      - "builds a comparison across defined dimensions"
+      - "notes trade-offs and when each approach is appropriate"
+    trigger_expected: true
+    assertions:
+      - type: output_format
+        target: markdown_table
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)distillation"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)trade.off|limitation|advantage"
+        weight: 0.6
+      - type: matches_regex
+        target: "et al\\.|\\(\\d{4}\\)"
+        weight: 0.6
+
+  - id: bibliography_building
+    prompt: "Build me a bibliography of key papers on reinforcement learning from human feedback"
+    fixtures: []
+    rubric:
+      - "searches for papers on the topic"
+      - "produces a structured list with full citation metadata"
+      - "covers foundational and recent work"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)reinforcement learning.*human feedback|RLHF"
+        weight: 1.0
+      - type: matches_regex
+        target: "et al\\.|\\(\\d{4}\\)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)title|author|year"
+        weight: 0.6
+      - type: contains
+        target: "References"
+        weight: 0.6
+
+  - id: gap_analysis
+    prompt: "What research gaps exist in the area of LLM evaluation benchmarks?"
+    fixtures: []
+    rubric:
+      - "surveys existing evaluation approaches"
+      - "identifies coverage, methodological, or evidence gaps"
+      - "distinguishes genuine gaps from standard field limitations"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)gap"
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)evaluation|benchmark"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)methodolog|coverage|evidence"
+        weight: 0.6
+      - type: matches_regex
+        target: "et al\\.|\\(\\d{4}\\)"
+        weight: 0.6
+
+  - id: negative_single_paper_critique
+    prompt: "What are the weaknesses in this specific paper about BERT?"
+    fixtures: []
+    rubric:
+      - "single-paper critique is research-critique territory, not literature review"
+    trigger_expected: false
+
+  - id: negative_manuscript_formatting
+    prompt: "Check the citation formatting in my manuscript"
+    fixtures: []
+    rubric:
+      - "citation hygiene and formatting is manuscript-review territory"
+    trigger_expected: false
+
+  - id: negative_provenance
+    prompt: "Verify that my literature review table is generated from the search scripts"
+    fixtures: []
+    rubric:
+      - "computational provenance is manuscript-provenance territory"
+    trigger_expected: false

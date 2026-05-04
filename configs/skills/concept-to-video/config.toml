@@ -1,0 +1,14 @@
+# Model configuration for the concept-to-video pipeline.
+#
+# Per armory convention, model identifiers live in config files rather than
+# source code so a single edit here retargets every pipeline stage.
+
+[models]
+# Storyboard planner: concept text -> structured scene JSON.
+planner = "claude-sonnet-4-6"
+
+# Visual critic: rendered frames -> layout patches.
+critic = "claude-sonnet-4-6"
+
+# Scene fixup: failing Manim scene + stderr -> corrected scene.
+fixup = "claude-sonnet-4-6"

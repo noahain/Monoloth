@@ -1,0 +1,62 @@
+cases:
+  - id: challenge_ai_plan
+    prompt: "I asked Claude to design a microservices architecture for our e-commerce platform. It proposed 6 services communicating via RabbitMQ, a shared PostgreSQL database, and JWT auth. Challenge this plan — what could go wrong?"
+    fixtures: []
+    rubric:
+      - "acknowledges strengths of the approach before critiquing"
+      - "applies structured frameworks (pre-mortem, inversion, Socratic questioning)"
+      - "identifies concrete concerns ranked by severity"
+      - "ends with clear verdict or recommendation"
+      - "every concern includes an actionable fix"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)(strength|solid|reasonable|gets right|makes sense|good|well.thought)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)(ship|verdict|recommend|conclusion|assessment|overall)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)(critical|high|medium|severity|concern|risk|issue)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)(pre.mortem|inversion|socratic|blind spot|assumption|failure mode)"
+        weight: 0.6
+
+  - id: challenge_code_implementation
+    prompt: "I just wrote an authentication middleware that validates JWTs on every request, stores refresh tokens in localStorage, and returns detailed error messages including stack traces when auth fails. Run devil's advocate on this approach."
+    fixtures: []
+    rubric:
+      - "flags localStorage for refresh tokens as a security concern"
+      - "flags stack traces in error responses as information leakage"
+      - "provides actionable security recommendations"
+      - "delivers clear verdict"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)(localStorage|storage|XSS|cookie|httpOnly)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)(stack trace|error message|information leak|exposure|verbose)"
+        weight: 0.8
+
+  - id: negative_code_writing
+    prompt: "Explain the difference between authentication and authorization."
+    fixtures: []
+    rubric:
+      - "should not trigger — this is an informational question, not a challenge request"
+    trigger_expected: false
+
+  - id: negative_general_question
+    prompt: "What is the difference between REST and GraphQL?"
+    fixtures: []
+    rubric:
+      - "should not trigger — this is an informational question, not a challenge request"
+    trigger_expected: false
+
+  - id: negative_implementation_request
+    prompt: "Fix the bug in the payment processing module."
+    fixtures: []
+    rubric:
+      - "should not trigger — this is a bug fix request, not a decision review"
+    trigger_expected: false

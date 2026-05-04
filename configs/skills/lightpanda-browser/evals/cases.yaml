@@ -1,0 +1,90 @@
+cases:
+  - id: lightpanda_scrape_website
+    prompt: "Scrape this website using lightpanda for fast headless extraction"
+    fixtures: []
+    rubric:
+      - "starts Lightpanda CDP server before browser commands"
+      - "uses agent-browser --cdp to connect through Lightpanda"
+      - "extracts content using get text or snapshot commands"
+    trigger_expected: true
+    assertions:
+      - type: contains
+        target: "lightpanda serve"
+        weight: 1.0
+      - type: contains
+        target: "--cdp"
+        weight: 1.0
+      - type: matches_regex
+        target: "agent-browser"
+        weight: 0.8
+      - type: matches_regex
+        target: "kill.*PID|cleanup"
+        weight: 0.6
+
+  - id: lightweight_headless_browser
+    prompt: "I need a lightweight headless browser to extract text from 50 pages without using too much memory"
+    fixtures: []
+    rubric:
+      - "recommends Lightpanda for low-memory headless operation"
+      - "shows parallel extraction pattern with multiple ports"
+      - "demonstrates daemon lifecycle management"
+    trigger_expected: true
+    assertions:
+      - type: contains
+        target: "lightpanda"
+        weight: 1.0
+      - type: matches_regex
+        target: "--port \\d+"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)parallel|multiple ports"
+        weight: 0.8
+      - type: contains
+        target: "--cdp"
+        weight: 0.6
+      - type: matches_regex
+        target: "(?i)memory|60.*MB|low.?memory"
+        weight: 0.6
+
+  - id: fast_dom_extraction
+    prompt: "Use a fast DOM-only browser to parse form fields from this page"
+    fixtures: []
+    rubric:
+      - "uses Lightpanda as the browser backend"
+      - "demonstrates snapshot -i for interactive element discovery"
+      - "connects via CDP protocol"
+    trigger_expected: true
+    assertions:
+      - type: contains
+        target: "snapshot -i"
+        weight: 1.0
+      - type: contains
+        target: "lightpanda serve"
+        weight: 0.8
+      - type: contains
+        target: "--cdp"
+        weight: 0.8
+      - type: matches_regex
+        target: "@e\\d"
+        weight: 0.6
+
+  - id: negative_screenshot_visual_testing
+    prompt: "Take a screenshot of this webpage and compare it visually to the design mockup"
+    fixtures: []
+    rubric:
+      - "visual screenshot tasks require rendering — agent-browser with Chromium, not Lightpanda"
+    trigger_expected: false
+
+  - id: negative_pdf_export
+    prompt: "Export this webpage as a styled PDF document with proper CSS layout"
+    fixtures: []
+    rubric:
+      - "PDF generation requires CSS layout engine — falls outside Lightpanda capabilities"
+    trigger_expected: false
+
+  - id: negative_mobile_device_emulation
+    prompt: "Test this responsive design on iPhone 16 Pro using the iOS simulator"
+    fixtures: []
+    rubric:
+      - "device emulation and iOS simulator require agent-browser native, not Lightpanda"
+    trigger_expected: false

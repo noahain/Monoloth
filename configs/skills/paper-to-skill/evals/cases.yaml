@@ -1,0 +1,91 @@
+cases:
+  # --- Positive cases ---
+  - id: convert_arxiv_paper
+    prompt: "Convert this arXiv paper (2604.01687) into an executable skill. It describes EvoSkills, a co-evolutionary method for generating agent skills."
+    fixtures: []
+    rubric:
+      - "Fetches and converts the paper to markdown"
+      - "Extracts the core algorithm as a skill specification"
+      - "Hands off to test-engineer for co-evolutionary generation"
+      - "Produces a skill package with proper paper attribution"
+    trigger_expected: true
+    assertions:
+      - type: contains
+        target: "SKILL.md"
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)attribution|source|paper|arXiv"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)algorithm|methodology|specification"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)EvoSkill|co.?evolution"
+        weight: 0.6
+
+  - id: paper_methodology_extraction
+    prompt: "Extract the methodology from this machine learning paper and turn it into a reusable skill. The paper describes a novel approach to few-shot text classification."
+    fixtures: []
+    rubric:
+      - "Invokes research-critique for methodology analysis"
+      - "Produces structured skill specification with algorithm steps"
+      - "Maps paper parameters to skill configuration"
+      - "Identifies failure modes from the paper's limitations section"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)methodology|algorithm|steps"
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)parameter|config"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)limitation|failure.mode"
+        weight: 0.6
+      - type: contains
+        target: "SKILL.md"
+        weight: 0.8
+
+  - id: implement_paper_as_skill
+    prompt: "I found a paper about automated code review using LLM judges. Create a skill from it that I can use in my workflow."
+    fixtures: []
+    rubric:
+      - "Chains paper intake, analysis, extraction, and skill generation"
+      - "Produces a skill with proper attribution to the source paper"
+      - "Generated skill follows armory SKILL.md conventions"
+    trigger_expected: true
+    assertions:
+      - type: contains
+        target: "SKILL.md"
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)attribution|source|paper"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)frontmatter|name:|description:"
+        weight: 0.6
+      - type: matches_regex
+        target: "(?i)code review|LLM"
+        weight: 0.6
+
+  # --- Negative cases ---
+  - id: not_literature_review
+    prompt: "Survey the recent literature on retrieval-augmented generation and summarize the key findings across 10 papers"
+    fixtures: []
+    rubric:
+      - "Should NOT activate — this is a literature survey for literature-review skill"
+    trigger_expected: false
+
+  - id: not_research_critique
+    prompt: "Critically analyze this paper's methodology and evaluate whether their claims are supported by the evidence"
+    fixtures: []
+    rubric:
+      - "Should NOT activate — this is paper critique for research-critique skill"
+    trigger_expected: false
+
+  - id: not_skill_evolution
+    prompt: "Evolve a new skill for regex pattern building through automated co-evolutionary refinement"
+    fixtures: []
+    rubric:
+      - "Should NOT activate — no paper source, this is direct skill creation for test-engineer"
+    trigger_expected: false

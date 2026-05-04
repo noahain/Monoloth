@@ -1,0 +1,63 @@
+cases:
+  - id: full_qa
+    prompt: "Run a full QA test on the web app at localhost:3000"
+    fixtures: []
+    rubric:
+      - "performs systematic page-by-page testing with structured checklist"
+      - "computes health score across 8 weighted categories"
+      - "produces a structured QA report with issue taxonomy"
+    trigger_expected: true
+    assertions:
+      - type: contains
+        target: "QA-"
+        weight: 1.0
+      - type: matches_regex
+        target: "(critical|major|minor)"
+        weight: 1.0
+      - type: contains
+        target: "health score"
+        weight: 0.8
+      - type: output_format
+        target: markdown_table
+        weight: 0.8
+      - type: matches_regex
+        target: "(Console|Broken links|Functional|UX|Accessibility|Visual|Performance|Content)"
+        weight: 0.6
+
+  - id: smoke_test
+    prompt: "Quick smoke test — just check the critical paths are working"
+    fixtures: []
+    rubric:
+      - "uses quick mode for 30-second critical path verification"
+      - "tests login, main navigation, and primary user actions"
+      - "reports pass/fail without full health score"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(pass|fail|PASS|FAIL)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(quick|smoke|critical path)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(nav|navigation|login|primary action)"
+        weight: 0.6
+      - type: not_contains
+        target: "health score"
+        weight: 0.3
+
+  - id: unit_tests
+    prompt: "Write unit tests for the user authentication module"
+    fixtures: []
+    rubric:
+      - "does not activate QA testing workflow"
+      - "unit test writing is different from systematic web QA"
+    trigger_expected: false
+
+  - id: load_test
+    prompt: "Run a load test to see how many concurrent users the API can handle"
+    fixtures: []
+    rubric:
+      - "does not activate QA testing workflow"
+      - "load/performance testing is different from functional QA"
+    trigger_expected: false

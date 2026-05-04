@@ -1,0 +1,101 @@
+cases:
+  - id: basic_marp_deck
+    prompt: "Create a MARP presentation about quarterly revenue growth. Use the dark-dashboard theme and include a few metric cards."
+    fixtures: []
+    rubric:
+      - "produces a MARP markdown file with YAML frontmatter"
+      - "sets theme via the style directive or frontmatter"
+      - "uses metric card HTML components"
+      - "uses --- as slide delimiters"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "^---\\s*\\n.*?marp:|^---\\s*\\n.*?theme:"
+        weight: 1.0
+      - type: contains
+        target: "paginate"
+        weight: 0.8
+      - type: matches_regex
+        target: "class=\"card\"|metric-card|\\.card"
+        weight: 0.8
+      - type: matches_regex
+        target: "^---\\s*$"
+        weight: 0.6
+
+  - id: markdown_slides_request
+    prompt: "I want to create slides from markdown that I can export to PDF. Set it up for me."
+    fixtures: []
+    rubric:
+      - "produces a MARP-formatted markdown file (not Reveal.js HTML)"
+      - "includes marp-cli export command with --pdf flag"
+      - "uses Marpit directives in frontmatter"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "marp-cli|npx @marp-team|marp slides"
+        weight: 1.0
+      - type: contains
+        target: "--pdf"
+        weight: 0.9
+      - type: matches_regex
+        target: "^---\\s*\\n"
+        weight: 0.8
+
+  - id: marp_with_svg_chart
+    prompt: "Build a MARP deck showing quarterly user growth. Include a line chart drawn in SVG."
+    fixtures: []
+    rubric:
+      - "produces MARP markdown with embedded SVG chart"
+      - "uses --html flag in export command"
+      - "uses polyline or polygon for the chart"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "<svg[^>]*viewBox"
+        weight: 1.0
+      - type: matches_regex
+        target: "polyline|polygon"
+        weight: 0.9
+      - type: contains
+        target: "--html"
+        weight: 0.8
+
+  - id: light_editorial_theme
+    prompt: "Create a MARP presentation about morning routines with a light editorial theme, serif headings, and a photo-driven layout."
+    fixtures: []
+    rubric:
+      - "uses light-editorial theme style"
+      - "uses serif font family (Fraunces, DM Serif, or similar)"
+      - "uses split background or photo background syntax"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "Fraunces|DM Serif|serif"
+        weight: 1.0
+      - type: matches_regex
+        target: "!\\[bg[^\\]]*\\]|background-image"
+        weight: 0.8
+      - type: matches_regex
+        target: "#faf8f3|#fafafa|#fff|--bg"
+        weight: 0.6
+
+  - id: reveal_js_request_rejected
+    prompt: "Create a Reveal.js presentation that runs in the browser with scroll navigation."
+    fixtures: []
+    rubric:
+      - "Reveal.js requests should route to html-presentation, not marp-slides"
+    trigger_expected: false
+
+  - id: native_pptx_editing_rejected
+    prompt: "Edit slide 3 of my existing PowerPoint file and change the chart data."
+    fixtures: []
+    rubric:
+      - "binary PPTX editing is outside marp-slides scope"
+    trigger_expected: false
+
+  - id: poster_request_rejected
+    prompt: "Design a single poster for a product launch event."
+    fixtures: []
+    rubric:
+      - "static single-page poster is outside marp-slides scope"
+    trigger_expected: false

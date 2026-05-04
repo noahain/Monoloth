@@ -1,0 +1,98 @@
+cases:
+  # --- Positive cases ---
+  - id: distill_skill_for_haiku
+    prompt: "Distill the architecture-reviewer skill so it works reliably on Haiku. It currently requires Opus-level reasoning for the 7-dimension scoring."
+    fixtures: []
+    rubric:
+      - "Produces a complexity analysis mapping each section to HIGH/MED/LOW"
+      - "Rewrites HIGH-complexity sections with deterministic lookup tables or checklists"
+      - "Validates the distilled skill on Haiku and reports cross-model comparison"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(HIGH|MED|LOW)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(complexity|Complexity)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(lookup table|checklist|deterministic)"
+        weight: 0.8
+      - type: output_format
+        target: markdown_table
+        weight: 0.8
+      - type: matches_regex
+        target: "(Haiku|haiku|cross.model)"
+        weight: 0.6
+
+  - id: cross_model_optimization
+    prompt: "This skill for SQL optimization works on Opus but fails on Sonnet. Run cross-model skill distillation to make it deterministic enough for Sonnet."
+    fixtures: []
+    rubric:
+      - "Collects execution traces on representative tasks"
+      - "Extracts deterministic decision paths from traces"
+      - "Produces a distilled SKILL.md with reduced reasoning complexity"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(trace|Trace)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(deterministic|explicit|concrete)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(SKILL\\.md|distilled)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(Sonnet|sonnet|target model)"
+        weight: 0.6
+      - type: not_contains
+        target: "TODO"
+        weight: 0.3
+
+  - id: reduce_skill_cost
+    prompt: "Optimize this skill for cost by making it Haiku-compatible. It currently uses too much open-ended reasoning at each decision point."
+    fixtures: []
+    rubric:
+      - "Identifies sections requiring open-ended adaptive reasoning and replaces with explicit steps"
+      - "Produces cross-model performance comparison table"
+      - "Outputs a recommendation (SHIP, ITERATE, or MANUAL_REVIEW_NEEDED)"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(SHIP|ITERATE|MANUAL_REVIEW_NEEDED)"
+        weight: 1.0
+      - type: output_format
+        target: markdown_table
+        weight: 0.8
+      - type: matches_regex
+        target: "(Opus|Sonnet|Haiku)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(explicit|numbered|step)"
+        weight: 0.6
+      - type: matches_regex
+        target: "(assertion|score|pass)"
+        weight: 0.6
+
+  # --- Negative cases ---
+  - id: not_code_refiner
+    prompt: "Simplify this Python function to reduce cyclomatic complexity and improve readability"
+    fixtures: []
+    rubric:
+      - "Should NOT activate — this is code simplification for code-refiner skill"
+    trigger_expected: false
+
+  - id: not_prompt_lab
+    prompt: "Optimize this LLM prompt to get better outputs with fewer tokens"
+    fixtures: []
+    rubric:
+      - "Should NOT activate — this is prompt engineering for prompt-lab skill"
+    trigger_expected: false
+
+  - id: not_test_engineer
+    prompt: "Evolve a new skill for data validation through co-evolutionary refinement"
+    fixtures: []
+    rubric:
+      - "Should NOT activate — this is skill creation for test-engineer agent"
+    trigger_expected: false

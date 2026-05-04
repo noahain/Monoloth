@@ -1,0 +1,128 @@
+cases:
+  - id: saas_idea_feasibility
+    prompt: "Is a $49/mo SaaS for automated invoice reconciliation for small businesses financially viable? We'd spend about $200 on Google Ads per customer acquired."
+    fixtures: []
+    rubric:
+      - "Calculates LTV based on ARPU and estimated churn"
+      - "Computes LTV:CAC ratio against 3:1 benchmark"
+      - "Provides break-even analysis with scenario modeling"
+      - "Delivers overall feasibility verdict"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(LTV|lifetime value)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(CAC|acquisition cost)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(LTV.CAC|3:1|ratio)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(break.even|Break.Even)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(verdict|Verdict|viable|Viable|GO|NO.GO)"
+        weight: 0.6
+
+  - id: marketplace_technical_risk
+    prompt: "Assess the feasibility of building a two-sided marketplace connecting freelance lab technicians with biotech startups. We need real-time availability matching, credential verification, and HIPAA-compliant messaging."
+    fixtures: []
+    rubric:
+      - "Classifies architecture complexity level"
+      - "Scores risk dimensions including compliance and integration"
+      - "Provides build estimation with MVP scope"
+      - "Identifies HIPAA as a critical compliance requirement"
+    trigger_expected: true
+    assertions:
+      - type: contains
+        target: "HIPAA"
+        weight: 1.0
+      - type: matches_regex
+        target: "(risk|Risk)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(MVP|minimum viable|scope)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(complexity|Complexity)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(compliance|Compliance)"
+        weight: 0.6
+
+  - id: feature_build_vs_buy
+    prompt: "We're considering adding real-time collaborative editing to our project management tool. Should we build it in-house or integrate a third-party solution? What are the risks and costs?"
+    fixtures: []
+    rubric:
+      - "Runs build vs buy analysis"
+      - "Assesses technical risk of each option"
+      - "Estimates development effort for build path"
+      - "Provides recommendation with de-risking steps"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(build|Build)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(buy|Buy|integrate|third.party)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(risk|Risk|cost|Cost)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(recommend|Recommend)"
+        weight: 0.6
+      - type: matches_regex
+        target: "(effort|timeline|estimation)"
+        weight: 0.6
+
+  - id: unit_economics_review
+    prompt: "Review the unit economics for our DTC subscription box. CAC is $85, average order value is $45, customers order 4.2 times on average, gross margin is 38%."
+    fixtures: []
+    rubric:
+      - "Calculates LTV from provided inputs"
+      - "Evaluates LTV:CAC ratio"
+      - "Identifies whether unit economics are sustainable"
+      - "Suggests levers to improve if needed"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(LTV|lifetime value)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(LTV.CAC|ratio)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(\\$\\d+|\\d+\\.\\d+)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(sustainable|unsustainable|viable)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(lever|improve|increase|reduce)"
+        weight: 0.6
+
+  - id: negative_code_review_request
+    prompt: "Review this Python function for bugs and suggest improvements."
+    fixtures: []
+    rubric:
+      - "Does not trigger feasibility assessment"
+      - "This is a code review request, not a feasibility evaluation"
+    trigger_expected: false
+
+  - id: negative_deployment_help
+    prompt: "How do I deploy a Flask app to AWS Lambda with API Gateway?"
+    fixtures: []
+    rubric:
+      - "Does not trigger feasibility assessment"
+      - "This is a deployment how-to question"
+    trigger_expected: false
+
+  - id: negative_general_business_question
+    prompt: "What's the difference between B2B and B2C marketing strategies?"
+    fixtures: []
+    rubric:
+      - "Does not trigger feasibility assessment"
+      - "This is a general knowledge question, not a specific feasibility evaluation"
+    trigger_expected: false

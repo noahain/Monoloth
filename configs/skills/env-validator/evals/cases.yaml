@@ -1,0 +1,86 @@
+cases:
+  # --- Positive cases ---
+  - id: validate_env_completeness
+    prompt: "Validate the .env file against .env.example and check for missing required variables"
+    fixtures: []
+    rubric:
+      - "Reads both .env and .env.example files"
+      - "Identifies variables in .env.example missing from .env"
+      - "Reports findings with severity classification"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)(missing|absent|not found|not set)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)(CRITICAL|HIGH|MEDIUM|LOW)"
+        weight: 0.8
+      - type: output_format
+        target: markdown_table
+        weight: 0.6
+      - type: calls_tool
+        target: Read
+        weight: 0.5
+      - type: calls_tool
+        target: Grep
+        weight: 0.5
+
+  - id: check_env_security
+    prompt: "Check the environment configuration for insecure defaults and exposed secrets in the .env file"
+    fixtures: []
+    rubric:
+      - "Scans for insecure default patterns (changeme, password, xxx)"
+      - "Checks for DEBUG=true in production configs"
+      - "Reports security-critical findings as HIGH severity"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)(insecure|security|secret|password|credential)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)(changeme|password|xxx|replace|TODO)"
+        weight: 0.6
+      - type: calls_tool
+        target: Read
+        weight: 0.5
+
+  - id: env_audit_with_code_refs
+    prompt: "Audit the environment variables by cross-referencing .env with code that uses os.environ or process.env"
+    fixtures: []
+    rubric:
+      - "Greps codebase for os.environ, process.env, or equivalent patterns"
+      - "Cross-references found variables against .env"
+      - "Identifies unreferenced variables in .env"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)(os\\.environ|process\\.env|env::var|Getenv)"
+        weight: 0.8
+      - type: calls_tool
+        target: Grep
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)(unreferenc|unused|stale|orphan)"
+        weight: 0.6
+
+  # --- Negative cases ---
+  - id: not_secret_scanner
+    prompt: "Scan the repository for hardcoded API keys and leaked credentials in source code"
+    fixtures: []
+    rubric:
+      - "Should NOT activate — secret scanning across all files is for secret-scanner agent"
+    trigger_expected: false
+
+  - id: not_security_reviewer
+    prompt: "Review the application for OWASP Top 10 security vulnerabilities"
+    fixtures: []
+    rubric:
+      - "Should NOT activate — OWASP vulnerability scanning is for security-reviewer agent"
+    trigger_expected: false
+
+  - id: not_config_editing
+    prompt: "Add a new DATABASE_URL variable to the .env file with the PostgreSQL connection string"
+    fixtures: []
+    rubric:
+      - "Should NOT activate — editing config files is direct work, not validation"
+    trigger_expected: false

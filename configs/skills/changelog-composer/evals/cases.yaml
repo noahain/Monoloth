@@ -1,0 +1,57 @@
+cases:
+  - id: changelog_from_git_history
+    prompt: "Generate a changelog from our git history since v1.2.0"
+    fixtures: []
+    rubric:
+      - "Output classifies changes into categories (e.g., breaking, features, fixes)"
+      - "Output links to PRs or commit references"
+      - "Output filters out internal-only or housekeeping changes"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(Breaking|Features|Fixes|Bug Fix|Added|Changed|Removed)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(#\\d+|PR|commit|sha)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(v1\\.2\\.0|v?\\d+\\.\\d+)"
+        weight: 0.8
+      - type: not_contains
+        target: "chore"
+        weight: 0.3
+
+  - id: release_notes_v2
+    prompt: "Write release notes for version 2.0"
+    fixtures: []
+    rubric:
+      - "Output detects and highlights breaking changes"
+      - "Output produces human-readable entries suitable for end users"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(BREAKING|Breaking Change|breaking)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(2\\.0|v2)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(Feature|Fix|Improvement|Added|Changed)"
+        weight: 0.8
+      - type: not_contains
+        target: "internal only"
+        weight: 0.3
+
+  - id: negative_git_log
+    prompt: "Show me the git log for the past week"
+    fixtures: []
+    rubric:
+      - "Skill should not trigger for raw git history requests"
+    trigger_expected: false
+
+  - id: negative_commit_message
+    prompt: "Write a commit message for my changes"
+    fixtures: []
+    rubric:
+      - "Skill should not trigger for commit message authoring"
+    trigger_expected: false

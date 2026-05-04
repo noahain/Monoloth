@@ -1,0 +1,98 @@
+cases:
+  # --- Positive cases ---
+  - id: verify_skill_output
+    prompt: "Verify this skill's output against its definition. Here's the SKILL.md for architecture-reviewer and the output it produced for a React app review. Generate assertions to check if the output meets the skill's stated capabilities."
+    fixtures: []
+    rubric:
+      - "Generates structured assertions with type, target, and weight fields"
+      - "Assertions cover output completeness, format compliance, and content quality"
+      - "Follows the assertion schema from evals/cases.yaml format"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(type:|type:)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(target:|target:)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(weight:|weight:)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(contains|not_contains|matches_regex|output_format)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(0\\.[0-9]|1\\.0)"
+        weight: 0.6
+
+  - id: generate_assertions_for_skill
+    prompt: "Generate eval assertions for the test-harness skill. Given these 3 task prompts, produce machine-checkable assertions that verify the skill produces correct pytest test suites."
+    fixtures: []
+    rubric:
+      - "Produces assertions for each task prompt separately"
+      - "Uses appropriate assertion types (contains for test functions, output_format for code blocks)"
+      - "Assigns weights based on importance (higher for core output, lower for nice-to-have)"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(contains|output_format|matches_regex)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(weight:|weight:)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(pytest|def test_|test suite)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(1\\.0|0\\.8|0\\.6|0\\.3)"
+        weight: 0.6
+      - type: not_contains
+        target: "TODO"
+        weight: 0.3
+
+  - id: diagnose_skill_failure
+    prompt: "The architecture-reviewer skill failed 3 out of 7 assertions when reviewing a FastAPI app. Here are the assertion results. Diagnose why it failed and suggest specific fixes to the SKILL.md."
+    fixtures: []
+    rubric:
+      - "Classifies each failure into a root-cause category (missing capability, format mismatch, etc.)"
+      - "References specific sections of the skill definition"
+      - "Provides concrete remediation steps with exact wording changes"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(DIAGNOSTIC|diagnostic|ROOT CAUSE|root cause)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(missing capability|format mismatch|hallucinated|incomplete)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(REMEDIATION|remediation|fix|change)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(SKILL\\.md|section|Phase|Step)"
+        weight: 0.6
+      - type: matches_regex
+        target: "(HIGH|MEDIUM|LOW)"
+        weight: 0.6
+
+  # --- Negative cases ---
+  - id: not_pr_review
+    prompt: "Review my pull request for code quality issues and suggest improvements"
+    fixtures: []
+    rubric:
+      - "Should NOT activate surrogate-verifier — this is a PR review task for pr-review"
+    trigger_expected: false
+
+  - id: not_package_evaluator
+    prompt: "Score this skill's frontmatter quality and trigger coverage across 6 dimensions"
+    fixtures: []
+    rubric:
+      - "Should NOT activate — this is package metadata evaluation for package-evaluator"
+    trigger_expected: false
+
+  - id: not_test_harness
+    prompt: "Write pytest unit tests for this Python function that validates email addresses"
+    fixtures: []
+    rubric:
+      - "Should NOT activate — this is test generation for application code, handled by test-harness"
+    trigger_expected: false

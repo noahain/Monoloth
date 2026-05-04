@@ -1,0 +1,60 @@
+cases:
+  - id: claude_agent_code_reviewer
+    prompt: "Build a Claude agent that reviews code using the Agent SDK"
+    fixtures: []
+    rubric:
+      - "Output references claude_agent_sdk or claude -p for agent invocation"
+      - "Output includes tool creation or tool registration"
+      - "Output covers authentication setup or API key configuration"
+    trigger_expected: true
+    assertions:
+      - type: output_format
+        target: code_block
+        weight: 1.0
+      - type: contains
+        target: "claude"
+        weight: 1.0
+      - type: matches_regex
+        target: "(agent_sdk|claude\\s+-p|ClaudeAgent|Agent\\()"
+        weight: 0.8
+      - type: contains
+        target: "tool"
+        weight: 0.8
+      - type: not_contains
+        target: "openai"
+        weight: 0.6
+
+  - id: headless_claude_automation
+    prompt: "Create a headless Claude automation script"
+    fixtures: []
+    rubric:
+      - "Output uses claude -p CLI for non-interactive execution"
+      - "Output covers session management or conversation handling"
+    trigger_expected: true
+    assertions:
+      - type: output_format
+        target: code_block
+        weight: 1.0
+      - type: matches_regex
+        target: "(claude\\s+-p|--print|headless)"
+        weight: 1.0
+      - type: contains
+        target: "session"
+        weight: 0.6
+      - type: not_contains
+        target: "interactive"
+        weight: 0.3
+
+  - id: negative_openai_chatbot
+    prompt: "Build a chatbot using the OpenAI API"
+    fixtures: []
+    rubric:
+      - "Skill should not trigger for non-Claude SDK agent building"
+    trigger_expected: false
+
+  - id: negative_rest_api_endpoint
+    prompt: "Create a REST API endpoint in FastAPI"
+    fixtures: []
+    rubric:
+      - "Skill should not trigger for general coding tasks"
+    trigger_expected: false

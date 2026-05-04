@@ -1,0 +1,160 @@
+cases:
+  - id: evaluate_single_skill
+    prompt: "Evaluate the quality of the sql-optimizer SKILL.md"
+    fixtures: []
+    rubric:
+      - "scores across defined dimensions including frontmatter quality and trigger coverage"
+      - "produces severity-classified findings (critical, warning, info)"
+      - "gives actionable recommendations for improvement"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)frontmatter|trigger"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)critical|warning|info"
+        weight: 1.0
+      - type: matches_regex
+        target: "\\d+(\\.\\d+)?\\s*/\\s*\\d+"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)recommend|improvement|fix"
+        weight: 0.6
+
+  - id: audit_all_skills
+    prompt: "Run a full audit across all skills in this repo and rank them by quality"
+    fixtures: []
+    rubric:
+      - "produces comparative ranking table across all skills"
+      - "includes per-skill summaries with scores"
+      - "identifies lowest-scoring skills with specific deficiencies"
+    trigger_expected: true
+    assertions:
+      - type: output_format
+        target: markdown_table
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)rank|score"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)lowest|deficien|weak"
+        weight: 0.6
+      - type: matches_regex
+        target: "\\d+(\\.\\d+)?\\s*/\\s*\\d+"
+        weight: 0.6
+
+  - id: evaluate_agent
+    prompt: "Evaluate this agent for quality and completeness"
+    fixtures: []
+    rubric:
+      - "detects AGENT.md as the definition file type"
+      - "checks agent-specific signals: model, category, execution_phase, decision tree"
+      - "applies agent-specific D3 and D4 scoring caps"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)AGENT\\.md|agent"
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)model|decision.tree|execution"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)critical|warning|info"
+        weight: 0.6
+      - type: matches_regex
+        target: "\\d+(\\.\\d+)?\\s*/\\s*\\d+"
+        weight: 0.6
+
+  - id: audit_hook_quality
+    prompt: "Audit hook quality and check if the handler script works"
+    fixtures: []
+    rubric:
+      - "detects HOOK.md as the definition file type"
+      - "checks for handler script existence and hook.events list"
+      - "applies hook-specific D4 cap if handler script is missing"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)HOOK\\.md|hook"
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)handler|events"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)critical|warning|info"
+        weight: 0.6
+      - type: matches_regex
+        target: "\\d+(\\.\\d+)?\\s*/\\s*\\d+"
+        weight: 0.6
+
+  - id: rate_rule_package
+    prompt: "Rate this rule package and tell me what's missing"
+    fixtures: []
+    rubric:
+      - "detects RULE.md as the definition file type"
+      - "checks for metadata.scope and concrete requirements"
+      - "flags vague principles without actionable specifics"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)RULE\\.md|rule"
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)scope|requirement"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)critical|warning|info"
+        weight: 0.6
+      - type: matches_regex
+        target: "(?i)missing|vague"
+        weight: 0.6
+
+  - id: score_all_packages
+    prompt: "Score all packages in this repository"
+    fixtures: []
+    rubric:
+      - "enumerates all package types across skills/, agents/, hooks/, rules/, commands/, utilities/, presets/"
+      - "produces comparative ranking table with Type column"
+      - "applies type-specific scoring for each package"
+    trigger_expected: true
+    assertions:
+      - type: output_format
+        target: markdown_table
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)type|skill|agent|hook|rule"
+        weight: 0.8
+      - type: matches_regex
+        target: "\\d+(\\.\\d+)?\\s*/\\s*\\d+"
+        weight: 0.6
+      - type: matches_regex
+        target: "(?i)rank|score"
+        weight: 0.6
+
+  - id: negative_prompt_improvement
+    prompt: "Improve this LLM prompt for better classification accuracy: 'Classify the sentiment of the following text'"
+    fixtures: []
+    rubric:
+      - "prompt engineering is prompt-lab territory, not package evaluation"
+    trigger_expected: false
+
+  - id: negative_skill_creation
+    prompt: "Write a new skill for database optimization from scratch"
+    fixtures: []
+    rubric:
+      - "skill creation is outside package evaluation scope"
+    trigger_expected: false
+
+  - id: negative_pr_review
+    prompt: "Review this PR for code quality issues"
+    fixtures: []
+    rubric:
+      - "PR review is pr-review territory, not package evaluation"
+    trigger_expected: false
+
+  - id: negative_prompt_evaluation
+    prompt: "Evaluate this LLM prompt for accuracy"
+    fixtures: []
+    rubric:
+      - "prompt evaluation is prompt-lab territory, not package evaluation"
+    trigger_expected: false

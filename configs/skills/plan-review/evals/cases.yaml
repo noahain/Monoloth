@@ -1,0 +1,60 @@
+cases:
+  - id: plan_audit
+    prompt: "Review this implementation plan before I start coding"
+    fixtures: []
+    rubric:
+      - "performs multi-section plan audit covering assumptions, risks, and failure modes"
+      - "produces severity-tagged findings"
+      - "delivers a ship/rethink/reject verdict"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)ship|rethink|reject"
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)assumption|risk|failure"
+        weight: 0.8
+      - type: matches_regex
+        target: "HIGH|MEDIUM|LOW|CRITICAL"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)finding|issue|concern"
+        weight: 0.6
+
+  - id: scope_challenge
+    prompt: "Stress-test this proposal — what am I missing and where will it break?"
+    fixtures: []
+    rubric:
+      - "challenges implicit assumptions in the plan"
+      - "maps failure modes and blast radius for each component"
+      - "identifies gaps and missing considerations"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)assumption"
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)failure.mode|blast.radius|break"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)gap|missing"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)ship|rethink|reject"
+        weight: 0.6
+
+  - id: code_review_not_plan
+    prompt: "Review this Python function for bugs and performance issues"
+    fixtures: []
+    rubric:
+      - "does not activate plan review workflow"
+      - "code review of existing code is different from pre-implementation plan audit"
+    trigger_expected: false
+
+  - id: architecture_diagram
+    prompt: "Draw me an architecture diagram for this system"
+    fixtures: []
+    rubric:
+      - "does not activate plan review workflow"
+      - "diagram creation is different from plan audit"
+    trigger_expected: false

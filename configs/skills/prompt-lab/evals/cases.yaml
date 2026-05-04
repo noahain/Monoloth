@@ -1,0 +1,99 @@
+cases:
+  # --- Positive cases ---
+
+  - id: improve_existing_prompt
+    prompt: "Improve this prompt: 'Summarize the document.' It's for Claude to summarize technical documents into 3-5 bullet points."
+    fixtures: []
+    rubric:
+      - "Identifies weaknesses in the current prompt (no output format, no length constraint, no audience specification)"
+      - "Generates 2-4 variants each testing a different hypothesis"
+      - "Each variant changes ONE variable from baseline"
+      - "Includes complete prompt text for each variant (not just descriptions)"
+      - "Designs an evaluation rubric with weighted criteria"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)variant|version|v\\d"
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)rubric|criteria|evaluat"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)weakness|failure|issue"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)weight|score"
+        weight: 0.6
+      - type: matches_regex
+        target: "(?i)few.shot|chain.of.thought|direct"
+        weight: 0.6
+
+  - id: design_classification_prompt
+    prompt: "Design a prompt for GPT-4 to classify customer support tickets into categories: billing, technical, account, feature-request, other."
+    fixtures: []
+    rubric:
+      - "Generates variants including at minimum a direct instruction and a few-shot approach"
+      - "Includes concrete examples in the few-shot variant"
+      - "Designs test cases with at least one edge case (ambiguous ticket)"
+      - "Specifies success criteria (classification accuracy)"
+      - "Notes target model (GPT-4) in recommendations"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)few.shot"
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)billing|technical|account|feature.request"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)test case|edge case"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)accuracy|success.criteria"
+        weight: 0.6
+      - type: matches_regex
+        target: "(?i)GPT-4|gpt.4"
+        weight: 0.6
+
+  - id: failure_mode_analysis
+    prompt: "Why does this prompt sometimes produce hallucinated facts? 'You are an expert. Answer the user's question about our product based on your knowledge.'"
+    fixtures: []
+    rubric:
+      - "Identifies missing grounding/context as the core failure mode"
+      - "Identifies 'based on your knowledge' as hallucination-inducing"
+      - "Recommends providing source documents or RAG context"
+      - "Generates improved variants that constrain the model to provided context"
+      - "Includes test cases specifically designed to trigger hallucination"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)hallucination|grounding|context"
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)based on your knowledge"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)RAG|retrieval|source document"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)variant|improved"
+        weight: 0.6
+      - type: matches_regex
+        target: "(?i)test case"
+        weight: 0.6
+
+  # --- Negative cases ---
+
+  - id: skill_evaluation_request
+    prompt: "Evaluate this SKILL.md file for quality and trigger coverage."
+    fixtures: []
+    rubric:
+      - "Does NOT trigger prompt-lab skill (skill-evaluator territory, not prompt engineering)"
+    trigger_expected: false
+
+  - id: code_generation_request
+    prompt: "Write a Python script that processes CSV files."
+    fixtures: []
+    rubric:
+      - "Does NOT trigger prompt-lab skill (general coding task, not prompt engineering)"
+    trigger_expected: false

@@ -1,0 +1,58 @@
+cases:
+  - id: dashboard_ux_audit_request
+    prompt: "I have an analytics dashboard with 12 KPI cards all the same size, 3 tabs hiding different data views, and a dense data table below. Users say they can't find what matters. What UX problems do you see and how should I fix the layout?"
+    fixtures: []
+    rubric:
+      - "identifies tab overuse as hiding information behind clicks"
+      - "flags flat visual hierarchy (12 equal-weight KPI cards)"
+      - "rates findings by severity"
+      - "suggests layout improvements with rationale grounded in UX principles"
+      - "references concepts like cognitive load, Shneiderman's mantra, or visual hierarchy"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)(critical|major|minor|severity|finding)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(?i)(hierarchy|cognitive|information architecture|visual weight|Shneiderman|overview first)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)(tab|hidden|click|interaction cost)"
+        weight: 0.8
+
+  - id: component_recommendation_request
+    prompt: "I'm building a B2B dashboard with Next.js and Tailwind CSS. I need charts for time-series metrics, a sortable data table for 500+ rows, and KPI cards. What UI libraries should I use and why?"
+    fixtures: []
+    rubric:
+      - "recommends specific libraries with rationale"
+      - "considers tech stack compatibility (Tailwind)"
+      - "addresses performance for large datasets"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(?i)(shadcn|recharts|tanstack|tremor|antd|MUI|nivo|ag.grid)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(?i)(tailwind|bundle|performance|virtual)"
+        weight: 0.6
+
+  - id: negative_code_implementation
+    prompt: "Write the React component for a KPI card that shows revenue with a trend chart."
+    fixtures: []
+    rubric:
+      - "should not trigger — this is a code implementation request, not a UX review"
+    trigger_expected: false
+
+  - id: negative_general_design
+    prompt: "Design a new logo for our company."
+    fixtures: []
+    rubric:
+      - "should not trigger — this is graphic design, not UX audit"
+    trigger_expected: false
+
+  - id: negative_backend_review
+    prompt: "Review the architecture of our PostgreSQL schema and query performance."
+    fixtures: []
+    rubric:
+      - "should not trigger — this is backend architecture, not UX"
+    trigger_expected: false

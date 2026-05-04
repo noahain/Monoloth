@@ -1,0 +1,60 @@
+cases:
+  - id: sort_algorithm_benchmark
+    prompt: "Compare the performance of quicksort vs mergesort on arrays of 10K-1M elements"
+    fixtures: []
+    rubric:
+      - "Output selects appropriate metrics such as latency, throughput, or execution time"
+      - "Output includes a comparison table or structured results"
+      - "Output captures hardware context (CPU, memory, OS)"
+    trigger_expected: true
+    assertions:
+      - type: output_format
+        target: markdown_table
+        weight: 1.0
+      - type: matches_regex
+        target: "(latency|throughput|execution time|runtime|ms|ns)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(CPU|RAM|memory|OS|hardware)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(quicksort|mergesort)"
+        weight: 0.8
+      - type: output_format
+        target: code_block
+        weight: 0.6
+
+  - id: caching_implementation_benchmark
+    prompt: "Benchmark our new caching implementation against the old one"
+    fixtures: []
+    rubric:
+      - "Output designs representative test cases with varying workloads"
+      - "Output includes reproduction instructions for repeating the benchmark"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(test case|workload|scenario)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(reproduce|reproduction|repeat|run)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(latency|throughput|hit rate|cache)"
+        weight: 0.8
+      - type: output_format
+        target: code_block
+        weight: 0.6
+
+  - id: negative_theory_question
+    prompt: "Which sorting algorithm is theoretically fastest?"
+    fixtures: []
+    rubric:
+      - "Skill should not trigger for theoretical algorithm questions"
+    trigger_expected: false
+
+  - id: negative_optimization_task
+    prompt: "Optimize this slow function"
+    fixtures: []
+    rubric:
+      - "Skill should not trigger for code optimization tasks"
+    trigger_expected: false

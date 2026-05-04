@@ -1,0 +1,66 @@
+cases:
+  - id: outline_to_slides
+    prompt: >
+      Convert my outline into an HTML slide presentation:
+      1. Introduction
+      2. Problem Statement
+      3. Solution
+      4. Results
+      5. Conclusion
+    fixtures: []
+    rubric:
+      - "produces a self-contained HTML file"
+      - "uses Reveal.js or equivalent slide framework"
+      - "creates one slide per section from the outline"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(<html|<HTML|\\.html)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(Reveal|reveal\\.js|slide)"
+        weight: 0.8
+      - type: contains
+        target: "Introduction"
+        weight: 0.8
+      - type: contains
+        target: "Conclusion"
+        weight: 0.8
+      - type: matches_regex
+        target: "(keyboard|navigation|arrow)"
+        weight: 0.6
+
+  - id: dark_themed_presentation
+    prompt: "Create a dark-themed presentation from this markdown document"
+    fixtures: []
+    rubric:
+      - "applies a dark theme to the slide deck"
+      - "supports keyboard navigation between slides"
+    trigger_expected: true
+    assertions:
+      - type: matches_regex
+        target: "(<html|<HTML|\\.html)"
+        weight: 1.0
+      - type: matches_regex
+        target: "(dark|Dark|#[0-2][0-2][0-2])"
+        weight: 0.8
+      - type: matches_regex
+        target: "(slide|Slide|section)"
+        weight: 0.8
+      - type: matches_regex
+        target: "(keyboard|keydown|navigation)"
+        weight: 0.6
+
+  - id: powerpoint_format
+    prompt: "Create a PowerPoint presentation"
+    fixtures: []
+    rubric:
+      - "PPTX format is outside HTML presentation scope"
+    trigger_expected: false
+
+  - id: blog_post_from_outline
+    prompt: "Write a blog post from this outline"
+    fixtures: []
+    rubric:
+      - "blog post authoring is not an HTML slide presentation task"
+    trigger_expected: false
