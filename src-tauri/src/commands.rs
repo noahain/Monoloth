@@ -6,6 +6,7 @@ use std::fs;
 use std::io::Read;
 use std::path::PathBuf;
 use std::process::Command;
+use tauri::AppHandle;
 use tauri::Manager;
 use tauri::State;
 
@@ -75,6 +76,44 @@ pub fn resolve_and_split_shell_command(shell_override: Option<&str>, raw: &str) 
     } else {
         ("sh".to_string(), vec!["-c".to_string(), raw.to_string()])
     }
+}
+
+fn persist_via_app_config(
+    app: &AppHandle,
+    tabs: &tauri::State<crate::tabs::TabsManager>,
+) -> Result<(), String> {
+    let cfg = tabs.load();
+    let value = serde_json::to_value(&cfg).map_err(|e| e.to_string())?;
+    let app_config = app.state::<AppConfig>();
+    app_config.set("tabs_config", value);
+    Ok(())
+}
+
+fn resolve_profile_for_create(
+    config: &tauri::State<AppConfig>,
+    requested: Option<&str>,
+) -> Result<(Option<String>, String, Option<String>, Vec<SecondaryLite>), String> {
+    let name = requested.map(String::from)
+        .or_else(|| config.get("active_profile").as_str().map(String::from))
+        .unwrap_or_else(|| "Default".to_string());
+    let path = crate::config::profile_path(&name);
+    let data = std::fs::read_to_string(&path).map_err(|_| format!("profile not found: {name}"))?;
+    let v: serde_json::Value = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+    let startup = v.get("startup_command").and_then(|x| x.as_str()).unwrap_or("").to_string();
+    let shell_override = v.get("shell_override").and_then(|x| x.as_str()).map(String::from);
+    let secondaries = v.get("secondary_commands")
+        .and_then(|x| x.as_array())
+        .map(|arr| arr.iter().filter_map(|s| serde_json::from_value::<SecondaryLite>(s.clone()).ok()).collect())
+        .unwrap_or_default();
+    Ok((Some(name), startup, shell_override, secondaries))
+}
+
+#[derive(serde::Deserialize)]
+struct SecondaryLite {
+    #[allow(dead_code)] pub name: String,
+    pub command: String,
+    #[serde(default)] #[allow(dead_code)] pub enabled: bool,
+    #[serde(default, rename = "showIconInTab")] pub show_icon_in_tab: bool,
 }
 
 #[allow(dead_code)]
@@ -971,6 +1010,344 @@ pub fn open_external_terminal(command: String, cwd: String) -> Result<bool, Stri
         .spawn()
         .map_err(|e| format!("Failed to open terminal: {}", e))?;
     Ok(true)
+}
+
+// ===== Tabs commands (Unit C) =====
+
+#[tauri::command]
+pub fn get_tabs_config(tabs: tauri::State<crate::tabs::TabsManager>) -> crate::tabs::TabsConfig {
+    tabs.load()
+}
+
+#[tauri::command]
+pub fn set_tabs_config(
+    app: AppHandle,
+    tabs: tauri::State<crate::tabs::TabsManager>,
+    cfg: crate::tabs::TabsConfig,
+) -> Result<(), String> {
+    if cfg.tabs.len() > 16 {
+        return Err("max 16 tabs".into());
+    }
+    for t in &cfg.tabs {
+        crate::tabs::validate_tab_id(&t.id)?;
+        if let Some(c) = &t.color {
+            crate::tabs::validate_color(c)?;
+        }
+        crate::tabs::validate_active_view(t, &t.active_view)?;
+    }
+    tabs.replace(cfg);
+    persist_via_app_config(&app, &tabs)
+}
+
+#[tauri::command]
+pub fn create_tab(
+    app: AppHandle,
+    tabs: tauri::State<crate::tabs::TabsManager>,
+    pty: tauri::State<PtyManager>,
+    history: tauri::State<HistoryManager>,
+    config: tauri::State<AppConfig>,
+    tab_id: String,
+    profile: Option<String>,
+    dir: Option<String>,
+    cols: u16,
+    rows: u16,
+) -> Result<(crate::tabs::Tab, Vec<(String, u64)>), String> {
+    crate::tabs::validate_tab_id(&tab_id)?;
+    let (prof_name, startup_command, shell_override, secondaries) =
+        resolve_profile_for_create(&config, profile.as_deref())?;
+    let cwd = dir.clone()
+        .or_else(|| config.get("last_directory").as_str().map(String::from))
+        .unwrap_or_else(|| ".".to_string());
+    let (shell, args) = resolve_and_split_shell_command(shell_override.as_deref(), &startup_command);
+    let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+
+    let mut spawned: Vec<(String, u64)> = Vec::new();
+    let primary_gen = pty.spawn(&tab_id, &shell, &args_ref, &cwd, cols, rows)?;
+    spawned.push((tab_id.clone(), primary_gen));
+    let _ = history.session_start(&prof_name.clone().unwrap_or_else(|| "Default".to_string()), &startup_command, &cwd);
+
+    let mut secondary_count = 0usize;
+    for sec in secondaries {
+        if !sec.show_icon_in_tab { continue; }
+        let sid = format!("{tab_id}__sec{secondary_count}");
+        let (s, a) = resolve_and_split_shell_command(shell_override.as_deref(), &sec.command);
+        let a_ref: Vec<&str> = a.iter().map(|s| s.as_str()).collect();
+        match pty.spawn(&sid, &s, &a_ref, &cwd, cols, rows) {
+            Ok(g) => {
+                spawned.push((sid, g));
+                let _ = history.session_start(&prof_name.clone().unwrap_or_else(|| "Default".to_string()), &sec.command, &cwd);
+            }
+            Err(e) => {
+                for (killed_sid, _) in spawned.drain(..) {
+                    let _ = pty.terminate(&killed_sid);
+                }
+                return Err(e);
+            }
+        }
+        secondary_count += 1;
+    }
+
+    let tab = crate::tabs::Tab {
+        id: tab_id.clone(),
+        profile: prof_name,
+        pinned: false,
+        color: None,
+        active_view: "primary".into(),
+        dir,
+        secondary_count,
+    };
+
+    if let Err(e) = tabs.add_tab(tab.clone()) {
+        for (killed_sid, _) in spawned.drain(..) {
+            let _ = pty.terminate(&killed_sid);
+        }
+        return Err(e);
+    }
+
+    persist_via_app_config(&app, &tabs)?;
+
+    Ok((tab, spawned))
+}
+
+#[tauri::command]
+pub fn close_tab(
+    app: AppHandle,
+    tabs: tauri::State<crate::tabs::TabsManager>,
+    pty: tauri::State<PtyManager>,
+    history: tauri::State<HistoryManager>,
+    tab_id: String,
+    force: bool,
+) -> Result<(), String> {
+    let tab = {
+        let inner = tabs.load();
+        inner.tabs.iter().find(|t| t.id == tab_id).cloned()
+    };
+    let tab = tab.ok_or_else(|| format!("unknown tab id: {tab_id}"))?;
+    if tab.pinned && !force {
+        return Err("tab is pinned".into());
+    }
+
+    let sids = tabs.session_ids_for_tab(&tab_id)
+        .ok_or_else(|| format!("unknown tab id: {tab_id}"))?;
+    for sid in &sids {
+        pty.terminate(sid);
+    }
+    history.session_end();
+    tabs.remove_tab(&tab_id)?;
+    tabs.close_tab_creates_default_if_empty(&tab_id);
+    persist_via_app_config(&app, &tabs)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn restore_tab_sessions(
+    app: AppHandle,
+    tabs: tauri::State<crate::tabs::TabsManager>,
+    pty: tauri::State<PtyManager>,
+    history: tauri::State<HistoryManager>,
+    config: tauri::State<AppConfig>,
+) -> Result<(Vec<crate::tabs::Tab>, Vec<(String, u64)>), String> {
+    let cfg = tabs.load();
+    let mut out_tabs = Vec::new();
+    let mut out_sessions: Vec<(String, u64)> = Vec::new();
+    for tab in &cfg.tabs {
+        let cols: u16 = 80;
+        let rows: u16 = 24;
+        let cwd = tab.dir.clone()
+            .or_else(|| config.get("last_directory").as_str().map(String::from))
+            .unwrap_or_else(|| ".".to_string());
+        let (prof_name, startup, shell_override, secondaries) = if let Some(p) = &tab.profile {
+            let path = crate::config::profile_path(p);
+            match std::fs::read_to_string(&path)
+                .ok()
+                .and_then(|d| serde_json::from_str::<serde_json::Value>(&d).ok())
+            {
+                Some(v) => {
+                    let s = v.get("startup_command").and_then(|x| x.as_str()).unwrap_or("").to_string();
+                    let sh = v.get("shell_override").and_then(|x| x.as_str()).map(String::from);
+                    let secs = v.get("secondary_commands")
+                        .and_then(|x| x.as_array())
+                        .map(|arr| arr.iter().filter_map(|x| serde_json::from_value::<SecondaryLite>(x.clone()).ok()).collect())
+                        .unwrap_or_default();
+                    (Some(p.clone()), s, sh, secs)
+                }
+                None => (None, String::new(), None, Vec::new()),
+            }
+        } else {
+            (None, String::new(), None, Vec::new())
+        };
+
+        let (shell, args) = resolve_and_split_shell_command(shell_override.as_deref(), &startup);
+        let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        if let Ok(gen) = pty.spawn(&tab.id, &shell, &args_ref, &cwd, cols, rows) {
+            out_sessions.push((tab.id.clone(), gen));
+            let _ = history.session_start(&prof_name.clone().unwrap_or_else(|| "Default".to_string()), &startup, &cwd);
+        }
+        let mut i = 0usize;
+        for sec in secondaries.iter().take(tab.secondary_count) {
+            if !sec.show_icon_in_tab { continue; }
+            let sid = format!("{tab_id}__sec{i}", tab_id = tab.id);
+            let (s, a) = resolve_and_split_shell_command(shell_override.as_deref(), &sec.command);
+            let a_ref: Vec<&str> = a.iter().map(|s| s.as_str()).collect();
+            if let Ok(gen) = pty.spawn(&sid, &s, &a_ref, &cwd, cols, rows) {
+                out_sessions.push((sid, gen));
+                let _ = history.session_start(&prof_name.clone().unwrap_or_else(|| "Default".to_string()), &sec.command, &cwd);
+            }
+            i += 1;
+        }
+        let _ = prof_name;
+        out_tabs.push(tab.clone());
+    }
+    let _ = app;
+    Ok((out_tabs, out_sessions))
+}
+
+#[tauri::command]
+pub fn set_tab_active_view(
+    app: AppHandle,
+    tabs: tauri::State<crate::tabs::TabsManager>,
+    tab_id: String,
+    view: String,
+) -> Result<(), String> {
+    tabs.set_active_view(&tab_id, view)?;
+    persist_via_app_config(&app, &tabs)
+}
+
+#[tauri::command]
+pub fn set_active_tab(
+    app: AppHandle,
+    tabs: tauri::State<crate::tabs::TabsManager>,
+    tab_id: String,
+) -> Result<(), String> {
+    let cfg = tabs.load();
+    if !cfg.tabs.iter().any(|t| t.id == tab_id) {
+        return Err(format!("unknown tab id: {tab_id}"));
+    }
+    tabs.set_active_tab_id(Some(tab_id));
+    persist_via_app_config(&app, &tabs)
+}
+
+#[tauri::command]
+pub fn set_tab_pinned(
+    app: AppHandle,
+    tabs: tauri::State<crate::tabs::TabsManager>,
+    tab_id: String,
+    pinned: bool,
+) -> Result<(), String> {
+    tabs.set_pinned(&tab_id, pinned)?;
+    persist_via_app_config(&app, &tabs)
+}
+
+#[tauri::command]
+pub fn set_tab_color(
+    app: AppHandle,
+    tabs: tauri::State<crate::tabs::TabsManager>,
+    tab_id: String,
+    color: Option<String>,
+) -> Result<(), String> {
+    tabs.set_color(&tab_id, color)?;
+    persist_via_app_config(&app, &tabs)
+}
+
+#[tauri::command]
+pub fn set_tab_profile(
+    app: AppHandle,
+    tabs: tauri::State<crate::tabs::TabsManager>,
+    pty: tauri::State<PtyManager>,
+    history: tauri::State<HistoryManager>,
+    config: tauri::State<AppConfig>,
+    tab_id: String,
+    profile: Option<String>,
+    cols: u16,
+    rows: u16,
+) -> Result<(crate::tabs::Tab, Vec<(String, u64)>), String> {
+    let tab = {
+        let inner = tabs.load();
+        inner.tabs.iter().find(|t| t.id == tab_id).cloned()
+    };
+    let tab = tab.ok_or_else(|| format!("unknown tab id: {tab_id}"))?;
+    if let Some(sids) = tabs.session_ids_for_tab(&tab_id) {
+        for sid in &sids {
+            pty.terminate(sid);
+        }
+    }
+    history.session_end();
+    let (prof_name, startup, shell_override, secondaries) = resolve_profile_for_create(&config, profile.as_deref())?;
+    let cwd = tab.dir.clone()
+        .or_else(|| config.get("last_directory").as_str().map(String::from))
+        .unwrap_or_else(|| ".".to_string());
+    let (shell, args) = resolve_and_split_shell_command(shell_override.as_deref(), &startup);
+    let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    let mut spawned: Vec<(String, u64)> = Vec::new();
+    if let Ok(g) = pty.spawn(&tab_id, &shell, &args_ref, &cwd, cols, rows) {
+        spawned.push((tab_id.clone(), g));
+        let _ = history.session_start(&prof_name.clone().unwrap_or_else(|| "Default".to_string()), &startup, &cwd);
+    }
+    let mut secondary_count = 0usize;
+    for sec in secondaries {
+        if !sec.show_icon_in_tab { continue; }
+        let sid = format!("{tab_id}__sec{secondary_count}");
+        let (s, a) = resolve_and_split_shell_command(shell_override.as_deref(), &sec.command);
+        let a_ref: Vec<&str> = a.iter().map(|s| s.as_str()).collect();
+        if let Ok(g) = pty.spawn(&sid, &s, &a_ref, &cwd, cols, rows) {
+            spawned.push((sid, g));
+            let _ = history.session_start(&prof_name.clone().unwrap_or_else(|| "Default".to_string()), &sec.command, &cwd);
+        }
+        secondary_count += 1;
+    }
+    tabs.set_profile(&tab_id, prof_name, secondary_count)?;
+    persist_via_app_config(&app, &tabs)?;
+    let updated = tabs.load().tabs.iter().find(|t| t.id == tab_id).cloned().unwrap();
+    Ok((updated, spawned))
+}
+
+#[tauri::command]
+pub fn reorder_tabs(
+    app: AppHandle,
+    tabs: tauri::State<crate::tabs::TabsManager>,
+    new_order: Vec<String>,
+) -> Result<(), String> {
+    tabs.reorder(new_order)?;
+    persist_via_app_config(&app, &tabs)
+}
+
+#[tauri::command]
+pub async fn refresh_tab(
+    app: AppHandle,
+    tabs: tauri::State<'_, crate::tabs::TabsManager>,
+    pty: tauri::State<'_, PtyManager>,
+    history: tauri::State<'_, HistoryManager>,
+    config: tauri::State<'_, AppConfig>,
+    tab_id: String,
+    cols: u16,
+    rows: u16,
+) -> Result<(crate::tabs::Tab, Vec<(String, u64)>), String> {
+    set_tab_profile(
+        app,
+        tabs,
+        pty,
+        history,
+        config,
+        tab_id,
+        None,
+        cols,
+        rows,
+    )
+}
+
+#[tauri::command]
+pub fn get_profile_config_by_name(
+    config: tauri::State<AppConfig>,
+    name: String,
+) -> Result<serde_json::Map<String, serde_json::Value>, String> {
+    let _ = config;
+    let path = crate::config::profile_path(&name);
+    let data = std::fs::read_to_string(&path).map_err(|_| format!("profile not found: {name}"))?;
+    let v: serde_json::Value = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+    match v {
+        serde_json::Value::Object(m) => Ok(m),
+        _ => Err("profile is not a JSON object".into()),
+    }
 }
 
 #[cfg(test)]

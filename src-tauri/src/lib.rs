@@ -167,6 +167,19 @@ pub fn run() {
             commands::open_in_explorer,
             commands::execute_background,
             commands::open_external_terminal,
+            commands::get_tabs_config,
+            commands::set_tabs_config,
+            commands::create_tab,
+            commands::close_tab,
+            commands::restore_tab_sessions,
+            commands::set_tab_active_view,
+            commands::set_active_tab,
+            commands::set_tab_pinned,
+            commands::set_tab_color,
+            commands::set_tab_profile,
+            commands::reorder_tabs,
+            commands::refresh_tab,
+            commands::get_profile_config_by_name,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
