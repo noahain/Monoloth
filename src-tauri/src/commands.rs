@@ -59,6 +59,24 @@ fn clean_path(path: &str) -> String {
     }
 }
 
+pub fn resolve_and_split_shell_command(shell_override: Option<&str>, raw: &str) -> (String, Vec<String>) {
+    if let Some(s) = shell_override {
+        if !s.is_empty() {
+            let flag = match s {
+                "powershell" | "pwsh" => "-Command",
+                "cmd" => "/C",
+                _ => "-c",
+            };
+            return (s.to_string(), vec![flag.to_string(), raw.to_string()]);
+        }
+    }
+    if cfg!(windows) {
+        ("cmd".to_string(), vec!["/C".to_string(), raw.to_string()])
+    } else {
+        ("sh".to_string(), vec!["-c".to_string(), raw.to_string()])
+    }
+}
+
 #[allow(dead_code)]
 #[derive(serde::Deserialize)]
 pub struct SecondaryCommand {
@@ -953,4 +971,30 @@ pub fn open_external_terminal(command: String, cwd: String) -> Result<bool, Stri
         .spawn()
         .map_err(|e| format!("Failed to open terminal: {}", e))?;
     Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_and_split_shell_command_uses_cmd_on_windows() {
+        let (shell, args) = resolve_and_split_shell_command(None, "echo hello");
+        assert_eq!(shell, "cmd");
+        assert!(args.windows(2).any(|w| w == ["/C", "echo hello"]));
+    }
+
+    #[test]
+    fn resolve_and_split_uses_override_when_provided() {
+        let (shell, args) = resolve_and_split_shell_command(Some("pwsh"), "Get-Process");
+        assert_eq!(shell, "pwsh");
+        assert_eq!(args, vec!["-Command", "Get-Process"]);
+    }
+
+    #[test]
+    fn resolve_and_split_handles_unparseable_as_raw() {
+        let (_, args) = resolve_and_split_shell_command(None, "'unbalanced");
+        // When shlex fails, the raw command is passed as a single arg
+        assert_eq!(args.last().unwrap(), "'unbalanced");
+    }
 }
