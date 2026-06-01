@@ -2611,6 +2611,7 @@ dependencies = [
  "log",
  "parking_lot",
  "portable-pty",
+ "regex",
  "rfd 0.15.4",
  "serde",
  "serde_json",
