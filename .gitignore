@@ -1,0 +1,34 @@
+# OS / shell junk
+nul
+Thumbs.db
+.DS_Store
+
+# Build outputs
+/target/
+/build/
+/dist/
+/gen/
+/gen/schemas
+/temp-tab-mockup.html
+/tauri-dev.log
+
+# Backups and scratch dirs
+/backup_*/
+/bkp_*/
+/new/
+/testing/
+/legacy/
+/pywinpty_extracted/
+/pywinpty-*.whl
+
+# Old/abandoned source tree
+/src/
+
+# Vendored config artifacts
+/configs/skills.zip
+/configs/skills - Copy.zip
+
+# Local plan scratch
+/design-doc-cta-theme-unification.md
+/design-spec-tab-bar.md
+/files.txt

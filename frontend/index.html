@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monoloth</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=block" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=89">
+    <link rel="stylesheet" href="lib/xterm.css?v=12">
+    <style>
+        .landing-brand, .landing-card, .landing-status-bar {
+            visibility: hidden;
+        }
+        .fonts-loaded .landing-brand,
+        .fonts-loaded .landing-card,
+        .fonts-loaded .landing-status-bar {
+            visibility: visible;
+        }
+    </style>
+</head>
+<body class="cta-blur" data-current-view="landing">
+    <!-- Custom Titlebar -->
+    <div id="custom-titlebar" class="custom-titlebar">
+      <div class="titlebar-section titlebar-left">
+        <button id="tb-back" class="titlebar-btn" data-tooltip="Back to Launcher" aria-label="Back to Launcher">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <button id="tb-refresh" class="titlebar-btn" data-tooltip="Refresh Session" aria-label="Refresh Session">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        </button>
+      </div>
+      <div class="titlebar-section titlebar-center" data-tauri-drag-region>
+        <span class="titlebar-title">Monoloth</span>
+      </div>
+      <div class="titlebar-section titlebar-right">
+        <button id="tb-menu" class="titlebar-btn" data-tooltip="Menu" aria-label="Open menu">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <button id="tb-minimize" class="titlebar-btn" data-tooltip="Minimize" aria-label="Minimize window">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <button id="tb-maximize" class="titlebar-btn" data-tooltip="Maximize" aria-label="Maximize window">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
+        </button>
+        <button id="tb-close" class="titlebar-btn titlebar-close-btn" data-tooltip="Close" aria-label="Close window">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Background Overlay -->
+    <div id="bg-overlay"></div>
+
+    <!-- Landing Page -->
+    <div id="landing" class="landing">
+        <div class="landing-content">
+            <div class="landing-brand">
+                <h1>Monoloth</h1>
+            </div>
+
+            <div class="landing-card" id="landing-card">
+                <div class="landing-card-toolbar">
+                    <div class="landing-card-agent">
+                        <span id="landing-agent-label">OpenCode</span>
+                    </div>
+                    <div class="landing-card-actions">
+                        <button class="profile-selector-btn" id="profile-selector-btn" data-tooltip="Switch Profile">
+                            <span id="current-profile-name">Default</span>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <button class="settings-icon" id="settings-btn" data-tooltip="Settings (Ctrl+,)" aria-label="Open Settings">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <button id="choose-dir-btn" class="dir-primary-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    <span>Choose Project Directory</span>
+                </button>
+
+                <div id="recent-projects-section" class="recent-projects-section" style="display:none">
+                    <div class="recent-section-label">Recent Projects</div>
+                    <div id="recent-projects-list" class="recent-projects-list"></div>
+                </div>
+
+                <div id="bridge-loading" class="bridge-loading-overlay" style="display:none">
+                    <div class="bridge-spinner"></div>
+                    <span>Initializing...</span>
+                </div>
+            </div>
+
+            <div class="landing-status-bar" id="landing-status-bar">
+                <span class="landing-kbd-text"><kbd>Ctrl</kbd>+<kbd>P</kbd> Commands</span>
+                <span class="landing-status-sep">·</span>
+                <span class="landing-kbd-text"><kbd>Ctrl</kbd>+<kbd>,</kbd> Settings</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Page -->
+    <div id="settings-page" class="settings-page">
+        <div class="settings-glass">
+            <div class="settings-header">
+                <h2>Settings</h2>
+                <button id="settings-close" class="settings-close" data-tooltip="Close (Esc)" aria-label="Close modal">&times;</button>
+            </div>
+            <div class="settings-tabs">
+                <button class="settings-tab active" data-tab="launcher">Launcher</button>
+                <button class="settings-tab" data-tab="appearance">Appearance</button>
+                <button class="settings-tab" data-tab="keybinds">Keybinds</button>
+                <button class="settings-tab" data-tab="profiles">Profiles</button>
+                <button class="settings-tab" data-tab="history">History</button>
+            </div>
+            <div class="settings-content">
+                <!-- Commands Tab -->
+                <div id="tab-launcher" class="tab-panel">
+                    <div class="settings-card">
+                        <div class="card-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                        </div>
+                        <div class="card-body">
+                            <h3>Launcher</h3>
+                            <p class="card-desc">Configure which AI agent or command launches when you open a directory.</p>
+
+                            <!-- Startup Command -->
+                            <div class="adv-section">
+                                <h4>Startup Command</h4>
+                                <p class="section-desc">Command that launches when you open a project.</p>
+                                <div class="startup-type-selector" id="startup-type-selector">
+                                    <button class="startup-type-btn active" data-type="preset" data-cmd="opencode">OpenCode</button>
+                                    <button class="startup-type-btn" data-type="preset" data-cmd="claude">Claude</button>
+                                    <button class="startup-type-btn" data-type="preset" data-cmd="qwen">Qwen</button>
+                                    <button class="startup-type-btn" data-type="preset" data-cmd="kimi">Kimi</button>
+                                    <button class="startup-type-btn" data-type="preset" data-cmd="codex">Codex</button>
+                                    <button class="startup-type-btn" data-type="preset" data-cmd="pi">Pi</button>
+                                    <button class="startup-type-btn" data-type="preset" data-cmd="gemini">Gemini</button>
+                                    <button class="startup-type-btn" data-type="custom">Custom</button>
+                                </div>
+                                <div id="startup-custom-row" class="startup-custom-row" style="display:none;">
+                                    <input type="text" id="startup-custom-input" class="settings-input" placeholder="e.g. python main.py, node server.js, bash">
+                                </div>
+                                <div id="startup-status" class="startup-status"></div>
+                            </div>
+
+                            <!-- Secondary Commands -->
+                            <div class="adv-section collapsible-section">
+                                <button class="collapsible-trigger" type="button">
+                                    <svg class="collapsible-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                                    <span>Secondary Commands</span>
+                                </button>
+                                <p class="section-desc">Additional commands to run alongside the startup command.</p>
+                                <div class="collapsible-body" style="display:none">
+                                    <div class="secondary-commands-list" id="secondary-commands-list"></div>
+                                    <button id="add-secondary-cmd-btn" class="btn-secondary add-cmd-btn">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                        Add Command
+                                    </button>
+                                    <div id="secondary-cmd-status" class="secondary-cmd-status"></div>
+                                </div>
+                            </div>
+
+                            <!-- File Picker -->
+                            <div class="adv-section collapsible-section">
+                                <button class="collapsible-trigger" type="button">
+                                    <svg class="collapsible-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                                    <span>File Picker</span>
+                                </button>
+                                <p class="section-desc">Choose which folder picker to use when selecting directories.</p>
+                                <div class="collapsible-body" style="display:none">
+                                    <div class="picker-type-selector" id="picker-type-selector">
+                                        <button class="picker-type-btn active" data-type="custom">Custom Picker</button>
+                                        <button class="picker-type-btn" data-type="native">Windows Native</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="advanced-status" class="appearance-status"></div>
+                </div>
+
+                <!-- Appearance Tab -->
+                <div id="tab-appearance" class="tab-panel">
+                    <div class="settings-card">
+                        <div class="card-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        </div>
+                        <div class="card-body">
+                            <h3>Appearance</h3>
+                            <p class="card-desc">Customize the background behind the terminal and UI.</p>
+
+                            <div class="form-group">
+                                <label>Theme</label>
+                                <div class="theme-selector" id="theme-selector">
+                                    <button class="theme-btn active" data-theme="dark">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                                        Dark
+                                    </button>
+                                    <button class="theme-btn" data-theme="light">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                                        Light
+                                    </button>
+                                    <button class="theme-btn" data-theme="auto">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                                        Auto
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Type</label>
+                                <div class="bg-type-selector" id="bg-type-selector">
+                                    <button class="bg-type-btn active" data-type="none">None</button>
+                                    <button class="bg-type-btn" data-type="image">Image</button>
+                                    <button class="bg-type-btn" data-type="color">Color</button>
+                                    <button class="bg-type-btn" data-type="gradient">Gradient</button>
+                                </div>
+                            </div>
+
+                            <div id="bg-image-options" class="bg-options-panel" style="display:none;">
+                                <div class="form-group">
+                                    <label>Image File</label>
+                                    <div class="bg-image-row">
+                                        <span id="bg-image-path" class="bg-image-path">None selected</span>
+                                        <button id="bg-pick-btn" class="btn-secondary">Choose</button>
+                                        <button id="bg-clear-btn" class="btn-secondary btn-danger">Clear</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="bg-color-options" class="bg-options-panel" style="display:none;">
+                                <div class="form-group">
+                                    <label for="bg-color-picker">Solid Color</label>
+                                    <div class="bg-color-row">
+                                        <input type="color" id="bg-color-picker" class="bg-color-picker" value="#0a0a0a" aria-label="Background solid color">
+                                        <span id="bg-color-hex" class="bg-color-hex">#0a0a0a</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="bg-gradient-options" class="bg-options-panel" style="display:none;">
+                                <div class="form-group">
+                                    <label>Gradient Presets</label>
+                                    <div class="bg-gradient-presets" id="bg-gradient-presets">
+                                        <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a, #1a1a2e)">Navy Tint</button>
+                                        <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a, #2d1b00)">Warm Tint</button>
+                                        <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a, #1a0a2e)">Violet Tint</button>
+                                        <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a, #001f1f)">Teal Tint</button>
+                                        <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a, #2e1a0a)">Copper Tint</button>
+                                        <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a, #1a1a1a)">Charcoal</button>
+                                        <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%)">Midnight Wave</button>
+                                        <button class="gradient-btn" data-value="radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a0a 100%)">Radial Dark</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="bg-transparency-slider">Opacity: <span id="bg-transparency-value">75%</span></label>
+                                <input type="range" id="bg-transparency-slider" class="transparency-slider" min="0" max="100" value="75">
+                                <div class="slider-labels">
+                                    <span>Transparent</span>
+                                    <span>Opaque</span>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>CTA Button Style</label>
+                                <div class="cta-style-selector" id="cta-style-selector">
+                                    <button class="cta-style-btn active" data-style="blur">Blur</button>
+                                    <button class="cta-style-btn" data-style="glass">Glass</button>
+                                    <button class="cta-style-btn" data-style="solid">Solid</button>
+                                    <button class="cta-style-btn" data-style="outline">Outline</button>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Window Chrome</label>
+                                <div class="titlebar-toggle" id="titlebar-toggle">
+                                    <button class="titlebar-toggle-btn active" data-titlebar="native">Native</button>
+                                    <button class="titlebar-toggle-btn" data-titlebar="custom">Custom</button>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Background Layer</label>
+                                <div class="bg-layer-selector" id="bg-layer-selector">
+                                    <button class="bg-layer-btn active" data-layer="behind">Behind TUI</button>
+                                    <button class="bg-layer-btn" data-layer="overlay">Above Terminal</button>
+                                </div>
+                            </div>
+
+                            <div class="bg-preview">
+                                <div class="bg-preview-label">Preview</div>
+                                <div id="bg-preview-thumb" class="bg-preview-thumb">
+                                    <span class="bg-preview-placeholder">No background</span>
+                                </div>
+                            </div>
+
+                            <div id="appearance-status" class="appearance-status"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Keyboard Tab -->
+                <div id="tab-keybinds" class="tab-panel">
+                    <div class="settings-card">
+                        <div class="card-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 12h4M14 12h4M8 12v4M12 12v4"/></svg>
+                        </div>
+                        <div class="card-body">
+                            <h3>Keybinds</h3>
+                            <p class="card-desc">Customize keyboard shortcuts. Click a shortcut to change it, or click Reset to restore defaults.</p>
+                            <div class="shortcuts-list" id="shortcuts-list">
+                                <div class="shortcut-row" data-key="command_palette">
+                                    <div class="shortcut-info">
+                                        <span class="shortcut-name">Command Palette</span>
+                                        <span class="shortcut-description">Open the command palette</span>
+                                    </div>
+                                    <div class="shortcut-keys">
+                                        <span class="shortcut-current" id="shortcut-command_palette"></span>
+                                        <button class="shortcut-reset-btn" data-key="command_palette" data-tooltip="Reset to default">Reset</button>
+                                    </div>
+                                </div>
+                                <div class="shortcut-row" data-key="settings">
+                                    <div class="shortcut-info">
+                                        <span class="shortcut-name">Settings</span>
+                                        <span class="shortcut-description">Open settings panel</span>
+                                    </div>
+                                    <div class="shortcut-keys">
+                                        <span class="shortcut-current" id="shortcut-settings"></span>
+                                        <button class="shortcut-reset-btn" data-key="settings" data-tooltip="Reset to default">Reset</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="shortcut-edit-mode" id="shortcut-edit-mode" style="display:none;">
+                                <div class="shortcut-edit-prompt">
+                                    <span>Press new shortcut combination for:</span>
+                                    <span id="shortcut-edit-name" class="shortcut-edit-target"></span>
+                                </div>
+                                <div class="shortcut-edit-keys">
+                                    <span id="shortcut-edit-preview" class="shortcut-edit-preview">Press keys...</span>
+                                </div>
+                                <div class="shortcut-edit-actions">
+                                    <button id="shortcut-edit-save" class="btn-secondary">Save</button>
+                                    <button id="shortcut-edit-cancel" class="btn-secondary">Cancel</button>
+                                </div>
+                                <div id="shortcut-edit-error" class="shortcut-edit-error"></div>
+                            </div>
+                            <div id="shortcuts-status" class="shortcuts-status"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Profiles Tab -->
+                <div id="tab-profiles" class="tab-panel">
+                    <div class="settings-card">
+                        <div class="card-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        </div>
+                        <div class="card-body">
+                            <h3>Profiles</h3>
+                            <p class="card-desc">Manage different configuration profiles. Each profile stores its own settings including startup command, appearance, and secondary commands.</p>
+
+                            <div class="profiles-list" id="profiles-list"></div>
+                            <button id="add-profile-btn" class="btn-secondary add-profile-btn">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                New Profile
+                            </button>
+                            <div id="profiles-status" class="profiles-status"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- History Tab -->
+                <div id="tab-history" class="tab-panel">
+                    <div class="settings-card">
+                        <div class="card-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        </div>
+                        <div class="card-body">
+                            <h3>History</h3>
+                            <p class="card-desc">Track time spent per tool and session. Data never leaves your machine.</p>
+
+                            <div class="form-group">
+                                <label>History Tracking</label>
+                                <div class="history-toggle" id="history-toggle">
+                                    <button class="history-toggle-btn active" data-enabled="true">On</button>
+                                    <button class="history-toggle-btn" data-enabled="false">Off</button>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Retention</label>
+                                <div class="retention-selector" id="retention-selector">
+                                    <button class="retention-btn active" data-retention="7d">7 Days</button>
+                                    <button class="retention-btn" data-retention="30d">30 Days</button>
+                                    <button class="retention-btn" data-retention="forever">Forever</button>
+                                </div>
+                            </div>
+
+                            <div class="history-actions">
+                                <button id="clear-history-btn" class="btn-secondary btn-danger">Clear All History</button>
+                            </div>
+
+                            <div class="history-display" id="history-display">
+                                <div class="history-section">
+                                    <h4 class="history-section-title">Most Used Tools</h4>
+                                    <div id="history-ranking" class="history-ranking">
+                                        <span class="history-empty">No history data yet. Start a session to begin tracking.</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="history-status" class="appearance-status"></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            <!-- Persistent Updater -->
+            <div class="settings-footer">
+                <div class="sf-updater">
+                    <span class="sf-label">Version</span>
+                    <span id="current-version" class="version-number">--</span>
+                    <button id="check-update-btn" class="btn-primary">Check for Updates</button>
+                    <a id="github-link" class="github-link" href="https://github.com/noahain/Monoloth" target="_blank" rel="noopener">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 2.638.973.816-.226 1.696-.34 2.572-.344.876.004 1.756.118 2.572.344 1.63-1.295 2.638-.973 2.638-.973.652 1.652.241 2.873.118 3.176.77.84 1.235 1.91 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                        GitHub
+                    </a>
+                </div>
+                <div id="updater-status" class="sf-status"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Terminal View -->
+    <div id="terminal-view" class="terminal-view">
+        <!-- Sidebar -->
+        <div id="sidebar" class="sidebar" style="display:none;">
+            <div id="sidebar-buttons" class="sidebar-buttons"></div>
+        </div>
+        <div class="terminal-toolbar">
+            <button id="terminal-back-btn" class="terminal-back-btn" data-tooltip="Back to Launcher">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                <span>Back to Launcher</span>
+            </button>
+        </div>
+        <div class="terminal-container" id="terminal-container">
+            <div id="terminal"></div>
+            <div id="terminal-bg-overlay"></div>
+        </div>
+        <!-- CMD Panel -->
+        <div id="cmd-panel" class="cmd-panel">
+            <div class="cmd-panel-resize-handle" id="cmd-panel-resize-handle"></div>
+            <div class="cmd-panel-toolbar">
+                <span class="cmd-panel-title">CMD Panel</span>
+                <button id="cmd-panel-close" class="cmd-panel-close" data-tooltip="Close Panel">&times;</button>
+            </div>
+            <div id="cmd-panel-terminal" class="cmd-panel-terminal"></div>
+            <div id="cmd-panel-exit-banner" class="cmd-panel-exit-banner" style="display:none;">
+                <span>Session ended — Click to restart</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Switcher Modal -->
+    <div id="profile-switcher" class="profile-switcher">
+        <div class="ps-overlay"></div>
+        <div class="ps-modal">
+            <div class="ps-header">
+                <span class="ps-title">Switch Profile</span>
+                <button id="ps-close" class="ps-close" data-tooltip="Close" aria-label="Close modal">&times;</button>
+            </div>
+            <div class="ps-body" id="ps-body"></div>
+        </div>
+    </div>
+
+    <!-- Inline Dialog Modal (replaces prompt/confirm) -->
+    <div id="inline-dialog" class="inline-dialog">
+        <div class="id-overlay"></div>
+        <div class="id-modal">
+            <div class="id-header">
+                <span id="id-title" class="id-title"></span>
+                <button id="id-close" class="id-close" data-tooltip="Close" aria-label="Close modal">&times;</button>
+            </div>
+            <div class="id-body" id="id-body"></div>
+            <div class="id-footer" id="id-footer"></div>
+        </div>
+    </div>
+
+    <!-- Custom File / Folder Picker -->
+    <div id="file-picker" class="file-picker">
+        <div class="fp-overlay"></div>
+        <div class="fp-modal">
+            <div class="fp-header">
+                <span id="fp-title" class="fp-title">Choose</span>
+                <button id="fp-close" class="fp-close" data-tooltip="Close" aria-label="Close modal">&times;</button>
+            </div>
+            <div class="fp-toolbar">
+                <button id="fp-back-btn" class="fp-nav-btn" data-tooltip="Back" disabled>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+                <button id="fp-forward-btn" class="fp-nav-btn" data-tooltip="Forward" disabled>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+                <button id="fp-up-btn" class="fp-nav-btn" data-tooltip="Go Up">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+                </button>
+                <div id="fp-path-bar" class="fp-path-bar">
+                    <input type="text" id="fp-path-input" class="fp-path-input" placeholder="Type a path...">
+                    <div id="fp-breadcrumb" class="fp-breadcrumb"></div>
+                </div>
+                <button id="fp-refresh-btn" class="fp-nav-btn" data-tooltip="Refresh">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                </button>
+            </div>
+            <div class="fp-body">
+                <div class="fp-sidebar">
+                    <div class="fp-sidebar-section">
+                        <div class="fp-sidebar-label">Quick Access</div>
+                        <div class="fp-sidebar-item" data-path="desktop">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                            Desktop
+                        </div>
+                        <div class="fp-sidebar-item" data-path="documents">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                            Documents
+                        </div>
+                        <div class="fp-sidebar-item" data-path="downloads">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Downloads
+                        </div>
+                        <div class="fp-sidebar-item" data-path="pictures">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                            Pictures
+                        </div>
+                    </div>
+                    <div class="fp-sidebar-divider"></div>
+                    <div class="fp-sidebar-section">
+                        <div class="fp-sidebar-label">This PC</div>
+                        <div id="fp-drives-list"></div>
+                    </div>
+                </div>
+                <div class="fp-main">
+                    <div id="fp-list-header" class="fp-list-header">
+                        <span class="fp-col-name">Name</span>
+                        <span class="fp-col-date">Date modified</span>
+                        <span class="fp-col-size">Size</span>
+                    </div>
+                    <div id="fp-file-list" class="fp-file-list"></div>
+                    <div id="fp-empty" class="fp-empty" style="display:none">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                        <span>This folder is empty</span>
+                    </div>
+                    <div id="fp-loading" class="fp-loading" style="display:none">
+                        <div class="fp-spinner"></div>
+                        <span>Loading...</span>
+                    </div>
+                </div>
+                <div id="fp-preview-pane" class="fp-preview-pane" style="display:none">
+                    <div class="fp-preview-header">Preview</div>
+                    <div class="fp-preview-content">
+                        <img id="fp-preview-img" src="" alt="Preview">
+                        <div id="fp-preview-info" class="fp-preview-info"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="fp-footer">
+                <div class="fp-footer-left">
+                    <label class="fp-footer-label" for="fp-filename">File name:</label>
+                    <input type="text" id="fp-filename" class="fp-filename-input" placeholder="(none)">
+                </div>
+                <div class="fp-footer-right">
+                    <select id="fp-filter" class="fp-filter-select monoloth-dropdown-select">
+                        <option value="*.*">All Files (*.*)</option>
+                    </select>
+                    <button id="fp-ok-btn" class="fp-ok-btn" disabled>Open</button>
+                    <button id="fp-cancel-btn" class="fp-cancel-btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Prevent font flash: show landing text only after fonts load
+        (function() {
+            function showFonts() {
+                document.body.classList.add('fonts-loaded');
+            }
+            if (document.fonts && document.fonts.ready) {
+                document.fonts.ready.then(showFonts);
+            }
+            setTimeout(showFonts, 1500);
+        })();
+    </script>
+    <script src="lib/xterm.js?v=12"></script>
+    <script src="lib/xterm-addon-fit.js?v=14"></script>
+    <script src="lib/xterm-addon-webgl.js?v=13"></script>
+    <script src="tauri-bridge.js?v=19"></script>
+
+    <script src="tooltip.js?v=3"></script>
+
+    <script src="app.js?v=49"></script>
+
+    <script src="sidebar.js?v=16"></script>
+</body>
+</html>
