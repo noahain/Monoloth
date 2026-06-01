@@ -2,6 +2,7 @@ mod commands;
 mod config;
 mod history;
 mod pty;
+mod tabs;
 
 use config::AppConfig;
 use history::HistoryManager;
