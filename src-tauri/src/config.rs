@@ -57,6 +57,12 @@ fn defaults() -> Map<String, Value> {
     m.insert("window_y".into(), Value::Null);
     m.insert("cmdPanelHeight".into(), Value::Number(200.into()));
     m.insert("panelShell".into(), Value::String("cmd".into()));
+    m.insert("tabs_config".into(), serde_json::to_value(serde_json::json!({
+        "enabled": true,
+        "position": "top",
+        "activeTabId": null,
+        "tabs": []
+    })).unwrap());
     m
 }
 
@@ -65,7 +71,7 @@ fn global_keys() -> Vec<&'static str> {
         "active_profile", "last_directory", "window_width", "window_height",
         "window_maximized", "fp_last_dir_bg_image", "fp_last_dir_choose",
         "use_custom_titlebar", "window_x", "window_y",
-        "cmdPanelHeight", "panelShell",
+        "cmdPanelHeight", "panelShell", "tabs_config",
     ]
 }
 
@@ -360,6 +366,23 @@ mod tests {
         assert_eq!(config.get("active_profile").as_str().unwrap(), "OldName");
         assert!(config.rename_profile("OldName", "NewName").is_ok());
         assert_eq!(config.get("active_profile").as_str().unwrap(), "NewName");
+        cleanup_test_env(&test_dir);
+    }
+
+    #[test]
+    fn tabs_config_in_global_keys() {
+        assert!(is_global_key("tabs_config"));
+    }
+
+    #[test]
+    fn tabs_config_default_seeded_on_first_load() {
+        let (test_dir, _lock) = setup_test_env();
+        let config = AppConfig::new();
+        let tabs = config.get("tabs_config");
+        assert_eq!(tabs["enabled"].as_bool().unwrap(), true);
+        assert_eq!(tabs["position"].as_str().unwrap(), "top");
+        assert!(tabs["activeTabId"].is_null());
+        assert!(tabs["tabs"].as_array().unwrap().is_empty());
         cleanup_test_env(&test_dir);
     }
 }

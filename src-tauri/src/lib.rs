@@ -14,6 +14,7 @@ pub fn run() {
     let app_config = AppConfig::new();
     let history_manager = HistoryManager::new();
     let pty_manager = PtyManager::new();
+    let tabs_manager = tabs::TabsManager::default();
     let pty_for_close = pty_manager.clone();
     let history_for_close = history_manager.clone();
 
@@ -63,6 +64,7 @@ pub fn run() {
             // Save window state on resize / move / close
             let cfg_for_events = cfg.clone();
             let pty_clone = pty_for_close;
+            let app_handle_for_close = app.handle().clone();
             let last_size_save = std::sync::Arc::new(parking_lot::Mutex::new(std::time::Instant::now()));
             let last_pos_save = std::sync::Arc::new(parking_lot::Mutex::new(std::time::Instant::now()));
             let window_clone = window.clone();
@@ -116,6 +118,15 @@ pub fn run() {
                         }
                         cfg_for_events.set("window_maximized", serde_json::Value::Bool(window_clone.is_maximized().unwrap_or(false)));
 
+                        {
+                            let tabs = app_handle_for_close.state::<tabs::TabsManager>();
+                            let tabs_cfg = tabs.load();
+                            if let Ok(v) = serde_json::to_value(&tabs_cfg) {
+                                let app_cfg = app_handle_for_close.state::<AppConfig>();
+                                app_cfg.set("tabs_config", v);
+                            }
+                        }
+
                         history_for_close.session_end();
                         pty_clone.terminate_all();
                     }
@@ -128,6 +139,7 @@ pub fn run() {
         .manage(app_config)
         .manage(history_manager)
         .manage(pty_manager)
+        .manage(tabs_manager)
         .invoke_handler(tauri::generate_handler![
             commands::get_config,
             commands::set_config,
