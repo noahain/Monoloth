@@ -66,6 +66,14 @@ class FakeElement {
         child.parentNode = null;
         return child;
     }
+    replaceChild(newChild, oldChild) {
+        const idx = this.children.indexOf(oldChild);
+        if (idx < 0) return oldChild;
+        this.children[idx] = newChild;
+        newChild.parentNode = this;
+        oldChild.parentNode = null;
+        return oldChild;
+    }
     remove() {
         if (this.parentNode) this.parentNode.removeChild(this);
     }
@@ -139,24 +147,31 @@ function makeInvokeHarness(initialConfig) {
     const calls = [];
     const config = JSON.parse(JSON.stringify(initialConfig));
     let nextGen = 1;
+    const recentDirs = ['C:\\proj1', 'C:\\proj2'];
     const invoke = (cmd, args) => {
         const a = args || {};
         calls.push({ cmd, args: a });
         if (cmd === 'get_tabs_config') return Promise.resolve(JSON.parse(JSON.stringify(config)));
         if (cmd === 'create_tab') {
+            const isLanding = a.view === 'landing';
             const tab = {
                 id: a.tabId,
-                profile: a.profile,
+                profile: isLanding ? null : a.profile,
                 pinned: false,
                 color: null,
                 activeView: 'primary',
-                dir: a.dir || null,
+                dir: isLanding ? null : (a.dir || null),
                 secondaryCount: 0,
+                view: isLanding ? 'landing' : 'terminal',
             };
-            return Promise.resolve([tab, [[a.tabId, nextGen++]]]);
+            if (isLanding) {
+                config.tabs.push(tab);
+            }
+            return Promise.resolve([tab, isLanding ? [] : [[a.tabId, nextGen++]]]);
         }
         if (cmd === 'restore_tab_sessions') {
-            return Promise.resolve([JSON.parse(JSON.stringify(config.tabs)), []]);
+            const filtered = config.tabs.filter(function (t) { return (t.view || 'terminal') !== 'landing'; });
+            return Promise.resolve([JSON.parse(JSON.stringify(filtered)), []]);
         }
         if (cmd === 'set_active_tab') {
             config.activeTabId = a.tabId;
@@ -166,14 +181,27 @@ function makeInvokeHarness(initialConfig) {
             Object.assign(config, a.cfg || {});
             return Promise.resolve();
         }
+        if (cmd === 'set_config' && a.key === 'last_directory') return Promise.resolve();
         if (cmd === 'get_config' && a.key === 'last_directory') return Promise.resolve(null);
+        if (cmd === 'get_config' && a.key === 'recent_directories') return Promise.resolve(recentDirs);
         if (cmd === 'get_config' && a.key === 'active_profile') return Promise.resolve('Default');
         if (cmd === 'get_profiles') {
             return Promise.resolve({ success: true, profiles: ['Default', 'opencode'], active: 'Default' });
         }
+        if (cmd === 'set_tab_profile') {
+            const idx = config.tabs.findIndex(function (t) { return t.id === a.tabId; });
+            if (idx >= 0) {
+                config.tabs[idx].view = 'terminal';
+                config.tabs[idx].profile = a.profile || null;
+                config.tabs[idx].secondaryCount = 0;
+            }
+            return Promise.resolve([{ id: a.tabId, profile: a.profile, secondaryCount: 0, view: 'terminal' }, [[a.tabId, nextGen++]]]);
+        }
+        if (cmd === 'terminate_terminal') return Promise.resolve({ success: true });
+        if (cmd === 'close_tab') return Promise.resolve();
         return Promise.resolve();
     };
-    return { calls, invoke, config };
+    return { calls, invoke, config, recentDirs };
 }
 
 function buildContext(options = {}) {
@@ -351,4 +379,77 @@ test('reorderTabs invokes reorder_tabs with the new order', async () => {
     const call = ctx.calls.find((c) => c.cmd === 'reorder_tabs');
     assert.ok(call, 'reorder_tabs should be called');
     assert.deepEqual(call.args.newOrder, order);
+});
+
+test('createLandingTab invokes create_tab with view="landing" and no PTY spawn', async () => {
+    const ctx = buildContext();
+    await ctx.runInit();
+    ctx.calls.length = 0;
+
+    const tab = await ctx.window.TabManager.createLandingTab();
+
+    const createCall = ctx.calls.find((c) => c.cmd === 'create_tab');
+    assert.ok(createCall, 'create_tab should be called');
+    assert.equal(createCall.args.view, 'landing');
+    assert.equal(createCall.args.profile, null);
+    assert.equal(createCall.args.dir, null);
+    assert.ok(UUID_V4_RE.test(createCall.args.tabId), 'tab id must be UUID v4');
+    assert.equal(tab.id, createCall.args.tabId);
+});
+
+test('transitionTabToTerminal moves landing tab to terminal via set_tab_profile', async () => {
+    const ctx = buildContext();
+    await ctx.runInit();
+    ctx.calls.length = 0;
+
+    await ctx.window.TabManager.createLandingTab();
+    const landingId = ctx.calls.filter((c) => c.cmd === 'create_tab').pop().args.tabId;
+    ctx.calls.length = 0;
+
+    await ctx.window.TabManager.transitionTabToTerminal(landingId, 'C:\\proj1');
+
+    const profileCall = ctx.calls.find((c) => c.cmd === 'set_tab_profile');
+    assert.ok(profileCall, 'set_tab_profile should be called');
+    assert.equal(profileCall.args.tabId, landingId);
+    assert.equal(profileCall.args.profile, null);
+
+    const lastDirCall = ctx.calls.find((c) => c.cmd === 'set_config' && c.args.key === 'last_directory');
+    assert.ok(lastDirCall, 'set_config last_directory should be called');
+    assert.equal(lastDirCall.args.value, 'C:\\proj1');
+
+    const cfgTab = ctx.config.tabs.find((t) => t.id === landingId);
+    assert.equal(cfgTab.view, 'terminal');
+    assert.equal(cfgTab.dir, 'C:\\proj1');
+});
+
+test('revertTabToLanding terminates PTYs and switches the tab back to landing state', async () => {
+    const ctx = buildContext();
+    await ctx.runInit();
+    await ctx.window.TabManager.createTab('Default');
+    const newId = ctx.calls.filter((c) => c.cmd === 'create_tab').pop().args.tabId;
+    ctx.calls.length = 0;
+
+    await ctx.window.TabManager.revertTabToLanding(newId);
+
+    const termCall = ctx.calls.find((c) => c.cmd === 'terminate_terminal');
+    assert.ok(termCall, 'terminate_terminal should be called');
+    assert.equal(termCall.args.sessionId, newId);
+
+    const cfgTab = ctx.config.tabs.find((t) => t.id === newId);
+    assert.equal(cfgTab.view, 'landing');
+    assert.equal(cfgTab.profile, null);
+    assert.equal(cfgTab.dir, null);
+    assert.equal(cfgTab.secondaryCount, 0);
+});
+
+test('closeTab on the last remaining tab invokes showGlobalLanding', async () => {
+    const ctx = buildContext();
+    await ctx.runInit();
+    await ctx.window.TabManager.closeTab('init-tab-id');
+
+    const landing = ctx.document.getElementById('landing');
+    const tabBar = ctx.document.getElementById('tab-bar');
+    assert.ok(landing && landing.classList.contains, 'landing should exist');
+    assert.ok(!landing.classList.contains('hidden'), 'landing should be visible');
+    assert.equal(tabBar.hidden, true, 'tab bar should be hidden when no tabs remain');
 });

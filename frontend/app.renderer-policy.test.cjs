@@ -208,10 +208,14 @@ function createHarness(backgroundConfig) {
             getActiveXterm: () => null,
             getActiveTabId: () => null,
             getActiveView: () => 'primary',
+            getActiveRuntime: () => null,
             isMainActive: () => false,
             resolveSessionId: (id, v) => v === 'primary' ? id : null,
             setupTerminalHandlers: () => {},
             createTab: async () => ({}),
+            createLandingTab: async () => ({}),
+            transitionTabToTerminal: async () => {},
+            revertTabToLanding: async () => {},
             closeTab: async () => {},
             setActiveTab: async () => {},
             switchTab: async () => {},
@@ -220,7 +224,9 @@ function createHarness(backgroundConfig) {
             setTabColor: async () => {},
             reorderTabs: async () => {},
             changeProfile: async () => {},
-            refreshActiveTab: async () => {}
+            refreshActiveTab: async () => {},
+            refitActive: async () => {},
+            showGlobalLanding: () => {}
         }
     };
     window.window = window;
