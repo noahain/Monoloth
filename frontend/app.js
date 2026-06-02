@@ -1747,7 +1747,10 @@
             if (settingsPage) settingsPage.classList.remove('active');
             if (terminalView) terminalView.classList.add('active');
             try {
-                await window.TabManager.createTab(dir);
+                if (window.monolithApi && dir) {
+                    await window.monolithApi.set_config('last_directory', dir).catch(function () {});
+                }
+                await window.TabManager.createTab(null);
             } catch (e) {
                 console.error('TabManager.createTab failed:', e);
             }
@@ -2272,7 +2275,11 @@
         if (e.ctrlKey && window.TabManager) {
             if (e.shiftKey && (e.key === 'T' || e.key === 't')) {
                 e.preventDefault();
-                window.TabManager.createTab(null);
+                if (typeof window.TabManager.pickAndCreateTab === 'function') {
+                    window.TabManager.pickAndCreateTab();
+                } else {
+                    window.TabManager.createTab(null);
+                }
             } else if (e.shiftKey && (e.key === 'W' || e.key === 'w')) {
                 e.preventDefault();
                 var activeId = window.TabManager.getActiveTabId();
