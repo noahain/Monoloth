@@ -411,6 +411,7 @@
       cfgTab.profile = updated.profile;
       cfgTab.secondaryCount = updated.secondaryCount;
     }
+    try { await api.setTabsConfig(state.config); } catch (e) { /* ignore */ }
 
     rt.xterms = { primary: null, secondaries: new Map() };
     rt.sessionIds = { primary: tabId, secondaries: new Map() };
