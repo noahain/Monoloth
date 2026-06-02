@@ -6467,10 +6467,34 @@ body.adaptive-light .sidebar-setting-name {
     height: 32px;
     align-items: center;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+}
+body.tabs-bar-active .landing {
+    padding-top: 32px;
+}
+body.tabs-bar-active #terminal-view {
+    padding-top: 32px;
+    box-sizing: border-box;
 }
 #tab-bar.position-bottom {
+    top: auto;
+    bottom: 0;
     border-bottom: none;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+body.tabs-bar-active:not(.tabs-bar-bottom) .landing,
+body.tabs-bar-active:not(.tabs-bar-bottom) #terminal-view {
+    padding-top: 32px;
+    box-sizing: border-box;
+}
+body.tabs-bar-active.tabs-bar-bottom .landing,
+body.tabs-bar-active.tabs-bar-bottom #terminal-view {
+    padding-bottom: 32px;
+    box-sizing: border-box;
 }
 #tab-list {
     display: flex;
