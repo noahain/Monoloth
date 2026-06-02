@@ -6655,3 +6655,77 @@ body.tabs-bar-active.tabs-bar-bottom #terminal-view {
 #profile-picker .item:hover {
     background: rgba(255, 255, 255, 0.08);
 }
+
+/* Tab landing (slimmed landing inside a tab) */
+.tab-landing {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    padding: 32px;
+    box-sizing: border-box;
+    color: var(--text-primary, #e0e0e0);
+    background: var(--bg-primary, #0a0a0a);
+    overflow-y: auto;
+}
+.tab-landing-header h2 {
+    font-size: 24px;
+    font-weight: 500;
+    margin: 0 0 24px 0;
+    color: var(--text-primary, #e0e0e0);
+}
+.tab-landing-pick-btn {
+    background: var(--accent-primary, #3b82f6);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 12px 24px;
+    font-size: 14px;
+    cursor: pointer;
+    font-weight: 500;
+}
+.tab-landing-pick-btn:hover { opacity: 0.85; }
+.tab-landing-recents {
+    width: 100%;
+    max-width: 400px;
+    margin-top: 32px;
+}
+.tab-landing-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--text-secondary, #888);
+    margin-bottom: 8px;
+    letter-spacing: 0.05em;
+}
+.tab-landing-recents-list { display: flex; flex-direction: column; gap: 4px; }
+.tab-landing-recent-item {
+    padding: 8px 12px;
+    background: var(--bg-tertiary, #2a2a2a);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-primary, #e0e0e0);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+}
+.tab-landing-recent-item:hover { background: var(--bg-hover, #3a3a3a); }
+.tab-landing-loading {
+    color: var(--text-secondary, #888);
+    font-style: italic;
+    padding: 24px;
+    text-align: center;
+}
+.tab-landing-icon {
+    color: var(--accent-primary, #3b82f6);
+    font-size: 12px;
+    flex-shrink: 0;
+}
+.tab[data-view="landing"] {
+    background: var(--bg-tertiary, #2a2a2a);
+    border-bottom: 2px dashed var(--accent-primary, #3b82f6);
+}
