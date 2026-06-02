@@ -279,10 +279,8 @@
 
     buildRuntimeForTab(tab);
 
-    if (!state.config.activeTabId) {
-      await setActiveTab(tabId);
-      await switchTab(tabId);
-    }
+    await setActiveTab(tabId);
+    await switchTab(tabId);
     return tab;
   }
 
