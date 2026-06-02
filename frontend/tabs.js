@@ -784,6 +784,12 @@
     }
     state.config = cfg;
 
+    var tabBar = document.getElementById('tab-bar');
+    if (tabBar) {
+      tabBar.hidden = !cfg.enabled;
+      tabBar.classList.toggle('position-bottom', cfg.position === 'bottom');
+    }
+
     if (!cfg.tabs || cfg.tabs.length === 0) {
       try { await createTab(null); } catch (e) { console.error('initial createTab failed:', e); }
     } else {
