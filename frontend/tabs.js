@@ -259,9 +259,6 @@
   }
 
   async function createTab(profileName) {
-    if (profileName == null) {
-      return showProfilePicker();
-    }
     var tabId = uuidv4();
     var cols = 80;
     var rows = 24;
@@ -287,6 +284,10 @@
       await switchTab(tabId);
     }
     return tab;
+  }
+
+  async function pickAndCreateTab() {
+    return showProfilePicker();
   }
 
   async function closeTab(tabId) {
@@ -707,7 +708,7 @@
 
   function setupNewTabButton() {
     var btn = document.getElementById('tab-new');
-    if (btn) btn.addEventListener('click', function () { showProfilePicker(); });
+    if (btn) btn.addEventListener('click', function () { pickAndCreateTab(); });
   }
 
   async function registerPtyOutputListener() {
@@ -789,6 +790,8 @@
       tabBar.hidden = !cfg.enabled;
       tabBar.classList.toggle('position-bottom', cfg.position === 'bottom');
     }
+    document.body.classList.toggle('tabs-bar-active', !!cfg.enabled);
+    document.body.classList.toggle('tabs-bar-bottom', cfg.position === 'bottom');
 
     if (!cfg.tabs || cfg.tabs.length === 0) {
       try { await createTab(null); } catch (e) { console.error('initial createTab failed:', e); }
@@ -829,6 +832,7 @@
     resolveSessionId: resolveSessionId,
     setupTerminalHandlers: setupTerminalHandlers,
     createTab: createTab,
+    pickAndCreateTab: pickAndCreateTab,
     closeTab: closeTab,
     setActiveTab: setActiveTab,
     switchTab: switchTab,
