@@ -53,8 +53,10 @@
             .catch(function (err) { return { success: false, error: String(err) }; });
     };
 
-    api.start_opencode = function (dir) {
-        return api.start_terminal('main', dir, true, null, null, null);
+    api.start_opencode = async function (dir) {
+        var tabId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now() + '-' + Math.random());
+        var activeProfile = await api.get_config('active_profile');
+        return api.createTab(tabId, activeProfile || null, dir, 80, 24);
     };
 
     api.send_input = function (sessionId, data) {
@@ -78,6 +80,59 @@
 
     api.terminate = function () {
         return api.terminate_terminal('main');
+    };
+
+    // --- Tabs (Unit E) ---
+    api.getTabsConfig = function () {
+        return invoke('get_tabs_config');
+    };
+
+    api.setTabsConfig = function (cfg) {
+        return invoke('set_tabs_config', { cfg: cfg });
+    };
+
+    api.createTab = function (tabId, profile, dir, cols, rows) {
+        return invoke('create_tab', { tabId: tabId, profile: profile, dir: dir, cols: cols, rows: rows });
+    };
+
+    api.closeTab = function (tabId, force) {
+        return invoke('close_tab', { tabId: tabId, force: force || false });
+    };
+
+    api.restoreTabSessions = function () {
+        return invoke('restore_tab_sessions');
+    };
+
+    api.setTabActiveView = function (tabId, view) {
+        return invoke('set_tab_active_view', { tabId: tabId, view: view });
+    };
+
+    api.setActiveTab = function (tabId) {
+        return invoke('set_active_tab', { tabId: tabId });
+    };
+
+    api.setTabPinned = function (tabId, pinned) {
+        return invoke('set_tab_pinned', { tabId: tabId, pinned: pinned });
+    };
+
+    api.setTabColor = function (tabId, color) {
+        return invoke('set_tab_color', { tabId: tabId, color: color });
+    };
+
+    api.setTabProfile = function (tabId, profile, cols, rows) {
+        return invoke('set_tab_profile', { tabId: tabId, profile: profile, cols: cols, rows: rows });
+    };
+
+    api.reorderTabs = function (newOrder) {
+        return invoke('reorder_tabs', { newOrder: newOrder });
+    };
+
+    api.refreshTab = function (tabId, cols, rows) {
+        return invoke('refresh_tab', { tabId: tabId, cols: cols, rows: rows });
+    };
+
+    api.getProfileConfigByName = function (name) {
+        return invoke('get_profile_config_by_name', { name: name });
     };
 
     // --- System commands ---
@@ -430,24 +485,6 @@
             .catch(function (err) { return { success: false, error: String(err) }; });
     };
 
-    // --- PTY Output Events ---
-    function setupPtyListener() {
-        listen('pty-output', function (event) {
-            var payload = event.payload;
-            var sessionId = payload.sessionId || 'main';
-            var generation = payload.generation || 0;
-            if (payload.eof) {
-                if (window.writeToTerm) window.writeToTerm('\r\n\x1b[90m[Process exited]\x1b[0m\r\n', true, sessionId, generation);
-                return;
-            }
-            if (window.writeToTerm) {
-                window.writeToTerm(payload.data, false, sessionId, generation);
-            }
-        }).catch(function (e) {
-            console.error('Failed to set up PTY listener:', e);
-        });
-    }
-
     // --- Generic Config Getter ---
     api.get_config = function(key) {
         return invoke('get_config', { key: key })
@@ -515,16 +552,4 @@
 
     window.monolithApi = api;
     console.log('[MonolothBridge] window.monolithApi set, methods:', Object.keys(api).length);
-
-    if (window.__TAURI__) {
-        setupPtyListener();
-    } else {
-        var checkTauri = setInterval(function () {
-            if (window.__TAURI__) {
-                clearInterval(checkTauri);
-                setupPtyListener();
-            }
-        }, 50);
-        setTimeout(function () { clearInterval(checkTauri); }, 10000);
-    }
 })();
