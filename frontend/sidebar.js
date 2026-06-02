@@ -982,6 +982,71 @@
         settingsContent.appendChild(sidebarPanel);
     }
 
+    // ---- Tabs Settings Section (inside Appearance tab) ----
+    function injectTabsSettingsSection() {
+        var tabsObserver = new MutationObserver(function () {
+            var appearance = document.getElementById('tab-appearance');
+            if (!appearance || appearance.dataset.tabsInjected === '1') return;
+            if (!document.body.contains(appearance)) return;
+            appearance.dataset.tabsInjected = '1';
+
+            var section = document.createElement('div');
+            section.className = 'settings-section';
+            section.innerHTML = [
+                '<h3>Tabs</h3>',
+                '<label class="settings-row">',
+                '  <input type="checkbox" id="tabs-enabled" />',
+                '  <span>Show tab bar</span>',
+                '</label>',
+                '<label class="settings-row">',
+                '  <span>Position</span>',
+                '  <select id="tabs-position">',
+                '    <option value="top">Top</option>',
+                '    <option value="bottom">Bottom</option>',
+                '  </select>',
+                '</label>'
+            ].join('');
+
+            var appearanceStatus = document.getElementById('appearance-status');
+            if (appearanceStatus) {
+                appearance.insertBefore(section, appearanceStatus);
+            } else {
+                appearance.appendChild(section);
+            }
+
+            var enabled = section.querySelector('#tabs-enabled');
+            var position = section.querySelector('#tabs-position');
+
+            function readAndApply() {
+                if (!window.monolithApi || typeof window.monolithApi.getTabsConfig !== 'function') return;
+                window.monolithApi.getTabsConfig().then(function (cfg) {
+                    if (!cfg) return;
+                    enabled.checked = !!cfg.enabled;
+                    position.value = cfg.position || 'top';
+                });
+            }
+
+            readAndApply();
+
+            enabled.addEventListener('change', function () {
+                if (!window.monolithApi || typeof window.monolithApi.getTabsConfig !== 'function') return;
+                window.monolithApi.getTabsConfig().then(function (cfg) {
+                    var next = Object.assign({}, cfg, { enabled: enabled.checked });
+                    return window.monolithApi.setTabsConfig(next);
+                }).catch(function (e) { console.error('setTabsConfig failed:', e); });
+            });
+
+            position.addEventListener('change', function () {
+                if (!window.monolithApi || typeof window.monolithApi.getTabsConfig !== 'function') return;
+                window.monolithApi.getTabsConfig().then(function (cfg) {
+                    var next = Object.assign({}, cfg, { position: position.value });
+                    return window.monolithApi.setTabsConfig(next);
+                }).catch(function (e) { console.error('setTabsConfig failed:', e); });
+            });
+        });
+        tabsObserver.observe(document.body, { childList: true, subtree: true });
+    }
+
     // ---- Window Resize Handler ----
     function onWindowResize() {
         if (window.MonolothApp && window.MonolothApp.refitTerminals) {
@@ -998,6 +1063,10 @@
         setTimeout(function () {
             setupSettingsTab();
         }, 500);
+
+        // Tabs settings section (lives inside Appearance; uses MutationObserver
+        // because the settings dialog DOM is destroyed/recreated on every open).
+        injectTabsSettingsSection();
 
         window.addEventListener('resize', function () {
             if (window._sidebarResizeTimer) clearTimeout(window._sidebarResizeTimer);
