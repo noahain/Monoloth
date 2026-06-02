@@ -982,18 +982,18 @@
         settingsContent.appendChild(sidebarPanel);
     }
 
-    // ---- Tabs Settings Section (inside Appearance tab) ----
+    // ---- Tabs Settings Section (inside dedicated Tabs settings tab) ----
     function injectTabsSettingsSection() {
         function tryInject() {
-            var appearance = document.getElementById('tab-appearance');
-            if (!appearance || appearance.dataset.tabsInjected === '1') return;
-            if (!document.body.contains(appearance)) return;
-            appearance.dataset.tabsInjected = '1';
+            var mount = document.getElementById('tabs-settings-mount');
+            if (!mount) return;
+            if (!document.body.contains(mount)) return;
+            if (mount.dataset.tabsInjected === '1') return;
+            mount.dataset.tabsInjected = '1';
 
             var section = document.createElement('div');
             section.className = 'settings-section';
             section.innerHTML = [
-                '<h3>Tabs</h3>',
                 '<label class="settings-row">',
                 '  <input type="checkbox" id="tabs-enabled" />',
                 '  <span>Show tab bar</span>',
@@ -1007,12 +1007,7 @@
                 '</label>'
             ].join('');
 
-            var appearanceStatus = document.getElementById('appearance-status');
-            if (appearanceStatus) {
-                appearance.insertBefore(section, appearanceStatus);
-            } else {
-                appearance.appendChild(section);
-            }
+            mount.appendChild(section);
 
             var enabled = section.querySelector('#tabs-enabled');
             var position = section.querySelector('#tabs-position');
@@ -1021,8 +1016,8 @@
                 if (!window.monolithApi || typeof window.monolithApi.getTabsConfig !== 'function') return;
                 window.monolithApi.getTabsConfig().then(function (cfg) {
                     if (!cfg) return;
-                    enabled.checked = !!cfg.enabled;
-                    position.value = cfg.position || 'top';
+                    enabled.checked = cfg.enabled !== false;
+                    position.value = cfg.position === 'bottom' ? 'bottom' : 'top';
                 });
             }
 
@@ -1066,7 +1061,7 @@
             setupSettingsTab();
         }, 500);
 
-        // Tabs settings section (lives inside Appearance). The settings dialog
+        // Tabs settings section (lives inside its own Tabs tab). The settings dialog
         // is destroyed/recreated on every open, so we use a MutationObserver.
         // Also retry on the same delay as setupSettingsTab for the first run.
         setTimeout(function () {
