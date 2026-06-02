@@ -1066,9 +1066,12 @@
             setupSettingsTab();
         }, 500);
 
-        // Tabs settings section (lives inside Appearance; uses MutationObserver
-        // because the settings dialog DOM is destroyed/recreated on every open).
-        injectTabsSettingsSection();
+        // Tabs settings section (lives inside Appearance). The settings dialog
+        // is destroyed/recreated on every open, so we use a MutationObserver.
+        // Also retry on the same delay as setupSettingsTab for the first run.
+        setTimeout(function () {
+            injectTabsSettingsSection();
+        }, 500);
 
         window.addEventListener('resize', function () {
             if (window._sidebarResizeTimer) clearTimeout(window._sidebarResizeTimer);
