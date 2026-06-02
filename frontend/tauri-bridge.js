@@ -56,7 +56,7 @@
     api.start_opencode = async function (dir) {
         var tabId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now() + '-' + Math.random());
         var activeProfile = await api.get_config('active_profile');
-        return api.createTab(tabId, activeProfile || null, dir, 80, 24);
+        return api.createTab(tabId, activeProfile || null, dir, 80, 24, 'terminal');
     };
 
     api.send_input = function (sessionId, data) {
@@ -91,8 +91,8 @@
         return invoke('set_tabs_config', { cfg: cfg });
     };
 
-    api.createTab = function (tabId, profile, dir, cols, rows) {
-        return invoke('create_tab', { tabId: tabId, profile: profile, dir: dir, cols: cols, rows: rows });
+    api.createTab = function (tabId, profile, dir, cols, rows, view) {
+        return invoke('create_tab', { tabId: tabId, profile: profile, dir: dir, cols: cols, rows: rows, view: view || null });
     };
 
     api.closeTab = function (tabId, force) {
