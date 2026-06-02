@@ -1,10 +1,6 @@
 (function () {
   'use strict';
 
-  if (!window.monolithApi) {
-    throw new Error('TabManager: monolithApi not loaded');
-  }
-
   const api = window.monolithApi;
   const eventApi = window.__TAURI__ && window.__TAURI__.event;
 
@@ -488,17 +484,25 @@
   function showGlobalLanding() {
     var landing = document.getElementById('landing');
     var terminalView = document.getElementById('terminal-view');
-    var tabBar = document.getElementById('tab-bar');
     if (landing) landing.classList.remove('hidden');
     if (terminalView) terminalView.classList.remove('active');
-    if (tabBar) tabBar.hidden = true;
-    document.body.classList.remove('tabs-bar-active');
   }
 
   async function createLandingTab() {
+    var tabBar = document.getElementById('tab-bar');
+    if (tabBar) tabBar.hidden = false;
+    document.body.classList.add('tabs-bar-active');
+
     var tabId = uuidv4();
     var cols = 80, rows = 24;
-    var result = await api.createTab(tabId, null, null, cols, rows, 'landing');
+    var result;
+    try {
+      result = await api.createTab(tabId, null, null, cols, rows, 'landing');
+    } catch (e) {
+      tabBar.hidden = true;
+      document.body.classList.remove('tabs-bar-active');
+      throw e;
+    }
     var tab = result[0];
 
     state.config.tabs.push(tab);
@@ -508,14 +512,14 @@
     await setActiveTab(tabId);
     await switchTab(tabId);
 
-    var tabBar = document.getElementById('tab-bar');
-    if (tabBar) tabBar.hidden = false;
-    document.body.classList.add('tabs-bar-active');
-
     return tab;
   }
 
   async function createTab(profileName) {
+    var tabBar = document.getElementById('tab-bar');
+    if (tabBar) tabBar.hidden = false;
+    document.body.classList.add('tabs-bar-active');
+
     var tabId = uuidv4();
     var cols = 80;
     var rows = 24;
@@ -525,7 +529,14 @@
       if (lastDir) dir = lastDir;
     } catch (e) { dir = null; }
 
-    var result = await api.createTab(tabId, profileName, dir || null, cols, rows, 'terminal');
+    var result;
+    try {
+      result = await api.createTab(tabId, profileName, dir || null, cols, rows, 'terminal');
+    } catch (e) {
+      tabBar.hidden = true;
+      document.body.classList.remove('tabs-bar-active');
+      throw e;
+    }
     var tab = result[0];
     var sessions = result[1] || [];
 
@@ -1067,6 +1078,11 @@
   }
 
   async function init() {
+    if (!api) {
+      console.error('TabManager: monolithApi not loaded');
+      return;
+    }
+
     state.xtermPoolEl = document.getElementById('tab-xterm-pool');
     if (!state.xtermPoolEl) {
       state.xtermPoolEl = document.createElement('div');
@@ -1075,13 +1091,19 @@
       document.body.appendChild(state.xtermPoolEl);
     }
 
-    await registerPtyOutputListener();
+    try {
+      await registerPtyOutputListener();
+    } catch (e) {
+      console.error('registerPtyOutputListener failed:', e);
+    }
 
     var cfg = null;
     try {
       cfg = await api.getTabsConfig();
     } catch (e) {
       console.error('getTabsConfig failed:', e);
+    }
+    if (!cfg) {
       cfg = { enabled: true, position: 'top', activeTabId: null, tabs: [] };
     }
     state.config = cfg;
@@ -1116,12 +1138,13 @@
           await setActiveTab(tabs[0].id);
           await switchTab(tabs[0].id);
         }
-        if (tabBar) {
-          tabBar.hidden = !barEnabled;
-          document.body.classList.add('tabs-bar-active');
-        }
       } catch (e) {
         console.error('restore failed', e);
+      } finally {
+        if (tabBar) {
+          tabBar.hidden = !barEnabled;
+          if (barEnabled) document.body.classList.add('tabs-bar-active');
+        }
       }
     }
 
@@ -1159,13 +1182,19 @@
     refreshActiveTab: refreshActiveTab,
     refitActive: refitActive,
     showGlobalLanding: showGlobalLanding,
+    ready: null,
   };
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () {
-      window.TabManager.init().catch(function (err) { console.error('TabManager.init failed:', err); });
-    });
-  } else {
-    window.TabManager.init().catch(function (err) { console.error('TabManager.init failed:', err); });
-  }
+  var readyPromise = (function () {
+    if (document.readyState === 'loading') {
+      return new Promise(function (resolve) {
+        document.addEventListener('DOMContentLoaded', function () {
+          window.TabManager.init().then(resolve, function (err) { console.error('TabManager.init failed:', err); resolve(); });
+        });
+      });
+    } else {
+      return window.TabManager.init().then(undefined, function (err) { console.error('TabManager.init failed:', err); });
+    }
+  })();
+  window.TabManager.ready = readyPromise;
 })();

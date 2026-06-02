@@ -6473,6 +6473,9 @@ body.adaptive-light .sidebar-setting-name {
     right: 0;
     z-index: 1000;
 }
+#tab-bar[hidden] {
+    display: none !important;
+}
 body.tabs-bar-active .landing {
     padding-top: 32px;
 }
