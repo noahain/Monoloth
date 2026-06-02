@@ -188,7 +188,9 @@ function createHarness(backgroundConfig) {
         resize_terminal: () => Promise.resolve(),
         send_input: () => Promise.resolve(),
         terminate_terminal: () => Promise.resolve(),
-        is_window_maximized: () => Promise.resolve({ maximized: false })
+        is_window_maximized: () => Promise.resolve({ maximized: false }),
+        getTabsConfig: () => Promise.resolve({ enabled: true, position: 'top', activeTabId: null, tabs: [] }),
+        setTabsConfig: () => Promise.resolve()
     }, {
         get(target, prop) {
             if (prop in target) return target[prop];
@@ -200,7 +202,26 @@ function createHarness(backgroundConfig) {
         monolithApi,
         addEventListener() {},
         removeEventListener() {},
-        __TAURI__: null
+        __TAURI__: null,
+        TabManager: {
+            init: async () => {},
+            getActiveXterm: () => null,
+            getActiveTabId: () => null,
+            getActiveView: () => 'primary',
+            isMainActive: () => false,
+            resolveSessionId: (id, v) => v === 'primary' ? id : null,
+            setupTerminalHandlers: () => {},
+            createTab: async () => ({}),
+            closeTab: async () => {},
+            setActiveTab: async () => {},
+            switchTab: async () => {},
+            switchView: async () => {},
+            pinTab: async () => {},
+            setTabColor: async () => {},
+            reorderTabs: async () => {},
+            changeProfile: async () => {},
+            refreshActiveTab: async () => {}
+        }
     };
     window.window = window;
 
