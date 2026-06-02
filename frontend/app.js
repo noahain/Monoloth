@@ -2256,6 +2256,45 @@
                 switchTab(settingsTabs[nextIdx].dataset.tab);
             }
         }
+
+        // Tab shortcuts (hardcoded, per spec)
+        if (e.ctrlKey && window.TabManager) {
+            if (e.shiftKey && (e.key === 'T' || e.key === 't')) {
+                e.preventDefault();
+                window.TabManager.createTab(null);
+            } else if (e.shiftKey && (e.key === 'W' || e.key === 'w')) {
+                e.preventDefault();
+                var activeId = window.TabManager.getActiveTabId();
+                if (activeId) window.TabManager.closeTab(activeId);
+            } else if (e.key === 'PageUp' || e.key === 'PageDown') {
+                e.preventDefault();
+                if (window.monolithApi && typeof window.monolithApi.getTabsConfig === 'function') {
+                    window.monolithApi.getTabsConfig().then(function (cfg) {
+                        if (!cfg || !cfg.tabs || cfg.tabs.length === 0) return;
+                        var id = window.TabManager.getActiveTabId();
+                        var idx = -1;
+                        for (var i = 0; i < cfg.tabs.length; i++) {
+                            if (cfg.tabs[i].id === id) { idx = i; break; }
+                        }
+                        if (idx < 0) idx = 0;
+                        var nextIdx = e.key === 'PageUp'
+                            ? (idx - 1 + cfg.tabs.length) % cfg.tabs.length
+                            : (idx + 1) % cfg.tabs.length;
+                        window.TabManager.switchTab(cfg.tabs[nextIdx].id);
+                    });
+                }
+            } else if (/^[1-9]$/.test(e.key)) {
+                e.preventDefault();
+                var n = parseInt(e.key, 10) - 1;
+                if (window.monolithApi && typeof window.monolithApi.getTabsConfig === 'function') {
+                    window.monolithApi.getTabsConfig().then(function (cfg) {
+                        if (cfg && cfg.tabs && cfg.tabs[n]) {
+                            window.TabManager.switchTab(cfg.tabs[n].id);
+                        }
+                    });
+                }
+            }
+        }
     });
 
     if (paletteInput) {
@@ -3592,6 +3631,9 @@
         restartSession: function (sessionId) {
             sessionId = sessionId || 'main';
             if (sessionId === 'main') {
+                if (window.TabManager && typeof window.TabManager.refreshActiveTab === 'function') {
+                    return window.TabManager.refreshActiveTab();
+                }
                 if (_terminalRunning) {
                     _skipNextEof['main'] = true;
                     window.monolithApi.terminate_terminal('main')
