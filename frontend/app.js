@@ -1534,6 +1534,9 @@
         if (window.monolithApi && dir) {
             try { await window.monolithApi.set_config('last_directory', dir); } catch (e) { /* ignore */ }
         }
+        var tabBar = document.getElementById('tab-bar');
+        if (tabBar) tabBar.hidden = false;
+        document.body.classList.add('tabs-bar-active');
         if (window.TabManager) {
             try {
                 var activeId = window.TabManager.getActiveTabId();
@@ -1542,9 +1545,6 @@
                 } else {
                     await window.TabManager.createTab(null);
                 }
-                var tabBar = document.getElementById('tab-bar');
-                if (tabBar) tabBar.hidden = false;
-                document.body.classList.add('tabs-bar-active');
             } catch (e) {
                 console.error('TabManager showTerminal failed:', e);
             }
