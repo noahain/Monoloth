@@ -31,6 +31,10 @@
     });
   }
 
+  function isLanding(rt) {
+    return rt && rt.view === 'landing';
+  }
+
   function resolveSessionId(tabId, view) {
     if (!tabId) return null;
     if (view === 'primary' || !view) return tabId;
@@ -152,6 +156,7 @@
     el.className = 'tab';
     el.dataset.tabId = tab.id;
     el.dataset.pinned = String(!!tab.pinned);
+    el.dataset.view = tab.view || 'terminal';
 
     if (tab.color) {
       var dot = document.createElement('span');
@@ -160,10 +165,22 @@
       el.appendChild(dot);
     }
 
+    if (tab.view === 'landing') {
+      var icon = document.createElement('span');
+      icon.className = 'tab-landing-icon';
+      icon.textContent = '\u2605';
+      icon.dataset.tooltip = 'New tab (no project)';
+      el.appendChild(icon);
+    }
+
     var label = document.createElement('span');
     label.className = 'tab-label';
     var pathTail = tab.dir ? tab.dir.split(/[\\\/]/).pop() : '';
-    label.textContent = tab.profile || pathTail || 'tab';
+    if (tab.view === 'landing') {
+      label.textContent = 'New';
+    } else {
+      label.textContent = tab.profile || pathTail || 'tab';
+    }
     el.appendChild(label);
 
     if (tab.secondaryCount && tab.secondaryCount > 0) {
@@ -224,29 +241,36 @@
 
   function buildRuntimeForTab(tab) {
     var tabId = tab.id;
+    var view = tab.view || 'terminal';
     var rt = {
       xterms: { primary: null, secondaries: new Map() },
       sessionIds: { primary: tabId, secondaries: new Map() },
       activeView: tab.activeView || 'primary',
       dom: null,
+      landingDom: null,
       pinned: !!tab.pinned,
       profile: tab.profile,
       color: tab.color,
       dir: tab.dir,
       secondaryCount: tab.secondaryCount || 0,
+      view: view,
     };
     state.runtime.set(tabId, rt);
-    state.sessionToTab.set(tabId, { tabId: tabId, view: 'primary' });
 
-    rt.xterms.primary = createXtermForView(tabId);
+    if (view === 'landing') {
+      buildLandingForRuntime(tabId);
+    } else {
+      state.sessionToTab.set(tabId, { tabId: tabId, view: 'primary' });
+      rt.xterms.primary = createXtermForView(tabId);
 
-    var count = tab.secondaryCount || 0;
-    for (var i = 0; i < count; i++) {
-      var sid = tabId + '__sec' + i;
-      var term = createXtermForView(sid);
-      rt.xterms.secondaries.set(i, term);
-      rt.sessionIds.secondaries.set(i, sid);
-      state.sessionToTab.set(sid, { tabId: tabId, view: 'secondary', secondaryIndex: i });
+      var count = tab.secondaryCount || 0;
+      for (var i = 0; i < count; i++) {
+        var sid = tabId + '__sec' + i;
+        var term = createXtermForView(sid);
+        rt.xterms.secondaries.set(i, term);
+        rt.sessionIds.secondaries.set(i, sid);
+        state.sessionToTab.set(sid, { tabId: tabId, view: 'secondary', secondaryIndex: i });
+      }
     }
 
     var list = document.getElementById('tab-list');
@@ -256,6 +280,238 @@
       rt.dom = el;
     }
     return rt;
+  }
+
+  function buildLandingContent(tab) {
+    var root = document.createElement('div');
+    root.className = 'tab-landing';
+    root.dataset.tabLanding = '1';
+
+    var header = document.createElement('div');
+    header.className = 'tab-landing-header';
+    var heading = document.createElement('h2');
+    heading.textContent = 'New Terminal';
+    header.appendChild(heading);
+    root.appendChild(header);
+
+    var pickBtn = document.createElement('button');
+    pickBtn.className = 'tab-landing-pick-btn';
+    pickBtn.textContent = 'Choose Project Directory';
+    pickBtn.addEventListener('click', function () {
+      if (window.MonolothApp && typeof window.MonolothApp.openFilePicker === 'function') {
+        window.MonolothApp.openFilePicker({ id: 'tab_dir', title: 'Choose Directory', mode: 'folder' })
+          .then(function (path) {
+            if (path) {
+              transitionTabToTerminal(tab.id, path);
+            }
+          })
+          .catch(function (e) { console.error('openFilePicker failed:', e); });
+      } else if (api.native_pick_directory) {
+        api.native_pick_directory()
+          .then(function (res) {
+            if (res && res.success && res.path) {
+              transitionTabToTerminal(tab.id, res.path);
+            }
+          })
+          .catch(function (e) { console.error('native_pick_directory failed:', e); });
+      }
+    });
+    root.appendChild(pickBtn);
+
+    var recentsWrap = document.createElement('div');
+    recentsWrap.className = 'tab-landing-recents';
+    var recentsLabel = document.createElement('div');
+    recentsLabel.className = 'tab-landing-label';
+    recentsLabel.textContent = 'Recent Projects';
+    recentsWrap.appendChild(recentsLabel);
+    var recentsList = document.createElement('div');
+    recentsList.className = 'tab-landing-recents-list';
+    recentsWrap.appendChild(recentsList);
+    root.appendChild(recentsWrap);
+
+    if (api.get_recent_directories) {
+      api.get_recent_directories()
+        .then(function (dirs) {
+          var list = Array.isArray(dirs) ? dirs : [];
+          list.forEach(function (dir) {
+            var item = document.createElement('div');
+            item.className = 'tab-landing-recent-item';
+            item.textContent = dir;
+            item.title = dir;
+            item.addEventListener('click', function () {
+              transitionTabToTerminal(tab.id, dir);
+            });
+            recentsList.appendChild(item);
+          });
+        })
+        .catch(function () { /* ignore */ });
+    }
+
+    return root;
+  }
+
+  function buildLandingForRuntime(tabId) {
+    var rt = state.runtime.get(tabId);
+    if (!rt) return;
+    var cfgTab = state.config.tabs.find(function (t) { return t.id === tabId; });
+    if (!cfgTab) return;
+    rt.landingDom = buildLandingContent(cfgTab);
+  }
+
+  function rebuildTabElement(tabId) {
+    var rt = state.runtime.get(tabId);
+    if (!rt || !rt.dom || !rt.dom.parentElement) return;
+    var parent = rt.dom.parentElement;
+    var cfgTab = state.config.tabs.find(function (t) { return t.id === tabId; });
+    if (!cfgTab) return;
+    var merged = Object.assign({}, cfgTab, { secondaryCount: rt.secondaryCount });
+    var fresh = buildTabElement(merged);
+    parent.replaceChild(fresh, rt.dom);
+    rt.dom = fresh;
+  }
+
+  async function transitionTabToTerminal(tabId, dir) {
+    var rt = state.runtime.get(tabId);
+    if (!rt) return;
+    if (!dir) return;
+
+    if (rt.landingDom) {
+      var loading = document.createElement('div');
+      loading.className = 'tab-landing-loading';
+      loading.textContent = 'Starting terminal in ' + dir + '...';
+      rt.landingDom.innerHTML = '';
+      rt.landingDom.appendChild(loading);
+    }
+
+    try { await api.set_config('last_directory', dir); } catch (e) { /* ignore */ }
+
+    var cols = 80, rows = 24;
+    var result;
+    try {
+      result = await api.setTabProfile(tabId, null, cols, rows);
+    } catch (e) {
+      console.error('transitionTabToTerminal setTabProfile failed:', e);
+      return;
+    }
+    var updated = result[0];
+    var sessions = result[1] || [];
+    for (var s = 0; s < sessions.length; s++) {
+      state.generations.set(sessions[s][0], sessions[s][1]);
+    }
+
+    rt.view = 'terminal';
+    rt.dir = dir;
+    rt.profile = updated.profile;
+    rt.secondaryCount = updated.secondaryCount || 0;
+
+    var cfgTab = state.config.tabs.find(function (t) { return t.id === tabId; });
+    if (cfgTab) {
+      cfgTab.view = 'terminal';
+      cfgTab.dir = dir;
+      cfgTab.profile = updated.profile;
+      cfgTab.secondaryCount = updated.secondaryCount;
+    }
+
+    rt.xterms = { primary: null, secondaries: new Map() };
+    rt.sessionIds = { primary: tabId, secondaries: new Map() };
+    state.sessionToTab.set(tabId, { tabId: tabId, view: 'primary' });
+    rt.xterms.primary = createXtermForView(tabId);
+    for (var i = 0; i < rt.secondaryCount; i++) {
+      var sid = tabId + '__sec' + i;
+      var term = createXtermForView(sid);
+      rt.xterms.secondaries.set(i, term);
+      rt.sessionIds.secondaries.set(i, sid);
+      state.sessionToTab.set(sid, { tabId: tabId, view: 'secondary', secondaryIndex: i });
+    }
+
+    if (rt.landingDom && rt.landingDom.parentElement) {
+      rt.landingDom.parentElement.removeChild(rt.landingDom);
+    }
+    rt.landingDom = null;
+
+    rebuildTabElement(tabId);
+
+    await switchTab(tabId);
+  }
+
+  async function revertTabToLanding(tabId) {
+    var rt = state.runtime.get(tabId);
+    if (!rt) return;
+    if (rt.view !== 'terminal') return;
+
+    var sids = [];
+    if (rt.sessionIds.primary) sids.push(rt.sessionIds.primary);
+    rt.sessionIds.secondaries.forEach(function (sid) { sids.push(sid); });
+    for (var i = 0; i < sids.length; i++) {
+      try { await api.terminate_terminal(sids[i]); } catch (e) { /* ignore */ }
+    }
+
+    if (rt.xterms.primary) { try { rt.xterms.primary.dispose(); } catch (e) { /* ignore */ } }
+    rt.xterms.secondaries.forEach(function (term) {
+      try { term.dispose(); } catch (e) { /* ignore */ }
+    });
+
+    if (rt.sessionIds.primary) {
+      state.sessionToTab.delete(rt.sessionIds.primary);
+      state.generations.delete(rt.sessionIds.primary);
+      state.skipNextEof.delete(rt.sessionIds.primary);
+    }
+    rt.sessionIds.secondaries.forEach(function (sid) {
+      state.sessionToTab.delete(sid);
+      state.generations.delete(sid);
+      state.skipNextEof.delete(sid);
+    });
+
+    rt.xterms = { primary: null, secondaries: new Map() };
+    rt.sessionIds = { primary: tabId, secondaries: new Map() };
+    rt.view = 'landing';
+    rt.dir = null;
+    rt.profile = null;
+    rt.secondaryCount = 0;
+
+    var cfgTab = state.config.tabs.find(function (t) { return t.id === tabId; });
+    if (cfgTab) {
+      cfgTab.view = 'landing';
+      cfgTab.dir = null;
+      cfgTab.profile = null;
+      cfgTab.secondaryCount = 0;
+    }
+    try { await api.setTabsConfig(state.config); } catch (e) { /* ignore */ }
+
+    buildLandingForRuntime(tabId);
+    rebuildTabElement(tabId);
+
+    await switchTab(tabId);
+  }
+
+  function showGlobalLanding() {
+    var landing = document.getElementById('landing');
+    var terminalView = document.getElementById('terminal-view');
+    var tabBar = document.getElementById('tab-bar');
+    if (landing) landing.classList.remove('hidden');
+    if (terminalView) terminalView.classList.remove('active');
+    if (tabBar) tabBar.hidden = true;
+    document.body.classList.remove('tabs-bar-active');
+  }
+
+  async function createLandingTab() {
+    var tabId = uuidv4();
+    var cols = 80, rows = 24;
+    var result = await api.createTab(tabId, null, null, cols, rows, 'landing');
+    var tab = result[0];
+
+    state.config.tabs.push(tab);
+
+    buildRuntimeForTab(tab);
+
+    await setActiveTab(tabId);
+    await switchTab(tabId);
+
+    var tabBar = document.getElementById('tab-bar');
+    if (tabBar) tabBar.hidden = false;
+    document.body.classList.add('tabs-bar-active');
+
+    return tab;
   }
 
   async function createTab(profileName) {
@@ -268,7 +524,7 @@
       if (lastDir) dir = lastDir;
     } catch (e) { dir = null; }
 
-    var result = await api.createTab(tabId, profileName, dir || null, cols, rows);
+    var result = await api.createTab(tabId, profileName, dir || null, cols, rows, 'terminal');
     var tab = result[0];
     var sessions = result[1] || [];
 
@@ -278,6 +534,10 @@
     }
 
     buildRuntimeForTab(tab);
+
+    var tabBar = document.getElementById('tab-bar');
+    if (tabBar) tabBar.hidden = false;
+    document.body.classList.add('tabs-bar-active');
 
     await setActiveTab(tabId);
     await switchTab(tabId);
@@ -300,11 +560,13 @@
       force = true;
     }
 
-    try {
-      await api.closeTab(tabId, force);
-    } catch (e) {
-      console.error('closeTab failed:', e);
-      return;
+    if (!isLanding(rt)) {
+      try {
+        await api.closeTab(tabId, force);
+      } catch (e) {
+        console.error('closeTab failed:', e);
+        return;
+      }
     }
 
     var view = document.getElementById('terminal-view');
@@ -317,9 +579,11 @@
       }
     });
 
-    state.sessionToTab.delete(rt.sessionIds.primary);
-    state.generations.delete(rt.sessionIds.primary);
-    state.skipNextEof.delete(rt.sessionIds.primary);
+    if (rt.sessionIds.primary) {
+      state.sessionToTab.delete(rt.sessionIds.primary);
+      state.generations.delete(rt.sessionIds.primary);
+      state.skipNextEof.delete(rt.sessionIds.primary);
+    }
     rt.sessionIds.secondaries.forEach(function (sid) {
       state.sessionToTab.delete(sid);
       state.generations.delete(sid);
@@ -333,6 +597,10 @@
       try { term.dispose(); } catch (e) { /* ignore */ }
     });
 
+    if (rt.landingDom && rt.landingDom.parentElement) {
+      rt.landingDom.parentElement.removeChild(rt.landingDom);
+    }
+
     if (rt.dom && rt.dom.parentElement) {
       rt.dom.parentElement.removeChild(rt.dom);
     }
@@ -340,13 +608,19 @@
     state.runtime.delete(tabId);
     state.config.tabs = state.config.tabs.filter(function (t) { return t.id !== tabId; });
 
+    if (!isLanding(rt)) {
+      try { await api.setTabsConfig(state.config); } catch (e) { /* ignore */ }
+    }
+
     if (state.config.activeTabId === tabId) {
-      var next = state.config.tabs[0];
-      if (next) {
+      if (state.config.tabs.length > 0) {
+        var next = state.config.tabs[0];
         try { await setActiveTab(next.id); } catch (e) { /* ignore */ }
         await switchTab(next.id);
       } else {
         state.config.activeTabId = null;
+        try { await api.setTabsConfig(state.config); } catch (e) { /* ignore */ }
+        showGlobalLanding();
       }
     }
   }
@@ -359,14 +633,21 @@
   async function switchTab(tabId) {
     if (state.config.activeTabId === tabId) return;
     var prevId = state.config.activeTabId;
+    var view = document.getElementById('terminal-view');
 
     if (prevId) {
       var prevRt = state.runtime.get(prevId);
       if (prevRt) {
-        var prevTerm = activeXtermFromRuntime(prevRt);
-        if (prevTerm && prevTerm.element && prevTerm.element.parentElement !== state.xtermPoolEl) {
-          state.xtermPoolEl.appendChild(prevTerm.element);
-          fitTerminal(prevTerm);
+        if (isLanding(prevRt) && prevRt.landingDom) {
+          if (prevRt.landingDom.parentElement === view) {
+            state.xtermPoolEl.appendChild(prevRt.landingDom);
+          }
+        } else {
+          var prevTerm = activeXtermFromRuntime(prevRt);
+          if (prevTerm && prevTerm.element && prevTerm.element.parentElement !== state.xtermPoolEl) {
+            state.xtermPoolEl.appendChild(prevTerm.element);
+            fitTerminal(prevTerm);
+          }
         }
       }
     }
@@ -375,18 +656,21 @@
     var rt = state.runtime.get(tabId);
     if (!rt) return;
 
-    var view = document.getElementById('terminal-view');
-    var term = activeXtermFromRuntime(rt);
-    if (view && term && term.element) {
-      view.appendChild(term.element);
-    }
-    fitTerminal(term);
+    if (isLanding(rt) && rt.landingDom) {
+      if (view) view.appendChild(rt.landingDom);
+    } else {
+      var term = activeXtermFromRuntime(rt);
+      if (view && term && term.element) {
+        view.appendChild(term.element);
+      }
+      fitTerminal(term);
 
-    var sid = activeSessionIdFromRuntime(rt);
-    var cols = term ? term.cols : 80;
-    var rows = term ? term.rows : 24;
-    if (sid) {
-      try { await api.resize_terminal(sid, cols, rows); } catch (e) { console.error('resize_terminal failed:', e); }
+      var sid = activeSessionIdFromRuntime(rt);
+      var cols = term ? term.cols : 80;
+      var rows = term ? term.rows : 24;
+      if (sid) {
+        try { await api.resize_terminal(sid, cols, rows); } catch (e) { console.error('resize_terminal failed:', e); }
+      }
     }
 
     var activeEls = document.querySelectorAll('.tab.active');
@@ -722,7 +1006,9 @@
 
   function setupNewTabButton() {
     var btn = document.getElementById('tab-new');
-    if (btn) btn.addEventListener('click', function () { pickAndCreateTab(); });
+    if (btn) btn.addEventListener('click', function () {
+      createLandingTab().catch(function (err) { console.error('createLandingTab failed:', err); });
+    });
   }
 
   async function registerPtyOutputListener() {
@@ -810,7 +1096,7 @@
     document.body.classList.toggle('tabs-bar-bottom', barPos === 'bottom');
 
     if (!cfg.tabs || cfg.tabs.length === 0) {
-      try { await createTab(null); } catch (e) { console.error('initial createTab failed:', e); }
+      showGlobalLanding();
     } else {
       try {
         var result = await api.restoreTabSessions();
@@ -829,6 +1115,10 @@
           await setActiveTab(tabs[0].id);
           await switchTab(tabs[0].id);
         }
+        if (tabBar) {
+          tabBar.hidden = !barEnabled;
+          document.body.classList.add('tabs-bar-active');
+        }
       } catch (e) {
         console.error('restore failed', e);
       }
@@ -839,15 +1129,23 @@
     setupNewTabButton();
   }
 
+  function getActiveRuntime() {
+    return state.runtime.get(state.config.activeTabId) || null;
+  }
+
   window.TabManager = {
     init: init,
     getActiveXterm: getActiveXterm,
     getActiveTabId: getActiveTabId,
     getActiveView: getActiveView,
+    getActiveRuntime: getActiveRuntime,
     isMainActive: isMainActive,
     resolveSessionId: resolveSessionId,
     setupTerminalHandlers: setupTerminalHandlers,
     createTab: createTab,
+    createLandingTab: createLandingTab,
+    transitionTabToTerminal: transitionTabToTerminal,
+    revertTabToLanding: revertTabToLanding,
     pickAndCreateTab: pickAndCreateTab,
     closeTab: closeTab,
     setActiveTab: setActiveTab,
@@ -859,6 +1157,7 @@
     changeProfile: changeProfile,
     refreshActiveTab: refreshActiveTab,
     refitActive: refitActive,
+    showGlobalLanding: showGlobalLanding,
   };
 
   if (document.readyState === 'loading') {
