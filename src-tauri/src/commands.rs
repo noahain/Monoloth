@@ -1051,8 +1051,30 @@ pub fn create_tab(
     dir: Option<String>,
     cols: u16,
     rows: u16,
+    view: Option<String>,
 ) -> Result<(crate::tabs::Tab, Vec<(String, u64)>), String> {
     crate::tabs::validate_tab_id(&tab_id)?;
+    let view_value = view.as_deref().unwrap_or("terminal");
+    if view_value != "terminal" && view_value != "landing" {
+        return Err(format!("invalid view: {view_value}"));
+    }
+
+    if view_value == "landing" {
+        let tab = crate::tabs::Tab {
+            id: tab_id.clone(),
+            profile: None,
+            pinned: false,
+            color: None,
+            active_view: "primary".into(),
+            dir: None,
+            secondary_count: 0,
+            view: "landing".into(),
+        };
+        tabs.add_tab(tab.clone())?;
+        persist_via_app_config(&app, &tabs)?;
+        return Ok((tab, Vec::new()));
+    }
+
     let (prof_name, startup_command, shell_override, secondaries) =
         resolve_profile_for_create(&config, profile.as_deref())?;
     let cwd = dir.clone()
@@ -1095,6 +1117,7 @@ pub fn create_tab(
         active_view: "primary".into(),
         dir,
         secondary_count,
+        view: "terminal".into(),
     };
 
     if let Err(e) = tabs.add_tab(tab.clone()) {
@@ -1151,6 +1174,10 @@ pub fn restore_tab_sessions(
     let mut out_tabs = Vec::new();
     let mut out_sessions: Vec<(String, u64)> = Vec::new();
     for tab in &cfg.tabs {
+        if tab.view == "landing" {
+            out_tabs.push(tab.clone());
+            continue;
+        }
         let cols: u16 = 80;
         let rows: u16 = 24;
         let cwd = tab.dir.clone()

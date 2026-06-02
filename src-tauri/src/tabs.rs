@@ -28,6 +28,7 @@ pub struct Tab {
     pub active_view: String,
     pub dir: Option<String>,
     pub secondary_count: usize,
+    pub view: String,
 }
 
 impl Default for TabsConfig {
@@ -134,6 +135,7 @@ impl TabsManager {
             .ok_or_else(|| format!("unknown tab id: {tab_id}"))?;
         t.profile = profile;
         t.secondary_count = secondary_count;
+        t.view = "terminal".into();
         Ok(())
     }
 
@@ -179,6 +181,7 @@ pub fn make_default_tab() -> Tab {
         active_view: "primary".into(),
         dir: None,
         secondary_count: 0,
+        view: "terminal".into(),
     }
 }
 
@@ -243,6 +246,7 @@ mod tests {
             active_view: "primary".into(),
             dir: None,
             secondary_count,
+            view: "terminal".into(),
         }
     }
 
@@ -361,5 +365,23 @@ mod tests {
         let back: TabsConfig = serde_json::from_value(value).unwrap();
         assert_eq!(back.position, TabPosition::Bottom);
         assert_eq!(back.tabs[0].secondary_count, 2);
+    }
+
+    #[test]
+    fn round_trip_serialization_with_view_field() {
+        let landing = Tab {
+            id: "550e8400-e29b-41d4-a716-446655440000".into(),
+            profile: None,
+            pinned: false,
+            color: None,
+            active_view: "primary".into(),
+            dir: None,
+            secondary_count: 0,
+            view: "landing".into(),
+        };
+        let value = serde_json::to_value(&landing).unwrap();
+        assert_eq!(value["view"], "landing");
+        let back: Tab = serde_json::from_value(value).unwrap();
+        assert_eq!(back.view, "landing");
     }
 }
