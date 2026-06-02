@@ -7,27 +7,16 @@
     const chooseBtn = document.getElementById('choose-dir-btn');
     const settingsBtn = document.getElementById('settings-btn');
     const settingsClose = document.getElementById('settings-close');
-    const terminalContainer = document.getElementById('terminal');
 
-    let term = null;
-    let fitAddon = null;
-    let webglAddon = null;
     let bridgeReady = false;
     let _bgImagePath = '';
     let _bgTransparency = 75;
     let _currentLaunchDir = '';
-    let _terminalRunning = false;
-    var _resizeObserver = null;
-    var _resizeHandler = null;
-    var _contextMenuHandler = null;
     var _keyDownHandler = null;
     var _mouseDownHandler = null;
     var _useCustomTitlebar = false;
     var _isMaximized = false;
     var _maximizeSyncTimer = null;
-    var _skipNextEof = { main: false, panel: false };
-    var _sessionGeneration = { main: 0, panel: 0 };
-    var _panelRunning = false;
     var _statusTimers = {};
     var _focusBeforeModal = null;
     var _trapHandler = null;
@@ -623,7 +612,6 @@
     // --- Appearance: Custom Background System ---
 
     const bgOverlay = document.getElementById('bg-overlay');
-    const terminalBgOverlay = document.getElementById('terminal-bg-overlay');
 
     function getBackgroundStyle(config) {
         var t = parseInt(config.transparency, 10);
@@ -678,40 +666,6 @@
         };
     }
 
-    function computeTerminalBg(config) {
-        var type = config.type || 'none';
-        if (type === 'none') return '#0a0a0a';
-        return 'transparent';
-    }
-
-    function shouldUseWebglRenderer(config) {
-        return false;
-    }
-
-    function syncTerminalWebglRenderer(config) {
-        if (!term) return;
-
-        if (!shouldUseWebglRenderer(config)) {
-            if (webglAddon) {
-                try { webglAddon.dispose(); } catch (e) {}
-                webglAddon = null;
-                if (term.rows > 0) {
-                    try { term.refresh(0, term.rows - 1); } catch (e) {}
-                }
-            }
-            return;
-        }
-
-        if (webglAddon || typeof WebglAddon === 'undefined') return;
-        try {
-            webglAddon = new WebglAddon.WebglAddon();
-            term.loadAddon(webglAddon);
-        } catch (e) {
-            webglAddon = null;
-            console.warn('[Monoloth] Failed to load WebGL addon, falling back to canvas renderer:', e);
-        }
-    }
-
     function applyBackground(config) {
         if (!bgOverlay) return;
         var style = getBackgroundStyle(config);
@@ -759,174 +713,6 @@
         _currentColor = config.color || '#0a0a0a';
         _currentGradient = config.gradient || '';
         _bgLayer = config.bgLayer || 'behind';
-
-        applyTerminalBg(config);
-        applyTerminalOverlay(config);
-    }
-
-    function getTerminalLightTheme() {
-        return {
-            foreground: '#2d2d2d',
-            cursor: '#333333',
-            selectionBackground: '#c0c0c0',
-            black: '#000000',
-            red: '#6e3030',
-            green: '#306030',
-            yellow: '#6e6e30',
-            blue: '#30306e',
-            magenta: '#6e306e',
-            cyan: '#306e6e',
-            white: '#808080',
-            brightBlack: '#505050',
-            brightRed: '#904040',
-            brightGreen: '#408040',
-            brightYellow: '#909040',
-            brightBlue: '#404090',
-            brightMagenta: '#904090',
-            brightCyan: '#409090',
-            brightWhite: '#b0b0b0'
-        };
-    }
-
-    function getTerminalDarkTheme(terminalBg) {
-        return {
-            foreground: '#b8b8b8',
-            cursor: '#c0c0c0',
-            selectionBackground: '#4a4a4a',
-            red: '#b0b0b0',
-            green: '#a0a0a0',
-            yellow: '#c0c0c0',
-            blue: '#909090',
-            magenta: '#b0b0b0',
-            cyan: '#a0a0a0',
-            white: '#e0e0e0',
-            brightBlack: '#4a4a4a',
-            brightRed: '#d0d0d0',
-            brightGreen: '#c0c0c0',
-            brightYellow: '#e0e0e0',
-            brightBlue: '#b0b0b0',
-            brightMagenta: '#d0d0d0',
-            brightCyan: '#c0c0c0',
-            brightWhite: '#ffffff'
-        };
-    }
-
-    function applyTerminalBg(config) {
-        if (!term || !term.setOption) return;
-        if (!config) {
-            config = {
-                type: _bgType,
-                transparency: _bgTransparency,
-                bgLayer: _bgLayer
-            };
-        }
-        var layer = config.bgLayer || 'behind';
-        var themeBg = layer === 'overlay' ? '#000000' : computeTerminalBg(config);
-        var isLight = document.body.classList.contains('light-mode') || document.body.classList.contains('adaptive-light');
-        try {
-            var useWebgl = shouldUseWebglRenderer(config);
-            if (!useWebgl) {
-                syncTerminalWebglRenderer(config);
-            }
-
-            var existing = {};
-            try { existing = Object.assign({}, term.getOption('theme')); } catch (e) {}
-            existing.background = themeBg;
-
-            var textTheme = isLight ? getTerminalLightTheme() : getTerminalDarkTheme(themeBg);
-            existing.foreground = textTheme.foreground;
-            existing.cursor = textTheme.cursor;
-            existing.selectionBackground = textTheme.selectionBackground;
-            existing.red = textTheme.red;
-            existing.green = textTheme.green;
-            existing.yellow = textTheme.yellow;
-            existing.blue = textTheme.blue;
-            existing.magenta = textTheme.magenta;
-            existing.cyan = textTheme.cyan;
-            existing.white = textTheme.white;
-            existing.brightBlack = textTheme.brightBlack;
-            existing.brightRed = textTheme.brightRed;
-            existing.brightGreen = textTheme.brightGreen;
-            existing.brightYellow = textTheme.brightYellow;
-            existing.brightBlue = textTheme.brightBlue;
-            existing.brightMagenta = textTheme.brightMagenta;
-            existing.brightCyan = textTheme.brightCyan;
-            existing.brightWhite = textTheme.brightWhite;
-
-            if (layer === 'overlay') {
-                existing.black = '#000000';
-            } else if (config.type !== 'none') {
-                existing.black = 'rgba(10, 10, 10, 0)';
-            } else {
-                existing.black = '#0a0a0a';
-            }
-
-            term.setOption('theme', existing);
-            if (term.rows > 0) {
-                term.refresh(0, term.rows - 1);
-            }
-
-            if (useWebgl) {
-                syncTerminalWebglRenderer(config);
-            }
-        } catch (e) { /* ignore */ }
-    }
-
-    function applyTerminalOverlay(config) {
-        if (!terminalBgOverlay) return;
-        var layer = config.bgLayer || 'behind';
-        if (layer === 'overlay' && config.type !== 'none') {
-            var isGifOverlay = false;
-            if (config.imageUrl) {
-                var isDataUrlOv = config.imageUrl.indexOf('data:') === 0;
-                if (isDataUrlOv) {
-                    isGifOverlay = config.imageUrl.indexOf('image/gif') !== -1 || config.imageUrl.indexOf('image/GIF') !== -1;
-                } else {
-                    isGifOverlay = config.imageUrl.toLowerCase().indexOf('.gif') !== -1 && config.imageUrl.toLowerCase().indexOf('.gif?') === -1;
-                }
-            }
-            if (isGifOverlay) {
-                terminalBgOverlay.style.backgroundImage = 'none';
-                terminalBgOverlay.style.backgroundColor = 'transparent';
-                terminalBgOverlay.style.display = 'none';
-                var existingGif = document.getElementById('terminal-bg-gif-img');
-                if (!existingGif) {
-                    var gifImg = document.createElement('img');
-                    gifImg.id = 'terminal-bg-gif-img';
-                    gifImg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;object-position:center;pointer-events:none;';
-                    terminalView.appendChild(gifImg);
-                    existingGif = gifImg;
-                }
-            var isDataUrlOvImg = config.imageUrl.indexOf('data:') === 0;
-            if (isDataUrlOvImg) {
-                existingGif.src = config.imageUrl;
-            } else {
-                var ovCacheBust = config.imageUrl.indexOf('?') === -1 ? '?t=' + Date.now() : '&t=' + Date.now();
-                existingGif.src = config.imageUrl + ovCacheBust;
-            }
-                existingGif.style.opacity = config.transparency != null ? parseInt(config.transparency, 10) / 100 : 0.75;
-                existingGif.style.display = 'block';
-            } else {
-                var existingTermGif = document.getElementById('terminal-bg-gif-img');
-                if (existingTermGif) { existingTermGif.remove(); }
-                var style = getBackgroundStyle(config);
-                terminalBgOverlay.style.backgroundImage = style.backgroundImage || 'none';
-                if (style.backgroundSize) terminalBgOverlay.style.backgroundSize = style.backgroundSize;
-                if (style.backgroundPosition) terminalBgOverlay.style.backgroundPosition = style.backgroundPosition;
-                if (style.backgroundRepeat) terminalBgOverlay.style.backgroundRepeat = style.backgroundRepeat;
-                if (style.backgroundColor) terminalBgOverlay.style.backgroundColor = style.backgroundColor;
-                terminalBgOverlay.style.opacity = style.opacity !== undefined ? style.opacity : 1;
-                terminalBgOverlay.style.display = 'block';
-            }
-            var tc = document.getElementById('terminal-container');
-            if (tc) tc.style.backgroundColor = '#000000';
-        } else {
-            terminalBgOverlay.style.display = 'none';
-            var tc2 = document.getElementById('terminal-container');
-            if (tc2) tc2.style.backgroundColor = '';
-            var terminalGifCleanup = document.getElementById('terminal-bg-gif-img');
-            if (terminalGifCleanup) { terminalGifCleanup.remove(); }
-        }
     }
 
     function renderBgPreview(config) {
@@ -1742,29 +1528,23 @@
     async function showTerminal(dir) {
         setCurrentView('terminal');
         _currentLaunchDir = dir;
-        if (window.TabManager && typeof window.TabManager.createTab === 'function') {
-            if (landing) landing.classList.add('hidden');
-            if (settingsPage) settingsPage.classList.remove('active');
-            if (terminalView) terminalView.classList.add('active');
-            try {
-                if (window.monolithApi && dir) {
-                    await window.monolithApi.set_config('last_directory', dir).catch(function () {});
-                }
-                await window.TabManager.createTab(null);
-            } catch (e) {
-                console.error('TabManager.createTab failed:', e);
-            }
-            return;
-        }
-        if (_terminalRunning && window.monolithApi) {
-            window.monolithApi.terminate_terminal('main');
-        }
-        _terminalRunning = false;
         if (landing) landing.classList.add('hidden');
         if (settingsPage) settingsPage.classList.remove('active');
         if (terminalView) terminalView.classList.add('active');
-        initTerminal(dir);
-        loadBackgroundConfig();
+        if (window.monolithApi && dir) {
+            try { await window.monolithApi.set_config('last_directory', dir); } catch (e) { /* ignore */ }
+        }
+        if (window.TabManager) {
+            try {
+                if (window.TabManager.getActiveTabId()) {
+                    await window.TabManager.refitActive();
+                } else {
+                    await window.TabManager.createTab(null);
+                }
+            } catch (e) {
+                console.error('TabManager showTerminal failed:', e);
+            }
+        }
         if (typeof window.SidebarManager !== 'undefined') {
             window.SidebarManager.show();
             setTimeout(function () {
@@ -1774,44 +1554,26 @@
     }
 
     // --- Back to Landing ---
-    function cleanupTerminalDomHandlers() {
-        if (_resizeObserver) { _resizeObserver.disconnect(); _resizeObserver = null; }
-        if (_resizeHandler) { window.removeEventListener('resize', _resizeHandler); _resizeHandler = null; }
-        if (_contextMenuHandler) { terminalContainer.removeEventListener('contextmenu', _contextMenuHandler); _contextMenuHandler = null; }
-    }
-
     function backToLanding() {
         setCurrentView('landing');
         if (typeof window.SidebarManager !== 'undefined') {
             window.SidebarManager.terminateCmdPanel();
             window.SidebarManager.hide();
         }
-        if (window.monolithApi) {
-            window.monolithApi.terminate_terminal('main').catch(function () {});
-        }
         if (settingsPage) settingsPage.classList.remove('active');
         if (terminalView) terminalView.classList.remove('active');
         if (landing) landing.classList.remove('hidden');
-        if (term) {
-            try { term.dispose(); } catch (e) {}
-            term = null;
-            fitAddon = null;
-            webglAddon = null;
-        }
-        terminalContainer.innerHTML = '';
-        cleanupTerminalDomHandlers();
         var existingGif = document.getElementById('bg-gif-img');
         if (existingGif) existingGif.remove();
         var terminalGif = document.getElementById('terminal-bg-gif-img');
         if (terminalGif) terminalGif.remove();
-        _terminalRunning = false;
-        _panelRunning = false;
     }
 
     var terminalBackBtn = document.getElementById('terminal-back-btn');
     if (terminalBackBtn) {
         terminalBackBtn.addEventListener('click', function () {
-            if (_terminalRunning) {
+            var hasActive = window.TabManager && window.TabManager.isMainActive && window.TabManager.isMainActive();
+            if (hasActive) {
                 showConfirm('Return to Launcher', 'Return to launcher? The current session will be terminated.')
                     .then(function () { backToLanding(); })
                     .catch(function () {});
@@ -1823,278 +1585,6 @@
 
 
 
-
-    // --- Terminal Setup ---
-    function initTerminal(dir) {
-        if (!terminalContainer) return;
-
-        cleanupTerminalDomHandlers();
-
-        // Dispose existing terminal and listeners before creating a new one
-        if (term) {
-            try { term.dispose(); } catch (e) { console.error('Error disposing term:', e); }
-            term = null;
-            webglAddon = null;
-        }
-        if (fitAddon) {
-            fitAddon = null;
-        }
-        terminalContainer.innerHTML = '';
-
-        if (typeof Terminal === 'undefined') {
-            terminalContainer.innerHTML = '<div style="color:#c0c0c0;padding:20px;font-family:monospace;">Error: Terminal library failed to load.</div>';
-            return;
-        }
-
-        var initBgConfig = { type: _bgType, bgLayer: _bgLayer };
-        var terminalBg = _bgLayer === 'overlay' ? '#000000' : computeTerminalBg(initBgConfig);
-        var terminalBlack = _bgLayer === 'overlay' ? '#000000' : (_bgType !== 'none' ? 'rgba(10, 10, 10, 0)' : '#0a0a0a');
-        var isLight = document.body.classList.contains('light-mode') || document.body.classList.contains('adaptive-light');
-        var initTheme = isLight ? getTerminalLightTheme() : getTerminalDarkTheme();
-        initTheme.background = terminalBg;
-        initTheme.black = terminalBlack;
-        term = new Terminal({
-            allowTransparency: true,
-            theme: initTheme,
-            fontFamily: '"Cascadia Mono", "Consolas", "Lucida Console", "Courier New", monospace',
-            fontSize: 14,
-            letterSpacing: 0,
-            lineHeight: 1.0,
-            cursorBlink: true,
-            cursorStyle: 'block',
-            scrollback: 2000,
-            smoothScrollDuration: 0,
-            scrollSensitivity: 1,
-            allowProposedApi: true,
-            windowsMode: true,
-            macOptionIsMeta: true,
-            macOptionClickForcesSelection: true,
-            minimumContrastRatio: 1,
-            fastScrollModifier: 'alt',
-            fastScrollSensitivity: 5,
-            scrollOnUserInput: true
-        });
-
-        term.open(terminalContainer);
-        term.focus();
-
-        if (typeof FitAddon !== 'undefined') {
-            fitAddon = new FitAddon.FitAddon();
-            term.loadAddon(fitAddon);
-        }
-
-        requestAnimationFrame(function() {
-            if (fitAddon) fitAddon.fit();
-            window.monolithApi.start_terminal('main', dir, true, null, term.cols, term.rows)
-                .then((result) => {
-                    if (!result || !result.success) {
-                        term.writeln('');
-                        term.writeln('Failed to start ' + getStartupLabel() + '. ' + (result && result.error ? result.error : 'Check that it is installed and in your PATH.'));
-                    } else {
-                        _terminalRunning = true;
-                        if (result.generation) {
-                            _sessionGeneration['main'] = result.generation;
-                        }
-                    }
-                })
-                .catch((err) => {
-                    term.writeln('');
-                    term.writeln('Error starting ' + getStartupLabel() + ': ' + err);
-                });
-        });
-
-        syncTerminalWebglRenderer(initBgConfig);
-
-        term.onScroll(function() {
-            term.refresh(0, term.rows - 1);
-        });
-
-        // --- Keyboard copy/paste shortcuts ---
-        term.attachCustomKeyEventHandler((e) => {
-            if (e.ctrlKey && !e.shiftKey && e.code === 'KeyC' && term.hasSelection()) {
-                navigator.clipboard.writeText(term.getSelection()).catch(() => {});
-                term.clearSelection();
-                return false;
-            }
-            if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
-                if (term.hasSelection()) {
-                    navigator.clipboard.writeText(term.getSelection()).catch(() => {});
-                    term.clearSelection();
-                }
-                return false;
-            }
-            if ((e.ctrlKey && e.code === 'KeyV') || (e.shiftKey && e.code === 'Insert')) {
-                return false;
-            }
-            if (e.ctrlKey && e.shiftKey && e.code === 'KeyW') {
-                if (_terminalRunning) {
-                    showConfirm('Return to Launcher', 'Return to launcher? The current session will be terminated.')
-                        .then(function() { backToLanding(); })
-                        .catch(function() {});
-                } else {
-                    backToLanding();
-                }
-                return false;
-            }
-            return true;
-        });
-
-        // --- Paste: DOM event avoids clipboard permission prompt & double-paste ---
-        term.element.addEventListener('paste', (e) => {
-            const text = e.clipboardData.getData('text');
-            if (text && window.monolithApi) {
-                e.preventDefault();
-                e.stopPropagation();
-                try { window.monolithApi.send_input('main', text); } catch (err) {}
-            }
-        });
-
-        // --- Right-click copy context menu ---
-        _contextMenuHandler = function (e) {
-            e.preventDefault();
-            var selection = term.getSelection();
-            if (selection) {
-                navigator.clipboard.writeText(selection).catch(function () {});
-                var indicator = document.createElement('div');
-                indicator.textContent = 'Copied!';
-                indicator.style.cssText = 'position:fixed;top:' + e.clientY + 'px;left:' + e.clientX + 'px;background:#4a4a4a;color:#e0e0e0;padding:4px 8px;border-radius:4px;font-size:12px;font-family:monospace;pointer-events:none;z-index:9999;';
-                document.body.appendChild(indicator);
-                setTimeout(function () { indicator.remove(); }, 800);
-            } else {
-                navigator.clipboard.readText().then(function (text) {
-                    if (window.monolithApi && text) window.monolithApi.send_input(text);
-                }).catch(function () {});
-            }
-        };
-        terminalContainer.addEventListener('contextmenu', _contextMenuHandler);
-
-        function syncSize() {
-            if (!term || !fitAddon) return;
-            var el = term.element || terminalContainer;
-            if (!el || el.offsetParent === null) return;
-            var prevCols = term.cols;
-            var prevRows = term.rows;
-            fitAddon.fit();
-            if (window.monolithApi && (term.cols !== prevCols || term.rows !== prevRows)) {
-                try {
-                    window.monolithApi.resize_terminal('main', term.cols, term.rows);
-                } catch (e) {}
-            }
-        }
-
-        var resizeTimeout;
-        var _resizeListener = function () {
-            clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(syncSize, 100);
-        };
-        window.addEventListener('resize', _resizeListener);
-        _resizeHandler = _resizeListener;
-
-        if (typeof ResizeObserver !== 'undefined') {
-            var resizeTimeout = null;
-            _resizeObserver = new ResizeObserver(function () {
-                clearTimeout(resizeTimeout);
-                resizeTimeout = setTimeout(syncSize, 100);
-            });
-            _resizeObserver.observe(terminalContainer);
-        } else {
-            var pollTimer = setInterval(function () {
-                if (terminalContainer.offsetWidth > 0 && terminalContainer.offsetHeight > 0) {
-                    syncSize();
-                    clearInterval(pollTimer);
-                }
-            }, 50);
-            setTimeout(function () { clearInterval(pollTimer); syncSize(); }, 3000);
-        }
-
-        var firstOutput = true;
-        var _exitTimer = null;
-        window.writeToTerm = (data, eof, sessionId, generation) => {
-            sessionId = sessionId || 'main';
-            generation = generation || 0;
-            if (generation > 0 && _sessionGeneration[sessionId] > 0 &&
-                generation < _sessionGeneration[sessionId]) {
-                return;
-            }
-            if (eof && _skipNextEof[sessionId]) {
-                _skipNextEof[sessionId] = false;
-                return;
-            }
-            if (sessionId === 'main') {
-                if (term) {
-                    if (eof) {
-                        term.write(data);
-                        var exitBanner = document.createElement('div');
-                        exitBanner.style.cssText = 'position:absolute;bottom:40px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,0.9);color:#c0c0c0;padding:8px 16px;border-radius:6px;font-family:monospace;font-size:13px;z-index:101;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(4px);pointer-events:auto;cursor:pointer;';
-                        exitBanner.textContent = 'Session ended \u2014 returning to launcher in 5s (click to stay)';
-                        if (terminalView) terminalView.appendChild(exitBanner);
-                        var countdown = 5;
-                        var cancelled = false;
-                        exitBanner.addEventListener('click', function () {
-                            cancelled = true;
-                            if (exitBanner.parentNode) exitBanner.remove();
-                        });
-                        var countdownInterval = setInterval(function () {
-                            if (cancelled) { clearInterval(countdownInterval); return; }
-                            countdown--;
-                            if (countdown <= 0) {
-                                clearInterval(countdownInterval);
-                                if (exitBanner.parentNode) exitBanner.remove();
-                                backToLanding();
-                            } else {
-                                exitBanner.textContent = 'Session ended \u2014 returning to launcher in ' + countdown + 's (click to stay)';
-                            }
-                        }, 1000);
-                        if (_exitTimer) { clearTimeout(_exitTimer); _exitTimer = null; }
-                        _exitTimer = setTimeout(function () {
-                            if (!cancelled) backToLanding();
-                        }, 5000);
-                        return;
-                    }
-                    term.write(data);
-                    if (firstOutput) {
-                        firstOutput = false;
-                        setTimeout(syncSize, 1500);
-                    }
-                    if (_exitTimer) { clearTimeout(_exitTimer); _exitTimer = null; }
-                    if (typeof data === 'string' && data.indexOf('[session ended]') !== -1) {
-                        _exitTimer = setTimeout(function () {
-                            backToLanding();
-                        }, 5000);
-                    }
-                }
-            } else if (sessionId === 'panel') {
-                if (typeof window.SidebarManager !== 'undefined') {
-                    if (eof) {
-                        window.SidebarManager.terminateCmdPanel();
-                    } else if (data) {
-                        window.SidebarManager.writeToPanel(data);
-                    }
-                }
-            }
-        };
-
-        term.onData((data) => {
-            if (window.monolithApi) {
-                try {
-                    window.monolithApi.send_input('main', data);
-                } catch (e) {}
-            }
-        });
-
-        applyTerminalBg();
-
-        term.writeln('');
-        term.writeln('Monoloth Terminal');
-        term.writeln('Directory: ' + dir);
-        term.writeln('Starting ' + getStartupLabel() + '...');
-        term.writeln('');
-
-        if (!window.monolithApi) {
-            term.writeln('Error: Bridge not available.');
-            return;
-        }
-    }
 
     // --- Command Palette (Ctrl+P) ---
     var commands = [
@@ -3174,14 +2664,14 @@
         if (!window.monolithApi) return;
         window.monolithApi.switch_profile(name)
             .then(function (res) {
-                if (res && res.success) {
-                    _activeProfile = name;
-                    updateProfileUI();
-                    if (_terminalRunning) {
-                        showProfilesStatus('Profile switched \u2014 changes apply on next launch.', false);
-                    } else {
-                        showProfilesStatus('Switched to ' + name, false);
-                    }
+                    if (res && res.success) {
+                        _activeProfile = name;
+                        updateProfileUI();
+                        if (window.TabManager && window.TabManager.isMainActive && window.TabManager.isMainActive()) {
+                            showProfilesStatus('Profile switched \u2014 changes apply on next launch.', false);
+                        } else {
+                            showProfilesStatus('Switched to ' + name, false);
+                        }
                     // Reload all settings from new profile
                     loadAllSettingsForProfile();
                 } else {
@@ -3405,7 +2895,8 @@
         var tbBack = document.getElementById('tb-back');
         if (tbBack) {
             tbBack.addEventListener('click', function() {
-                if (_terminalRunning) {
+                var hasActive = window.TabManager && window.TabManager.isMainActive && window.TabManager.isMainActive();
+                if (hasActive) {
                     showConfirm('Return to Launcher', 'Return to launcher? The current session will be terminated.')
                         .then(function() { backToLanding(); })
                         .catch(function() {});
@@ -3418,15 +2909,8 @@
         var tbRefresh = document.getElementById('tb-refresh');
         if (tbRefresh) {
             tbRefresh.addEventListener('click', function() {
-                if (_currentLaunchDir) {
-                    // Skip the old session's EOF event to prevent back-to-landing
-                    _skipNextEof['main'] = true;
-                    if (_terminalRunning && window.monolithApi) {
-                        window.monolithApi.terminate().catch(function () {});
-                    }
-                    _terminalRunning = false;
-                    initTerminal(_currentLaunchDir);
-                    loadBackgroundConfig();
+                if (window.TabManager && typeof window.TabManager.refreshActiveTab === 'function') {
+                    window.TabManager.refreshActiveTab().catch(function (err) { console.error('refreshActiveTab failed:', err); });
                 }
             });
         }
@@ -3460,7 +2944,8 @@
         var tbClose = document.getElementById('tb-close');
         if (tbClose) {
             tbClose.addEventListener('click', function() {
-                if (_terminalRunning) {
+                var hasActive = window.TabManager && window.TabManager.isMainActive && window.TabManager.isMainActive();
+                if (hasActive) {
                     showConfirm('Exit Monoloth', 'A terminal session is running. Exit anyway?')
                         .then(function() { if (window.monolithApi) window.monolithApi.close_window(); })
                         .catch(function() {});
@@ -3652,39 +3137,21 @@
                 if (window.TabManager && typeof window.TabManager.refreshActiveTab === 'function') {
                     return window.TabManager.refreshActiveTab();
                 }
-                if (_terminalRunning) {
-                    _skipNextEof['main'] = true;
-                    window.monolithApi.terminate_terminal('main')
-                        .finally(function () { _skipNextEof['main'] = false; _terminalRunning = false; initTerminal(_currentLaunchDir); });
-                } else {
-                    initTerminal(_currentLaunchDir);
-                }
-            } else if (sessionId === 'panel') {
-                if (_panelRunning) {
-                    _skipNextEof['panel'] = true;
-                    window.monolithApi.terminate_terminal('panel')
-                        .finally(function () { _skipNextEof['panel'] = false; _panelRunning = false; if (typeof window.SidebarManager !== 'undefined') { window.SidebarManager.showCmdPanel(); window.SidebarManager.initCmdPanel(_currentLaunchDir); } });
-                } else {
-                    if (typeof window.SidebarManager !== 'undefined') {
-                        window.SidebarManager.showCmdPanel();
-                        window.SidebarManager.initCmdPanel(_currentLaunchDir);
-                    }
-                }
+                return Promise.resolve();
             }
-        },
-        setSkipNextEof: function (sessionId, val) {
-            _skipNextEof[sessionId] = val;
-        },
-        setSessionGeneration: function (sessionId, gen) {
-            _sessionGeneration[sessionId] = gen;
+            if (sessionId === 'panel' && typeof window.SidebarManager !== 'undefined') {
+                window.SidebarManager.showCmdPanel();
+                window.SidebarManager.initCmdPanel(_currentLaunchDir);
+            }
         },
         refitTerminals: function () {
-            if (term && fitAddon) {
-                fitAddon.fit();
-                if (window.monolithApi) window.monolithApi.resize_terminal('main', term.cols, term.rows);
+            if (window.TabManager && typeof window.TabManager.refitActive === 'function') {
+                return window.TabManager.refitActive();
             }
         },
-        isMainActive: function () { return _terminalRunning; }
+        isMainActive: function () {
+            return !!(window.TabManager && window.TabManager.isMainActive && window.TabManager.isMainActive());
+        }
     };
 
     // Initialize sidebar on first terminal show
