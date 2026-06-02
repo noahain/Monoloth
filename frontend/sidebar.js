@@ -984,7 +984,7 @@
 
     // ---- Tabs Settings Section (inside Appearance tab) ----
     function injectTabsSettingsSection() {
-        var tabsObserver = new MutationObserver(function () {
+        function tryInject() {
             var appearance = document.getElementById('tab-appearance');
             if (!appearance || appearance.dataset.tabsInjected === '1') return;
             if (!document.body.contains(appearance)) return;
@@ -1043,7 +1043,9 @@
                     return window.monolithApi.setTabsConfig(next);
                 }).catch(function (e) { console.error('setTabsConfig failed:', e); });
             });
-        });
+        }
+        tryInject();
+        var tabsObserver = new MutationObserver(tryInject);
         tabsObserver.observe(document.body, { childList: true, subtree: true });
     }
 
