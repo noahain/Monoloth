@@ -32,3 +32,6 @@ Thumbs.db
 /design-doc-cta-theme-unification.md
 /design-spec-tab-bar.md
 /files.txt
+
+# AGENTS.md is volatile / regenerated often; not source-controlled
+/AGENTS.md
