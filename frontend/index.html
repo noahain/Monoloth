@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=block" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=89">
+    <link rel="stylesheet" href="style.css?v=90">
     <link rel="stylesheet" href="lib/xterm.css?v=12">
     <style>
         .landing-brand, .landing-card, .landing-status-bar {
@@ -438,6 +438,12 @@
         </div>
     </div>
 
+    <!-- Tab Bar -->
+    <div id="tab-bar" class="position-top" hidden>
+        <div class="tab-list" id="tab-list"></div>
+        <div class="tab-new" data-tooltip="New tab (Ctrl+Shift+T)" id="tab-new">+</div>
+    </div>
+
     <!-- Terminal View -->
     <div id="terminal-view" class="terminal-view">
         <!-- Sidebar -->
@@ -586,6 +592,9 @@
         </div>
     </div>
 
+    <!-- Off-screen pool for inactive tab terminals -->
+    <div id="tab-xterm-pool" style="position:absolute;left:-9999px;top:0;width:800px;height:600px;visibility:hidden;"></div>
+
     <script>
         // Prevent font flash: show landing text only after fonts load
         (function() {
@@ -601,12 +610,14 @@
     <script src="lib/xterm.js?v=12"></script>
     <script src="lib/xterm-addon-fit.js?v=14"></script>
     <script src="lib/xterm-addon-webgl.js?v=13"></script>
-    <script src="tauri-bridge.js?v=20"></script>
+    <script src="tauri-bridge.js?v=21"></script>
 
-    <script src="tooltip.js?v=3"></script>
+    <script src="tooltip.js?v=4"></script>
 
-    <script src="app.js?v=49"></script>
+    <script src="tabs.js?v=1"></script>
 
-    <script src="sidebar.js?v=16"></script>
+    <script src="app.js?v=50"></script>
+
+    <script src="sidebar.js?v=17"></script>
 </body>
 </html>
