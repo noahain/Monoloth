@@ -1739,9 +1739,20 @@
     }
 
     // --- Show Terminal View ---
-    function showTerminal(dir) {
+    async function showTerminal(dir) {
         setCurrentView('terminal');
         _currentLaunchDir = dir;
+        if (window.TabManager && typeof window.TabManager.createTab === 'function') {
+            if (landing) landing.classList.add('hidden');
+            if (settingsPage) settingsPage.classList.remove('active');
+            if (terminalView) terminalView.classList.add('active');
+            try {
+                await window.TabManager.createTab(dir);
+            } catch (e) {
+                console.error('TabManager.createTab failed:', e);
+            }
+            return;
+        }
         if (_terminalRunning && window.monolithApi) {
             window.monolithApi.terminate_terminal('main');
         }
