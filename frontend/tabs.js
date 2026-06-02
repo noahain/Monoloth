@@ -512,6 +512,22 @@
     }
   }
 
+  async function refitActive() {
+    var id = state.config.activeTabId;
+    if (!id) return;
+    var rt = state.runtime.get(id);
+    if (!rt) return;
+    var term = activeXtermFromRuntime(rt);
+    if (!term) return;
+    fitTerminal(term);
+    var sid = activeSessionIdFromRuntime(rt);
+    var cols = term.cols;
+    var rows = term.rows;
+    if (sid && cols > 0 && rows > 0) {
+      try { await api.resize_terminal(sid, cols, rows); } catch (e) { console.error('refitActive resize failed:', e); }
+    }
+  }
+
   function setupDragDrop() {
     var list = document.getElementById('tab-list');
     if (!list) return;
@@ -784,12 +800,14 @@
     state.config = cfg;
 
     var tabBar = document.getElementById('tab-bar');
+    var barEnabled = cfg.enabled !== false;
+    var barPos = cfg.position === 'bottom' ? 'bottom' : 'top';
     if (tabBar) {
-      tabBar.hidden = !cfg.enabled;
-      tabBar.classList.toggle('position-bottom', cfg.position === 'bottom');
+      tabBar.hidden = !barEnabled;
+      tabBar.classList.toggle('position-bottom', barPos === 'bottom');
     }
-    document.body.classList.toggle('tabs-bar-active', !!cfg.enabled);
-    document.body.classList.toggle('tabs-bar-bottom', cfg.position === 'bottom');
+    document.body.classList.toggle('tabs-bar-active', barEnabled);
+    document.body.classList.toggle('tabs-bar-bottom', barPos === 'bottom');
 
     if (!cfg.tabs || cfg.tabs.length === 0) {
       try { await createTab(null); } catch (e) { console.error('initial createTab failed:', e); }
@@ -840,6 +858,7 @@
     reorderTabs: reorderTabs,
     changeProfile: changeProfile,
     refreshActiveTab: refreshActiveTab,
+    refitActive: refitActive,
   };
 
   if (document.readyState === 'loading') {
