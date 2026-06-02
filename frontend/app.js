@@ -1536,11 +1536,15 @@
         }
         if (window.TabManager) {
             try {
-                if (window.TabManager.getActiveTabId()) {
-                    await window.TabManager.refitActive();
+                var activeId = window.TabManager.getActiveTabId();
+                if (activeId) {
+                    await window.TabManager.transitionTabToTerminal(activeId, dir);
                 } else {
                     await window.TabManager.createTab(null);
                 }
+                var tabBar = document.getElementById('tab-bar');
+                if (tabBar) tabBar.hidden = false;
+                document.body.classList.add('tabs-bar-active');
             } catch (e) {
                 console.error('TabManager showTerminal failed:', e);
             }
@@ -1550,6 +1554,20 @@
             setTimeout(function () {
                 window.SidebarManager.restorePanelState();
             }, 200);
+        }
+    }
+
+    function handleGlobalBack() {
+        if (window.TabManager && window.TabManager.getActiveTabId()) {
+            var id = window.TabManager.getActiveTabId();
+            var rt = window.TabManager.getActiveRuntime ? window.TabManager.getActiveRuntime() : null;
+            if (rt && rt.view === 'landing') {
+                window.TabManager.closeTab(id).catch(function (err) { console.error(err); });
+            } else {
+                window.TabManager.revertTabToLanding(id).catch(function (err) { console.error(err); });
+            }
+        } else {
+            backToLanding();
         }
     }
 
@@ -1574,9 +1592,14 @@
         terminalBackBtn.addEventListener('click', function () {
             var hasActive = window.TabManager && window.TabManager.isMainActive && window.TabManager.isMainActive();
             if (hasActive) {
-                showConfirm('Return to Launcher', 'Return to launcher? The current session will be terminated.')
-                    .then(function () { backToLanding(); })
-                    .catch(function () {});
+                var rt = window.TabManager.getActiveRuntime ? window.TabManager.getActiveRuntime() : null;
+                if (rt && rt.view === 'landing') {
+                    window.TabManager.closeTab(window.TabManager.getActiveTabId()).catch(function (err) { console.error(err); });
+                } else {
+                    showConfirm('Return to Launcher', 'Return to launcher? The current session will be terminated.')
+                        .then(function () { handleGlobalBack(); })
+                        .catch(function () {});
+                }
             } else {
                 backToLanding();
             }
@@ -2897,9 +2920,14 @@
             tbBack.addEventListener('click', function() {
                 var hasActive = window.TabManager && window.TabManager.isMainActive && window.TabManager.isMainActive();
                 if (hasActive) {
-                    showConfirm('Return to Launcher', 'Return to launcher? The current session will be terminated.')
-                        .then(function() { backToLanding(); })
-                        .catch(function() {});
+                    var rt = window.TabManager.getActiveRuntime ? window.TabManager.getActiveRuntime() : null;
+                    if (rt && rt.view === 'landing') {
+                        window.TabManager.closeTab(window.TabManager.getActiveTabId()).catch(function (err) { console.error(err); });
+                    } else {
+                        showConfirm('Return to Launcher', 'Return to launcher? The current session will be terminated.')
+                            .then(function() { handleGlobalBack(); })
+                            .catch(function() {});
+                    }
                 } else {
                     backToLanding();
                 }
@@ -3151,6 +3179,9 @@
         },
         isMainActive: function () {
             return !!(window.TabManager && window.TabManager.isMainActive && window.TabManager.isMainActive());
+        },
+        openFilePicker: function (opts) {
+            return openFilePicker(opts);
         }
     };
 
