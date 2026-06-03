@@ -279,6 +279,43 @@
             this._emit({ type: 'active_tab_changed', tabId: tabId });
             this._save();
         },
+        handleBack: function (tabId) {
+            var self = this;
+            var tab = state.tabs.find(function (t) { return t.id === tabId; });
+            if (!tab) return;
+            var running = _terminalRunning[tabId];
+            var proceed = function () { self._backToSimplifiedLanding(tabId); };
+            if (running) {
+                if (typeof window.showConfirm === 'function') {
+                    window.showConfirm('Return to Launcher', 'Return to launcher? The current session will be terminated.')
+                        .then(proceed).catch(function () {});
+                } else if (confirm('Return to launcher? The current session will be terminated.')) {
+                    proceed();
+                }
+            } else {
+                proceed();
+            }
+        },
+        _backToSimplifiedLanding: function (tabId) {
+            if (window.monolithApi && window.monolithApi.terminate_terminal) {
+                window.monolithApi.terminate_terminal(tabId + '__main').catch(function () {});
+            }
+            this.unregisterSession(tabId, tabId + '__main');
+
+            var term = _terms[tabId];
+            if (term) { try { term.dispose(); } catch (e) {} _terms[tabId] = null; }
+            _fitAddons[tabId] = null;
+            _terminalRunning[tabId] = false;
+            this.clearExitTimer(tabId);
+
+            var container = document.querySelector('.terminal-instance[data-tab-id="' + tabId + '"]');
+            if (container) container.innerHTML = '';
+
+            if (window.simplifiedLanding && window.simplifiedLanding.renderInto) {
+                window.simplifiedLanding.renderInto(container, tabId);
+            }
+            this._emit({ type: 'back_to_simplified', tabId: tabId });
+        },
         _init_for_test: function (initialState) { state = initialState; },
         _save: function () {
             if (!state) return;
