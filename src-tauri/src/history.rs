@@ -49,6 +49,7 @@ struct ActiveSession {
     command: String,
     directory: String,
     start_time: String,
+    activities: Vec<serde_json::Value>,
 }
 
 impl HistoryManager {
@@ -97,6 +98,7 @@ impl HistoryManager {
             command: command.to_string(),
             directory: directory.to_string(),
             start_time: iso_now(),
+            activities: Vec::new(),
         });
     }
 
@@ -172,6 +174,17 @@ impl HistoryManager {
         inner.data.retention = retention.to_string();
         self.purge_inner(&mut inner);
         save_json(&history_path(), &inner.data);
+    }
+
+    pub fn record_activity(&self, activity_type: &str, payload: serde_json::Value) {
+        let mut inner = self.inner.lock();
+        if let Some(session) = inner.active_session.as_mut() {
+            session.activities.push(serde_json::json!({
+                "type": activity_type,
+                "payload": payload,
+                "timestamp": epoch_seconds().to_string(),
+            }));
+        }
     }
 
     pub fn clear_history(&self) {

@@ -693,6 +693,15 @@ pub fn end_history_session(history: State<HistoryManager>) {
 }
 
 #[tauri::command]
+pub fn record_history_activity(
+    history: State<HistoryManager>,
+    activity_type: String,
+    payload: serde_json::Value,
+) {
+    history.record_activity(&activity_type, payload);
+}
+
+#[tauri::command]
 pub fn get_current_version() -> String {
     env!("CARGO_PKG_VERSION").into()
 }
