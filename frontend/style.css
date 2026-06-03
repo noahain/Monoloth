@@ -6896,3 +6896,17 @@ body.tab-bar-disabled { padding-bottom: 0 !important; padding-top: 0 !important;
     background: rgba(255, 255, 255, 0.08);
     color: var(--text-primary);
 }
+
+body.cta-blur .tab-bar { background: rgba(20, 20, 20, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+body.cta-glass .tab-bar { background: rgba(40, 40, 40, 0.6); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top-color: rgba(255, 255, 255, 0.08); }
+body.cta-solid .tab-bar { background: var(--bg-tertiary); }
+body.cta-outline .tab-bar { background: transparent; border-top: 1px solid var(--border-muted); }
+
+body.light-mode .tab-bar { background: rgba(245, 245, 245, 0.92); border-top-color: var(--border-muted); }
+body.light-mode .tab-chip { background: rgba(0, 0, 0, 0.04); color: var(--text-secondary); border-color: var(--border-muted); }
+body.light-mode .tab-chip:hover { background: rgba(0, 0, 0, 0.08); }
+body.light-mode .tab-chip.active { background: rgba(250, 178, 131, 0.18); border-color: var(--accent-primary); color: var(--text-primary); }
+
+body.tab-bar-top { padding-top: 44px; padding-bottom: 0; }
+body.tab-bar-top .tab-bar { top: 0; bottom: auto; border-bottom: 1px solid var(--border-dark); border-top: none; }
+body.tab-bar-top .terminal-instance { height: calc(100vh - 44px); }
