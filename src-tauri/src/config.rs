@@ -72,6 +72,7 @@ fn global_keys() -> Vec<&'static str> {
         "window_maximized", "fp_last_dir_bg_image", "fp_last_dir_choose",
         "use_custom_titlebar", "window_x", "window_y",
         "cmdPanelHeight", "panelShell", "tabs_config",
+        "tabs_state", "sidebar_config",
     ]
 }
 
@@ -383,6 +384,30 @@ mod tests {
         assert_eq!(tabs["position"].as_str().unwrap(), "top");
         assert!(tabs["activeTabId"].is_null());
         assert!(tabs["tabs"].as_array().unwrap().is_empty());
+        cleanup_test_env(&test_dir);
+    }
+
+    #[test]
+    fn test_tabs_state_is_global() {
+        let (test_dir, _lock) = setup_test_env();
+        let config = AppConfig::new();
+        config.create_profile("OtherProfile");
+        config.switch_profile("OtherProfile");
+        config.set("tabs_state", Value::String("test-value".into()));
+        let global = load_json(&config_path());
+        assert_eq!(global.get("tabs_state").and_then(|v| v.as_str()), Some("test-value"));
+        cleanup_test_env(&test_dir);
+    }
+
+    #[test]
+    fn test_sidebar_config_is_global() {
+        let (test_dir, _lock) = setup_test_env();
+        let config = AppConfig::new();
+        config.create_profile("OtherProfile");
+        config.switch_profile("OtherProfile");
+        config.set("sidebar_config", Value::String("test-value".into()));
+        let global = load_json(&config_path());
+        assert_eq!(global.get("sidebar_config").and_then(|v| v.as_str()), Some("test-value"));
         cleanup_test_env(&test_dir);
     }
 }
