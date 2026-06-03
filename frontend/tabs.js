@@ -492,6 +492,70 @@
                 document.addEventListener('mousemove', onMove);
                 document.addEventListener('mouseup', onUp);
             });
+        },
+        _setupContextMenu: function () {
+            var self = this;
+            var tabsContainer = document.getElementById('tab-bar-tabs');
+            if (!tabsContainer) return;
+            var menu = document.createElement('div');
+            menu.className = 'tab-context-menu';
+            menu.style.display = 'none';
+            menu.innerHTML = '<button data-action="close">Close</button><button data-action="close-others">Close Others</button>';
+            document.body.appendChild(menu);
+
+            var currentTabId = null;
+
+            tabsContainer.addEventListener('contextmenu', function (e) {
+                var chip = e.target.closest('.tab-chip');
+                if (!chip) return;
+                e.preventDefault();
+                currentTabId = chip.getAttribute('data-tab-id');
+                menu.style.left = e.clientX + 'px';
+                menu.style.top = e.clientY + 'px';
+                menu.style.display = 'block';
+            });
+
+            menu.addEventListener('click', function (e) {
+                var action = e.target.getAttribute('data-action');
+                if (!action || !currentTabId) return;
+                menu.style.display = 'none';
+                if (action === 'close') {
+                    self.closeTab(currentTabId);
+                    self.renderTabs();
+                } else if (action === 'close-others') {
+                    self._closeOthers(currentTabId);
+                }
+            });
+
+            document.addEventListener('click', function (e) {
+                if (!menu.contains(e.target)) menu.style.display = 'none';
+            });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') menu.style.display = 'none';
+            });
+        },
+        _closeOthers: function (keepTabId) {
+            if (!state) return;
+            var keepTab = state.tabs.find(function (t) { return t.id === keepTabId; });
+            if (!keepTab) return;
+            var mainTab = state.tabs.find(function (t) { return t.isMain; });
+            var toClose = state.tabs.filter(function (t) {
+                return t.id !== keepTabId && t.id !== (mainTab && mainTab.id);
+            });
+            if (toClose.length === 0) return;
+            var self = this;
+            var hasRunning = toClose.some(function (t) { return self.isTerminalRunning(t.id); });
+            var proceed = function () {
+                toClose.forEach(function (t) { self.closeTab(t.id); });
+                self.renderTabs();
+            };
+            if (hasRunning) {
+                if (typeof window.showConfirm === 'function') {
+                    window.showConfirm('Close Other Tabs', 'One or more other tabs have running sessions. Close them anyway?').then(proceed).catch(function () {});
+                } else if (confirm('Close other tabs?')) proceed();
+            } else {
+                proceed();
+            }
         }
     };
 
