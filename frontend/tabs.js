@@ -606,6 +606,48 @@
                     }
                 }
             });
+        },
+
+        // Legacy API compatibility aliases (used by app.js legacy code paths)
+        getActiveTabId: function () { return this.activeTabId(); },
+        getActiveXterm: function () { return this.getTerminal(this.activeTabId()); },
+        getActiveView: function () { return 'primary'; },
+        getActiveRuntime: function () {
+            var id = this.activeTabId();
+            if (!id || !_terminalRunning[id]) return null;
+            return { sessionId: id + '__main', generation: _sessionGeneration[id + '__main'] || 0 };
+        },
+        isMainActive: function () { return this.isTerminalRunning(this.activeTabId()); },
+        transitionTabToTerminal: function (tabId, dir) { return this.initTabTerminal(tabId, dir); },
+        revertTabToLanding: function (tabId) { return this.handleBack(tabId); },
+        createLandingTab: function () { return this.createTab(); },
+        pickAndCreateTab: function () {
+            var self = this;
+            if (!window.monolithApi || !window.monolithApi.pick_directory) return;
+            window.monolithApi.pick_directory().then(function (res) {
+                if (res && res.path) {
+                    self.initTabTerminal(self.activeTabId(), res.path);
+                }
+            });
+        },
+        switchTab: function (tabId) { this.setActiveTab(tabId); this.switchTo(tabId); },
+        refreshActiveTab: function () {
+            var tabId = this.activeTabId();
+            if (!tabId) return Promise.resolve();
+            if (this.isTerminalRunning(tabId)) {
+                var sid = tabId + '__main';
+                window.monolithApi.terminate_terminal(sid).catch(function () {});
+            }
+            return this.initTabTerminal(tabId, '');
+        },
+        setupTerminalHandlers: function () {},
+        resolveSessionId: function (tabId, view) { return view === 'primary' ? tabId + '__main' : null; },
+        refitActive: function () {
+            var tabId = this.activeTabId();
+            if (!tabId) return;
+            var t = this.getTerminal(tabId);
+            var f = this.getFitAddon(tabId);
+            if (t && f) { f.fit(); }
         }
     };
 

@@ -1534,9 +1534,7 @@
         if (window.monolithApi && dir) {
             try { await window.monolithApi.set_config('last_directory', dir); } catch (e) { /* ignore */ }
         }
-        var tabBar = document.getElementById('tab-bar');
-        if (tabBar) tabBar.hidden = false;
-        document.body.classList.add('tabs-bar-active');
+        document.body.classList.add('tab-bar-bottom');
         if (window.TabManager) {
             try {
                 var activeId = window.TabManager.getActiveTabId();
@@ -3258,6 +3256,22 @@
     // Initialize sidebar on first terminal show
     if (typeof window.SidebarManager !== 'undefined') {
         window.SidebarManager.init();
+    }
+
+    // Initialize tab manager
+    if (typeof window.TabManager !== 'undefined') {
+        window.TabManager.init(function (s) {
+            if (s && s.tabBarEnabled) {
+                window.TabManager.renderTabs();
+                if (s.tabBarPosition === 'top') {
+                    document.body.classList.add('tab-bar-top');
+                    document.body.classList.remove('tab-bar-bottom');
+                } else {
+                    document.body.classList.add('tab-bar-bottom');
+                    document.body.classList.remove('tab-bar-top');
+                }
+            }
+        });
     }
 
     // Scan for [data-tooltip] elements after all DOM is ready
