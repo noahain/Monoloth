@@ -148,6 +148,77 @@
             this._save();
             return newTab;
         },
-        _init_for_test: function (initialState) { state = initialState; }
+        _init_for_test: function (initialState) { state = initialState; },
+        _save: function () {
+            if (!state) return;
+            if (!window.monolithApi || !window.monolithApi.set_config) return;
+            if (_debounceTimer) clearTimeout(_debounceTimer);
+            _debounceTimer = setTimeout(function () {
+                _debounceTimer = null;
+                _doSave();
+            }, 500);
+        },
+        flushSave: function () {
+            if (_debounceTimer) {
+                clearTimeout(_debounceTimer);
+                _debounceTimer = null;
+            }
+            _doSave();
+        },
+        init: function (callback) {
+            var self = this;
+            loadConfig(function (raw) {
+                if (raw && raw.tabs && Array.isArray(raw.tabs) && raw.tabs.length > 0 && raw.tabBarEnabled) {
+                    state = self._normalize(raw);
+                } else {
+                    state = DEFAULT_STATE();
+                    self._save();
+                }
+                self._emit({ type: 'initialized' });
+                if (callback) callback(state);
+            });
+        },
+        _normalize: function (raw) {
+            var s = {
+                version: raw.version || 1,
+                tabs: raw.tabs.slice(),
+                activeTabId: raw.activeTabId,
+                tabBarPosition: raw.tabBarPosition || 'bottom',
+                tabBarEnabled: raw.tabBarEnabled !== false
+            };
+            var mainCount = s.tabs.filter(function (t) { return t.isMain; }).length;
+            if (mainCount === 0 && s.tabs.length > 0) {
+                s.tabs[0].isMain = true;
+            } else if (mainCount > 1) {
+                var firstMain = true;
+                s.tabs.forEach(function (t) {
+                    if (t.isMain && firstMain) { firstMain = false; }
+                    else if (t.isMain) { t.isMain = false; }
+                });
+            }
+            var activeExists = s.tabs.some(function (t) { return t.id === s.activeTabId; });
+            if (!activeExists && s.tabs.length > 0) {
+                s.activeTabId = s.tabs[0].id;
+            }
+            return s;
+        }
     };
+
+    function _doSave() {
+        if (!state || !window.monolithApi || !window.monolithApi.set_config) return;
+        _saveInflight = true;
+        window.monolithApi.set_config('tabs_state', state)
+            .catch(function (e) { console.error('[TabManager] save failed', e); })
+            .then(function () { _saveInflight = false; });
+    }
+
+    if (typeof window !== 'undefined') {
+        window.addEventListener('beforeunload', function () {
+            if (_debounceTimer) {
+                clearTimeout(_debounceTimer);
+                _debounceTimer = null;
+            }
+            _doSave();
+        });
+    }
 })();
