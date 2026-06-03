@@ -556,6 +556,56 @@
             } else {
                 proceed();
             }
+        },
+        _setupClickHandlers: function () {
+            var self = this;
+            var tabsContainer = document.getElementById('tab-bar-tabs');
+            if (!tabsContainer) return;
+
+            tabsContainer.addEventListener('click', function (e) {
+                var closeBtn = e.target.closest('.tab-chip-close');
+                if (closeBtn) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    var tabId = closeBtn.getAttribute('data-tab-id');
+                    if (tabId) {
+                        if (self.isTerminalRunning(tabId)) {
+                            if (typeof window.showConfirm === 'function') {
+                                window.showConfirm('Close Tab', 'A terminal session is running in this tab. Close it anyway?')
+                                    .then(function () { self.closeTab(tabId); self.renderTabs(); })
+                                    .catch(function () {});
+                            } else if (confirm('Close tab?')) {
+                                self.closeTab(tabId);
+                                self.renderTabs();
+                            }
+                        } else {
+                            self.closeTab(tabId);
+                            self.renderTabs();
+                        }
+                    }
+                    return;
+                }
+                var addBtn = e.target.closest('.tab-chip-add');
+                if (addBtn) {
+                    var newTab = self.createTab();
+                    if (newTab) {
+                        self.renderTabs();
+                        var container = document.querySelector('.terminal-instance[data-tab-id="' + newTab.id + '"]');
+                        if (container && window.simplifiedLanding) {
+                            window.simplifiedLanding.renderInto(container, newTab.id);
+                        }
+                    }
+                    return;
+                }
+                var chip = e.target.closest('.tab-chip');
+                if (chip) {
+                    var tid = chip.getAttribute('data-tab-id');
+                    if (tid) {
+                        self.switchTo(tid);
+                        self.renderTabs();
+                    }
+                }
+            });
         }
     };
 
@@ -574,6 +624,16 @@
                 _debounceTimer = null;
             }
             _doSave();
+        });
+    }
+
+    if (typeof window !== 'undefined') {
+        window.addEventListener('DOMContentLoaded', function () {
+            if (window.TabManager) {
+                if (window.TabManager._setupDragHandlers) window.TabManager._setupDragHandlers();
+                if (window.TabManager._setupClickHandlers) window.TabManager._setupClickHandlers();
+                if (window.TabManager._setupContextMenu) window.TabManager._setupContextMenu();
+            }
         });
     }
 })();
