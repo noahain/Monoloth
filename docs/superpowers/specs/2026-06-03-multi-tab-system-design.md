@@ -36,7 +36,7 @@ Monoloth today has exactly one terminal area backed by a single `'main'` PTY ses
 | Decision | Choice | Why |
 |---|---|---|
 | Tab data ownership | Frontend `TabManager` (in-memory + JSON in config) | No Rust TabsManager needed; `AppConfig` already persists arbitrary JSON via `set_config`/`get_config` |
-| Persisted shape | New global key `tabs_state` (single object) | Matches existing `global_keys()` extension pattern; one atomic write per change |
+| Persisted shape | New global key `tabs_state` (single object), registered in `global_keys()` | Matches existing `global_keys()` extension pattern; one atomic write per change |
 | Tab ID | UUID v4 (frontend-generated via `crypto.randomUUID()`) | Stable across reorder/rename; no collision risk |
 | PTY session ID | `${tabId}_main` and `${tabId}_panel` (and `${tabId}_bg_${buttonId}` for sidebar) | Existing `PtyManager` is a `HashMap<String, PtySession>` keyed by string — just use composite keys |
 | Xterm instance lifecycle | Created lazily on terminal launch, disposed on tab close | Inactive tabs in simplified-landing state have no xterm at all (saves memory) |
@@ -56,7 +56,7 @@ Monoloth today has exactly one terminal area backed by a single `'main'` PTY ses
 
 ### 3.1 Persisted config (new global key)
 
-Add `tabs_state` to the global config object in `config.json` (the file `appdata_dir()/config.json`). It is treated as a single global key for the purposes of the existing `AppConfig::set/get` machinery — no new `global_keys()` entry is required because `set_config`/`get_config` accept any key; we just standardise on `tabs_state` as the key name.
+Add `tabs_state` to the global config object in `config.json` (the file `appdata_dir()/config.json`). It must be registered in `AppConfig::global_keys()` (a one-line addition in `config.rs` around line 63-70) so it is always written to `config.json` regardless of `active_profile`. Without that registration, `set_config` routes the value into the active profile's JSON file, which is not what the design intends.
 
 ```json
 {
