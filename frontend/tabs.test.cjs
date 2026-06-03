@@ -77,3 +77,36 @@ test('closeTab on the only main tab preserves the tab', () => {
     assert.equal(tm.state().tabs.length, 1);
     assert.equal(tm.state().tabs[0].isMain, true);
 });
+
+test('reorderTabs moves a tab', () => {
+    const ctx = makeContext();
+    const tm = ctx.window.TabManager;
+    tm._init_for_test({
+        tabs: [
+            { id: 'a', isMain: true, profile: 'Default' },
+            { id: 'b', isMain: false, profile: 'Default' },
+            { id: 'c', isMain: false, profile: 'Default' }
+        ],
+        activeTabId: 'a'
+    });
+    tm.reorderTabs(0, 2);
+    assert.deepEqual(tm.state().tabs.map(function (t) { return t.id; }), ['b', 'c', 'a']);
+});
+
+test('setActiveTab updates activeTabId', () => {
+    const ctx = makeContext();
+    const tm = ctx.window.TabManager;
+    tm._init_for_test({
+        tabs: [
+            { id: 'a', isMain: true, profile: 'Default' },
+            { id: 'b', isMain: false, profile: 'Default' }
+        ],
+        activeTabId: 'a'
+    });
+    let emitted = null;
+    tm.on(function (e) { if (e.type === 'active_tab_changed') emitted = e; });
+    tm.setActiveTab('b');
+    assert.equal(tm.state().activeTabId, 'b');
+    assert.ok(emitted);
+    assert.equal(emitted.tabId, 'b');
+});

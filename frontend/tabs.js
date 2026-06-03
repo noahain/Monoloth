@@ -63,6 +63,24 @@
             delete _sessionsByTab[tabId];
         },
         _save: function () { },
+        reorderTabs: function (fromIndex, toIndex) {
+            if (!state) return;
+            if (fromIndex < 0 || fromIndex >= state.tabs.length) return;
+            if (toIndex < 0 || toIndex >= state.tabs.length) return;
+            if (fromIndex === toIndex) return;
+            var moved = state.tabs.splice(fromIndex, 1)[0];
+            state.tabs.splice(toIndex, 0, moved);
+            this._emit({ type: 'tabs_reordered' });
+            this._save();
+        },
+        setActiveTab: function (tabId) {
+            if (!state) return;
+            var tab = state.tabs.find(function (t) { return t.id === tabId; });
+            if (!tab) return;
+            state.activeTabId = tabId;
+            this._emit({ type: 'active_tab_changed', tabId: tabId });
+            this._save();
+        },
         closeTab: function (tabId, opts) {
             opts = opts || {};
             if (!state) return null;
