@@ -6732,3 +6732,138 @@ body.tabs-bar-active.tabs-bar-bottom #terminal-view {
     background: var(--bg-tertiary, #2a2a2a);
     border-bottom: 2px dashed var(--accent-primary, #3b82f6);
 }
+
+.tab-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    height: 44px;
+    background: rgba(20, 20, 20, 0.92);
+    border-top: 1px solid var(--border-dark);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.tab-bar-bottom {
+    bottom: 0;
+    border-top: 1px solid var(--border-dark);
+    border-bottom: none;
+}
+
+.tab-bar-top {
+    top: 0;
+    border-bottom: 1px solid var(--border-dark);
+    border-top: none;
+}
+
+body.tab-bar-bottom { padding-bottom: 44px; }
+body.tab-bar-top { padding-top: 44px; }
+body.tab-bar-disabled .tab-bar { display: none; }
+body.tab-bar-disabled { padding-bottom: 0 !important; padding-top: 0 !important; }
+
+.tab-bar-tabs {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 4px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    height: 100%;
+    scrollbar-width: thin;
+}
+
+.tab-bar-tabs::-webkit-scrollbar { height: 4px; }
+.tab-bar-tabs::-webkit-scrollbar-thumb { background: var(--border-muted); border-radius: 2px; }
+
+.tab-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    height: 30px;
+    min-width: 80px;
+    max-width: 200px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    user-select: none;
+    flex-shrink: 0;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.tab-chip:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--border-muted);
+}
+
+.tab-chip.active {
+    background: rgba(250, 178, 131, 0.15);
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+}
+
+.tab-chip.is-main .tab-chip-main-badge {
+    color: var(--accent-primary);
+    font-size: 10px;
+}
+
+.tab-chip-profile {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+}
+
+.tab-chip-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0 4px;
+    font-size: 14px;
+    line-height: 1;
+    border-radius: 3px;
+}
+
+.tab-chip-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+.tab-chip-add {
+    background: rgba(20, 20, 20, 0.95);
+    border: 1px dashed var(--border-muted);
+    color: var(--text-muted);
+    cursor: pointer;
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    font-size: 16px;
+    line-height: 1;
+    flex-shrink: 0;
+    position: sticky;
+    right: 0;
+}
+
+.tab-chip-add:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.terminal-instance {
+    width: 100%;
+    height: calc(100vh - 44px);
+    display: none;
+}
+
+.terminal-instance.active {
+    display: block;
+}
