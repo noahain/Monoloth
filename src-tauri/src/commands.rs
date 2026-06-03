@@ -411,9 +411,10 @@ pub fn start_terminal(
     shell: Option<String>,
     cols: u16,
     rows: u16,
+    profile: Option<String>,
 ) -> Result<u64, String> {
     let record = record_history.unwrap_or(true);
-    let is_panel = session_id == "panel";
+    let is_panel = session_id == "panel" || session_id.ends_with("__panel");
 
     if is_panel {
         let shell_exe = match shell.as_deref().unwrap_or("cmd") {
@@ -431,9 +432,11 @@ pub fn start_terminal(
         return Ok(gen);
     }
 
-    let startup_cmd = config.get("startup_command").as_str().unwrap_or("opencode").to_string();
-    let cmd_type = config.get("startup_command_type").as_str().unwrap_or("preset").to_string();
-    let active_profile = config.get_active_profile();
+    let profile_name = profile.as_deref().unwrap_or("Default");
+    let get = |key: &str| config.get_for_profile(profile_name, key);
+    let startup_cmd = get("startup_command").as_str().unwrap_or("opencode").to_string();
+    let cmd_type = get("startup_command_type").as_str().unwrap_or("preset").to_string();
+    let active_profile = profile_name.to_string();
 
     let directory = expand_env_vars(&directory);
 
