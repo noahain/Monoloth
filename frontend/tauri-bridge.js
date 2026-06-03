@@ -72,6 +72,24 @@
             .catch(function (err) { return { success: false, error: String(err) }; });
     };
 
+    api.end_history_session = function () {
+        return invoke('end_history_session', {})
+            .then(function () { return { success: true }; })
+            .catch(function (err) { return { success: false, error: String(err) }; });
+    };
+
+    api.record_history_activity = function (activityType, payload) {
+        return invoke('record_history_activity', { activityType: activityType, payload: payload })
+            .then(function () { return { success: true }; })
+            .catch(function (err) { return { success: false, error: String(err) }; });
+    };
+
+    api.terminate_tab_sessions = function (tabId) {
+        return invoke('terminate_tab_sessions', { tabId: tabId })
+            .then(function () { return { success: true }; })
+            .catch(function (err) { return { success: false, error: String(err) }; });
+    };
+
     // --- Tabs (Unit E) ---
     api.getTabsConfig = function () {
         return invoke('get_tabs_config');
