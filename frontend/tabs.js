@@ -425,6 +425,73 @@
                 addBtn.textContent = '+';
                 tabsContainer.appendChild(addBtn);
             }
+        },
+        _setupDragHandlers: function () {
+            var self = this;
+            var tabsContainer = document.getElementById('tab-bar-tabs');
+            if (!tabsContainer) return;
+            var draggedFrom = null;
+            var dragGhost = null;
+
+            tabsContainer.addEventListener('mousedown', function (e) {
+                var chip = e.target.closest('.tab-chip');
+                if (!chip) return;
+                var tabId = chip.getAttribute('data-tab-id');
+                if (!tabId) return;
+                if (e.target.classList.contains('tab-chip-close')) return;
+                if (e.target.classList.contains('tab-chip-main-badge')) return;
+
+                var fromIndex = state.tabs.findIndex(function (t) { return t.id === tabId; });
+                if (fromIndex === -1) return;
+
+                draggedFrom = fromIndex;
+                var startX = e.clientX;
+                var chipRect = chip.getBoundingClientRect();
+
+                function onMove(ev) {
+                    if (draggedFrom === null) return;
+                    var dx = ev.clientX - startX;
+                    if (!dragGhost) {
+                        dragGhost = chip.cloneNode(true);
+                        dragGhost.style.position = 'fixed';
+                        dragGhost.style.left = chipRect.left + 'px';
+                        dragGhost.style.top = chipRect.top + 'px';
+                        dragGhost.style.width = chipRect.width + 'px';
+                        dragGhost.style.opacity = '0.8';
+                        dragGhost.style.zIndex = '9999';
+                        dragGhost.style.pointerEvents = 'none';
+                        document.body.appendChild(dragGhost);
+                    }
+                    dragGhost.style.left = (chipRect.left + dx) + 'px';
+                }
+
+                function onUp(ev) {
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                    if (dragGhost) { dragGhost.remove(); dragGhost = null; }
+                    if (draggedFrom === null) return;
+                    var dropX = ev.clientX;
+                    var chips = Array.prototype.slice.call(tabsContainer.querySelectorAll('.tab-chip'));
+                    var toIndex = draggedFrom;
+                    for (var i = 0; i < chips.length; i++) {
+                        var rect = chips[i].getBoundingClientRect();
+                        if (dropX < rect.left + rect.width / 2) {
+                            toIndex = i;
+                            break;
+                        }
+                        toIndex = i + 1;
+                    }
+                    if (toIndex > chips.length) toIndex = chips.length;
+                    if (toIndex !== draggedFrom) {
+                        self.reorderTabs(draggedFrom, toIndex);
+                        self.renderTabs();
+                    }
+                    draggedFrom = null;
+                }
+
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            });
         }
     };
 
