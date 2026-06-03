@@ -53,12 +53,6 @@
             .catch(function (err) { return { success: false, error: String(err) }; });
     };
 
-    api.start_opencode = async function (dir) {
-        var tabId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now() + '-' + Math.random());
-        var activeProfile = await api.get_config('active_profile');
-        return api.createTab(tabId, activeProfile || null, dir, 80, 24, 'terminal');
-    };
-
     api.send_input = function (sessionId, data) {
         return invoke('send_input', { sessionId: sessionId, data: data })
             .then(function () { return { success: true }; })
@@ -76,10 +70,6 @@
         return invoke('terminate_terminal', { sessionId: sid })
             .then(function () { return { success: true }; })
             .catch(function (err) { return { success: false, error: String(err) }; });
-    };
-
-    api.terminate = function () {
-        return api.terminate_terminal('main');
     };
 
     // --- Tabs (Unit E) ---
