@@ -178,6 +178,19 @@ impl AppConfig {
         }
     }
 
+    pub fn get_for_profile(&self, profile_name: &str, key: &str) -> Value {
+        if profile_name == "Default" {
+            let inner = self.inner.lock();
+            return inner.global.get(key).cloned().unwrap_or(Value::Null);
+        }
+        let path = profile_path(profile_name);
+        if !path.exists() {
+            return Value::Null;
+        }
+        let map = load_json(&path);
+        map.get(key).cloned().unwrap_or(Value::Null)
+    }
+
     pub fn set(&self, key: &str, value: Value) {
         let mut inner = self.inner.lock();
         if is_global_key(key) || inner.active_profile == "Default" {
@@ -408,6 +421,24 @@ mod tests {
         config.set("sidebar_config", Value::String("test-value".into()));
         let global = load_json(&config_path());
         assert_eq!(global.get("sidebar_config").and_then(|v| v.as_str()), Some("test-value"));
+        cleanup_test_env(&test_dir);
+    }
+
+    #[test]
+    fn test_get_for_profile() {
+        let (test_dir, _lock) = setup_test_env();
+        let config = AppConfig::new();
+        config.create_profile("Work");
+        config.switch_profile("Work");
+        config.set("startup_command", Value::String("claude".into()));
+        let active = config.get_active_profile();
+        assert_eq!(active, "Work");
+        let from_work = config.get_for_profile("Work", "startup_command");
+        assert_eq!(from_work.as_str(), Some("claude"));
+        let from_default = config.get_for_profile("Default", "startup_command");
+        assert_eq!(from_default.as_str(), Some("opencode"));
+        let from_missing = config.get_for_profile("Nonexistent", "startup_command");
+        assert_eq!(from_missing, Value::Null);
         cleanup_test_env(&test_dir);
     }
 }
