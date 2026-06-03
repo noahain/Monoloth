@@ -550,6 +550,31 @@
             .catch(function(err) { return { success: false, error: String(err) }; });
     };
 
+    function setupPtyListener() {
+        listen('pty-output', function (event) {
+            var payload = event.payload || {};
+            var sessionId = payload.sessionId;
+            if (!sessionId) {
+                console.warn('[MonolothBridge] pty-output event missing sessionId, dropping');
+                return;
+            }
+            var generation = payload.generation || 0;
+            if (payload.eof) {
+                if (window.writeToTerm) window.writeToTerm('\r\n\x1b[90m[Process exited]\x1b[0m\r\n', true, sessionId, generation);
+                return;
+            }
+            if (window.writeToTerm) {
+                window.writeToTerm(payload.data || '', false, sessionId, generation);
+            }
+        }).catch(function (e) {
+            console.error('Failed to set up PTY listener:', e);
+        });
+    }
+
+    window.addEventListener('DOMContentLoaded', function () {
+        setupPtyListener();
+    });
+
     window.monolithApi = api;
     console.log('[MonolothBridge] window.monolithApi set, methods:', Object.keys(api).length);
 })();
