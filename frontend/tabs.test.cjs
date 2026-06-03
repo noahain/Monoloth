@@ -7,6 +7,19 @@ const vm = require('node:vm');
 const tabsSource = fs.readFileSync(path.join(__dirname, 'tabs.js'), 'utf8');
 
 function makeContext(monolithApi) {
+    const fakeEl = {
+        innerHTML: '',
+        textContent: '',
+        appendChild: function () {},
+        classList: { add: function () {}, remove: function () {}, contains: function () { return false; }, toggle: function () {} },
+        setAttribute: function () {},
+        getAttribute: function () { return null; },
+        addEventListener: function () {},
+        removeEventListener: function () {},
+        style: {},
+        querySelector: function () { return null; },
+        querySelectorAll: function () { return []; }
+    };
     const ctx = {
         console,
         setTimeout, clearTimeout, setInterval, clearInterval,
@@ -14,6 +27,13 @@ function makeContext(monolithApi) {
         crypto: { randomUUID: function () {
             return '00000000-0000-4000-8000-' + (Math.random().toString(16).slice(2, 14).padEnd(12, '0'));
         }},
+        document: {
+            getElementById: function () { return fakeEl; },
+            querySelector: function () { return fakeEl; },
+            querySelectorAll: function () { return []; },
+            createElement: function () { return Object.assign({}, fakeEl); },
+            body: fakeEl
+        },
         window: {
             addEventListener: function () {},
             removeEventListener: function () {}
@@ -197,4 +217,82 @@ test('save debounces rapid calls', (t, done) => {
         assert.equal(saveCount, 1, 'three rapid saves produce one write');
         done();
     }, 600);
+});
+
+test('flushSave synchronously calls set_config', (t, done) => {
+    let savedWith = null;
+    const ctx = makeContext({
+        get_config: () => Promise.resolve(null),
+        set_config: function (k, v) { savedWith = v; return Promise.resolve(); }
+    });
+    const tm = ctx.window.TabManager;
+    tm._init_for_test({ tabs: [{ id: 'a', isMain: true, profile: 'Default' }], activeTabId: 'a' });
+    tm._save();
+    tm.flushSave();
+    assert.ok(savedWith, 'flushSave writes synchronously');
+    assert.equal(savedWith.tabs[0].id, 'a');
+    setTimeout(done, 10);
+});
+
+test('Close Others on main tab keeps main and closes all others', () => {
+    const ctx = makeContext();
+    const tm = ctx.window.TabManager;
+    tm._init_for_test({
+        tabs: [
+            { id: 'a', isMain: true, profile: 'Default' },
+            { id: 'b', isMain: false, profile: 'Default' },
+            { id: 'c', isMain: false, profile: 'Default' }
+        ],
+        activeTabId: 'a'
+    });
+    tm._closeOthers('a');
+    assert.deepEqual(tm.state().tabs.map(function (t) { return t.id; }), ['a']);
+});
+
+test('Close Others on non-main tab keeps main and current', () => {
+    const ctx = makeContext();
+    const tm = ctx.window.TabManager;
+    tm._init_for_test({
+        tabs: [
+            { id: 'a', isMain: true, profile: 'Default' },
+            { id: 'b', isMain: false, profile: 'Default' },
+            { id: 'c', isMain: false, profile: 'Default' }
+        ],
+        activeTabId: 'a'
+    });
+    tm._closeOthers('c');
+    assert.deepEqual(tm.state().tabs.map(function (t) { return t.id; }), ['a', 'c']);
+});
+
+test('tab bar position and enabled flag round-trip', () => {
+    const ctx = makeContext();
+    const tm = ctx.window.TabManager;
+    tm._init_for_test({
+        tabs: [{ id: 'a', isMain: true, profile: 'Default' }],
+        activeTabId: 'a',
+        tabBarPosition: 'top',
+        tabBarEnabled: false
+    });
+    var s = tm.state();
+    assert.equal(s.tabBarPosition, 'top');
+    assert.equal(s.tabBarEnabled, false);
+});
+
+test('closeTab clears per-tab session generation and skip-next-eof', () => {
+    const ctx = makeContext();
+    const tm = ctx.window.TabManager;
+    tm._init_for_test({
+        tabs: [
+            { id: 'a', isMain: true, profile: 'Default' },
+            { id: 'b', isMain: false, profile: 'Default' }
+        ],
+        activeTabId: 'a'
+    });
+    tm.setSessionGeneration('b__main', 5);
+    tm.setSkipNextEof('b__main', true);
+    tm.registerSession('b', 'b__main');
+    tm.closeTab('b');
+    assert.equal(tm.getSessionGeneration('b__main'), 0);
+    assert.equal(tm.getSkipNextEof('b__main'), false);
+    assert.equal(tm.getSessionsForTab('b'), null);
 });
