@@ -49,6 +49,19 @@
         _emit: function (event) {
             _listeners.forEach(function (fn) { try { fn(event); } catch (e) { console.error(e); } });
         },
+        registerSession: function (tabId, sessionId) {
+            if (!_sessionsByTab[tabId]) _sessionsByTab[tabId] = new Set();
+            _sessionsByTab[tabId].add(sessionId);
+        },
+        unregisterSession: function (tabId, sessionId) {
+            if (_sessionsByTab[tabId]) {
+                _sessionsByTab[tabId].delete(sessionId);
+                if (_sessionsByTab[tabId].size === 0) delete _sessionsByTab[tabId];
+            }
+        },
+        unregisterAllForTab: function (tabId) {
+            delete _sessionsByTab[tabId];
+        },
         _init_for_test: function (initialState) { state = initialState; }
     };
 })();
