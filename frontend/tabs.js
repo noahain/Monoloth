@@ -21,6 +21,13 @@
     var _debounceTimer = null;
     var _sessionsByTab = Object.create(null);
     var _saveInflight = false;
+    var _terms = Object.create(null);
+    var _fitAddons = Object.create(null);
+    var _sessionGeneration = Object.create(null);
+    var _skipNextEof = Object.create(null);
+    var _firstOutput = Object.create(null);
+    var _exitTimer = Object.create(null);
+    var _terminalRunning = Object.create(null);
 
     function genId() {
         if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -147,6 +154,100 @@
             this._emit({ type: 'tab_created', tab: newTab });
             this._save();
             return newTab;
+        },
+        initTabTerminal: function (tabId, dir, opts) {
+            opts = opts || {};
+            var self = this;
+            var sessionId = tabId + '__main';
+            var container = document.querySelector('.terminal-instance[data-tab-id="' + tabId + '"]');
+            if (!container) {
+                console.error('[TabManager] no terminal-instance for tab', tabId);
+                return Promise.resolve({ success: false, error: 'no container' });
+            }
+
+            if (_terms[tabId]) {
+                try { _terms[tabId].dispose(); } catch (e) {}
+                _terms[tabId] = null;
+            }
+            _fitAddons[tabId] = null;
+            _firstOutput[tabId] = true;
+            if (_exitTimer[tabId]) { clearTimeout(_exitTimer[tabId]); _exitTimer[tabId] = null; }
+            container.innerHTML = '';
+
+            if (typeof Terminal === 'undefined') {
+                container.innerHTML = '<div style="color:#c0c0c0;padding:20px;font-family:monospace;">Error: Terminal library failed to load.</div>';
+                return Promise.resolve({ success: false, error: 'no Terminal' });
+            }
+
+            var term = new Terminal({
+                allowTransparency: true,
+                fontFamily: '"Cascadia Mono", "Consolas", "Lucida Console", "Courier New", monospace',
+                fontSize: 14,
+                scrollback: 2000,
+                smoothScrollDuration: 0,
+                scrollSensitivity: 1,
+                allowProposedApi: true,
+                windowsMode: true,
+                minimumContrastRatio: 1,
+                fastScrollModifier: 'alt',
+                fastScrollSensitivity: 5,
+                scrollOnUserInput: true
+            });
+            term.open(container);
+            term.focus();
+
+            var fit = null;
+            if (typeof FitAddon !== 'undefined') {
+                fit = new FitAddon.FitAddon();
+                term.loadAddon(fit);
+            }
+            _terms[tabId] = term;
+            _fitAddons[tabId] = fit;
+            _terminalRunning[tabId] = false;
+
+            this.registerSession(tabId, sessionId);
+
+            return new Promise(function (resolve) {
+                requestAnimationFrame(function () {
+                    if (fit) fit.fit();
+                    var profile = (self.activeTab() && self.activeTab().profile) || 'Default';
+                    var recordHistory = opts.recordHistory !== false;
+                    window.monolithApi.start_terminal(sessionId, dir, recordHistory, opts.shell || null, term.cols, term.rows)
+                        .then(function (result) {
+                            if (!result || !result.success) {
+                                term.writeln('Failed to start. ' + (result && result.error ? result.error : ''));
+                                resolve({ success: false });
+                                return;
+                            }
+                            _terminalRunning[tabId] = true;
+                            _sessionGeneration[sessionId] = result.generation || 0;
+                            resolve({ success: true, generation: result.generation });
+                        })
+                        .catch(function (err) {
+                            term.writeln('Error: ' + err);
+                            resolve({ success: false, error: String(err) });
+                        });
+                });
+            });
+        },
+        getTerminal: function (tabId) { return _terms[tabId] || null; },
+        getFitAddon: function (tabId) { return _fitAddons[tabId] || null; },
+        isTerminalRunning: function (tabId) { return !!_terminalRunning[tabId]; },
+        setSkipNextEof: function (sessionId, val) { _skipNextEof[sessionId] = !!val; },
+        getSkipNextEof: function (sessionId) { return !!_skipNextEof[sessionId]; },
+        setSessionGeneration: function (sessionId, gen) { _sessionGeneration[sessionId] = gen; },
+        getSessionGeneration: function (sessionId) { return _sessionGeneration[sessionId] || 0; },
+        clearExitTimer: function (tabId) {
+            if (_exitTimer[tabId]) { clearTimeout(_exitTimer[tabId]); _exitTimer[tabId] = null; }
+        },
+        scheduleExitTimer: function (tabId, fn, ms) {
+            this.clearExitTimer(tabId);
+            _exitTimer[tabId] = setTimeout(fn, ms);
+        },
+        isFirstOutput: function (tabId) {
+            var v = !!_firstOutput[tabId];
+            if (v) _firstOutput[tabId] = false;
+            return v;
         },
         _init_for_test: function (initialState) { state = initialState; },
         _save: function () {
