@@ -249,6 +249,36 @@
             if (v) _firstOutput[tabId] = false;
             return v;
         },
+        switchTo: function (tabId) {
+            if (!state) return;
+            var tab = state.tabs.find(function (t) { return t.id === tabId; });
+            if (!tab) return;
+            if (state.activeTabId === tabId) return;
+
+            state.activeTabId = tabId;
+
+            var instances = document.querySelectorAll('.terminal-instance');
+            instances.forEach(function (el) {
+                el.style.display = (el.getAttribute('data-tab-id') === tabId) ? 'block' : 'none';
+            });
+
+            var slEl = document.getElementById('simplified-landing');
+            if (slEl) slEl.style.display = 'none';
+
+            var term = _terms[tabId];
+            var fit = _fitAddons[tabId];
+            if (term && fit) {
+                requestAnimationFrame(function () {
+                    fit.fit();
+                    if (window.monolithApi && window.monolithApi.resize_terminal) {
+                        window.monolithApi.resize_terminal(tabId + '__main', term.cols, term.rows);
+                    }
+                });
+            }
+
+            this._emit({ type: 'active_tab_changed', tabId: tabId });
+            this._save();
+        },
         _init_for_test: function (initialState) { state = initialState; },
         _save: function () {
             if (!state) return;
