@@ -702,6 +702,11 @@ pub fn record_history_activity(
 }
 
 #[tauri::command]
+pub fn terminate_tab_sessions(pty: State<PtyManager>, tab_id: String) {
+    pty.terminate_tab(&tab_id);
+}
+
+#[tauri::command]
 pub fn get_current_version() -> String {
     env!("CARGO_PKG_VERSION").into()
 }

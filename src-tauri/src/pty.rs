@@ -290,4 +290,18 @@ impl PtyManager {
             self.terminate(&sid);
         }
     }
+
+    pub fn terminate_tab(&self, tab_id: &str) {
+        let prefix = format!("{}__", tab_id);
+        let matching: Vec<String> = {
+            self.sessions.lock()
+                .keys()
+                .filter(|k| k.starts_with(&prefix))
+                .cloned()
+                .collect()
+        };
+        for sid in matching {
+            self.terminate(&sid);
+        }
+    }
 }
