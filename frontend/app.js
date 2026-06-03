@@ -1625,7 +1625,7 @@
         { id: 'settings', category: 'configuration', label: 'Settings', action: function () { showSettings(); }, shortcutKey: 'settings' },
         { id: 'appearance', category: 'configuration', label: 'Appearance Settings', action: function () { openAppearanceSettings(); } },
         { id: 'history', category: 'configuration', label: 'History', action: function () { openHistorySettings(); } },
-        { id: 'profiles', category: 'configuration', label: 'Switch Profile', action: function () { openProfileSwitcher(); } },
+        { id: 'profiles', category: 'configuration', label: 'Switch Profile', action: function () { openProfileSwitcher('global'); } },
     ];
 
     var paletteEl = document.createElement('div');
@@ -3049,7 +3049,7 @@
     var psClose = document.getElementById('ps-close');
     var psBody = document.getElementById('ps-body');
 
-    function renderProfileSwitcher() {
+    function renderProfileSwitcher(scope, tabId) {
         if (!psBody) return;
         psBody.innerHTML = '';
         _profiles.forEach(function (profile) {
@@ -3066,20 +3066,30 @@
                 item.appendChild(checkSpan);
             }
             item.addEventListener('click', function () {
-                switchToProfile(profile.name);
                 closeProfileSwitcher();
+                if (scope === 'tab' && tabId && window.TabManager) {
+                    window.TabManager.setTabProfile(tabId, profile.name);
+                    if (tabId === window.TabManager.activeTabId()) {
+                        if (typeof loadBackgroundConfig === 'function') loadBackgroundConfig();
+                    }
+                } else {
+                    switchToProfile(profile.name);
+                }
             });
             psBody.appendChild(item);
         });
     }
 
-    function openProfileSwitcher() {
+    function openProfileSwitcher(scope, tabId) {
+        scope = scope || 'global';
         if (!profileSwitcher) return;
-        renderProfileSwitcher();
+        renderProfileSwitcher(scope, tabId);
         profileSwitcher.classList.add('active');
         saveFocus();
         trapFocus(profileSwitcher);
     }
+
+    window.openProfileSwitcher = openProfileSwitcher;
 
     function closeProfileSwitcher() {
         if (!profileSwitcher) return;
@@ -3088,7 +3098,7 @@
     }
 
     if (profileSelectorBtn) {
-        profileSelectorBtn.addEventListener('click', openProfileSwitcher);
+        profileSelectorBtn.addEventListener('click', function () { openProfileSwitcher('global'); });
     }
 
     if (psClose) {
