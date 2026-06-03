@@ -636,6 +636,58 @@
         }
         // Wire up event handlers
         wireSettingsEvents();
+        renderTabsSettings();
+    }
+
+    function renderTabsSettings() {
+        var panel = document.getElementById('tab-sidebar');
+        if (!panel) return;
+        var state = window.TabManager && window.TabManager.state();
+        var enabled = state ? state.tabBarEnabled : true;
+        var position = state ? state.tabBarPosition : 'bottom';
+
+        var tabsSection = document.createElement('div');
+        tabsSection.className = 'settings-card';
+        tabsSection.innerHTML = ''
+            + '<div class="card-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>'
+            + '<div class="card-body">'
+            + '  <h3>Tabs</h3>'
+            + '  <p class="card-desc">Configure the tab bar position and visibility.</p>'
+            + '  <div class="setting-row">'
+            + '    <label><input type="checkbox" id="tabs-enabled-toggle" ' + (enabled ? 'checked' : '') + ' /> Enable tab bar</label>'
+            + '  </div>'
+            + '  <p class="setting-hint">Disabling hides the tab bar and reverts to single-tab mode. Your tabs are saved and will be restored if you re-enable.</p>'
+            + '  <div class="setting-row">'
+            + '    <label>Position: '
+            + '      <select id="tabs-position-select">'
+            + '        <option value="bottom"' + (position === 'bottom' ? ' selected' : '') + '>Bottom</option>'
+            + '        <option value="top"' + (position === 'top' ? ' selected' : '') + '>Top</option>'
+            + '      </select>'
+            + '    </label>'
+            + '  </div>'
+            + '</div>';
+
+        panel.appendChild(tabsSection);
+
+        document.getElementById('tabs-enabled-toggle').addEventListener('change', function (e) {
+            var s = window.TabManager.state();
+            s.tabBarEnabled = e.target.checked;
+            window.TabManager._save();
+            if (e.target.checked) {
+                document.body.classList.remove('tab-bar-disabled');
+                document.body.classList.add(s.tabBarPosition === 'top' ? 'tab-bar-top' : 'tab-bar-bottom');
+            } else {
+                document.body.classList.add('tab-bar-disabled');
+            }
+        });
+
+        document.getElementById('tabs-position-select').addEventListener('change', function (e) {
+            var s = window.TabManager.state();
+            s.tabBarPosition = e.target.value;
+            window.TabManager._save();
+            document.body.classList.toggle('tab-bar-top', s.tabBarPosition === 'top');
+            document.body.classList.toggle('tab-bar-bottom', s.tabBarPosition === 'bottom');
+        });
     }
 
     function wireSettingsEvents() {
