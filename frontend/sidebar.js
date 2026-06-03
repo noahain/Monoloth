@@ -26,6 +26,12 @@
     var _configSaveTimer = null;
     var _panelRestoreNeeded = false;
 
+    function panelSessionId() {
+        if (typeof window === 'undefined' || !window.TabManager) return 'panel';
+        var tabId = window.TabManager.activeTabId();
+        return tabId ? tabId + '__panel' : 'panel';
+    }
+
     // ---- SVG Icons ----
     var ICONS = {
         folder: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
@@ -132,7 +138,7 @@
             if (!_cmdPanelOpen) {
                 showCmdPanel();
             }
-            window.monolithApi.send_input('panel', cmd + '\n').catch(function () {});
+            window.monolithApi.send_input(panelSessionId(), cmd + '\n').catch(function () {});
         }
     }
 
@@ -410,7 +416,7 @@
 
             panelTerm.onData(function (data) {
                 if (window.monolithApi) {
-                    window.monolithApi.send_input('panel', data).catch(function () {});
+                    window.monolithApi.send_input(panelSessionId(), data).catch(function () {});
                 }
             });
         }
@@ -418,19 +424,19 @@
         _panelRunning = true;
         var pCols = panelTerm ? panelTerm.cols : 80;
         var pRows = panelTerm ? panelTerm.rows : 24;
-        window.monolithApi.start_terminal('panel', dir, false, _panelShell, pCols, pRows)
+        window.monolithApi.start_terminal(panelSessionId(), dir, false, _panelShell, pCols, pRows)
             .then(function (result) {
                 if (!result || !result.success) {
                     _panelRunning = false;
                     showPanelExitBanner();
                 } else if (result.generation && window.MonolothApp && typeof window.MonolothApp.setSessionGeneration === 'function') {
-                    window.MonolothApp.setSessionGeneration('panel', result.generation);
+                    window.MonolothApp.setSessionGeneration(panelSessionId(), result.generation);
                 }
                 if (panelFitAddon && panelTerm) {
                     setTimeout(function () {
                         panelFitAddon.fit();
                         if (window.monolithApi) {
-                            window.monolithApi.resize_terminal('panel', panelTerm.cols, panelTerm.rows).catch(function () {});
+                            window.monolithApi.resize_terminal(panelSessionId(), panelTerm.cols, panelTerm.rows).catch(function () {});
                         }
                     }, 100);
                 }
@@ -447,7 +453,8 @@
             cmdPanelExitBanner.style.display = '';
             cmdPanelExitBanner.onclick = function () {
                 if (window.MonolothApp && window.MonolothApp.restartSession) {
-                    window.MonolothApp.restartSession('panel');
+                    var activeTabId = window.TabManager ? window.TabManager.activeTabId() : null;
+                    window.MonolothApp.restartSession(activeTabId);
                 }
             };
         }
@@ -464,7 +471,7 @@
         _panelRunning = false;
         hidePanelExitBanner();
         if (window.monolithApi) {
-            window.monolithApi.terminate_terminal('panel').catch(function () {});
+            window.monolithApi.terminate_terminal(panelSessionId()).catch(function () {});
         }
         if (panelTerm) {
             try { panelTerm.dispose(); } catch (e) {}
