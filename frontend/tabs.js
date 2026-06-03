@@ -112,6 +112,15 @@
             }
 
             this.unregisterAllForTab(tabId);
+            if (_terms[tabId]) { try { _terms[tabId].dispose(); } catch (e) {} _terms[tabId] = null; }
+            _fitAddons[tabId] = null;
+            _terminalRunning[tabId] = false;
+            this.clearExitTimer(tabId);
+            delete _sessionGeneration[tabId + '__main'];
+            delete _sessionGeneration[tabId + '__panel'];
+            delete _skipNextEof[tabId + '__main'];
+            delete _skipNextEof[tabId + '__panel'];
+            delete _firstOutput[tabId];
             this._emit({ type: 'tab_closing', tabId: tabId });
 
             if (isOnlyTab && tab.isMain) {
