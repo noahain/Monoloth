@@ -88,6 +88,9 @@ impl HistoryManager {
         if !inner.data.enabled {
             return;
         }
+        if inner.active_session.is_some() {
+            return;
+        }
         self.session_end_inner(&mut inner);
         inner.active_session = Some(ActiveSession {
             profile: profile.to_string(),
@@ -298,5 +301,24 @@ fn save_json(path: &Path, data: &HistoryData) {
             }
         }
         Err(e) => eprintln!("[Monoloth] Failed to serialize history: {}", e),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn test_session_start_is_idempotent() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let manager = HistoryManager::new();
+        manager.session_start("Default", "opencode", "C:\\proj1");
+        manager.session_start("Default", "opencode", "C:\\proj2");
+        manager.session_end();
+        let data = manager.get_data();
+        let last = data.sessions.last().expect("session should be recorded");
+        assert_eq!(last.directory, "C:\\proj1");
     }
 }
