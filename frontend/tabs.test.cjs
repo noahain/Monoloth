@@ -110,3 +110,18 @@ test('setActiveTab updates activeTabId', () => {
     assert.ok(emitted);
     assert.equal(emitted.tabId, 'b');
 });
+
+test('setTabProfile updates only that tab', () => {
+    const ctx = makeContext();
+    const tm = ctx.window.TabManager;
+    tm._init_for_test({
+        tabs: [
+            { id: 'a', isMain: true, profile: 'Default' },
+            { id: 'b', isMain: false, profile: 'Default' }
+        ],
+        activeTabId: 'a'
+    });
+    tm.setTabProfile('b', 'Work');
+    assert.equal(tm.state().tabs[0].profile, 'Default');
+    assert.equal(tm.state().tabs[1].profile, 'Work');
+});

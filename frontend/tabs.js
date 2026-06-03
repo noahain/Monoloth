@@ -63,6 +63,14 @@
             delete _sessionsByTab[tabId];
         },
         _save: function () { },
+        setTabProfile: function (tabId, profile) {
+            if (!state) return;
+            var tab = state.tabs.find(function (t) { return t.id === tabId; });
+            if (!tab) return;
+            tab.profile = profile;
+            this._emit({ type: 'tab_profile_changed', tabId: tabId, profile: profile });
+            this._save();
+        },
         reorderTabs: function (fromIndex, toIndex) {
             if (!state) return;
             if (fromIndex < 0 || fromIndex >= state.tabs.length) return;
