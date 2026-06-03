@@ -62,6 +62,25 @@
         unregisterAllForTab: function (tabId) {
             delete _sessionsByTab[tabId];
         },
+        _save: function () { },
+        createTab: function (opts) {
+            opts = opts || {};
+            if (!state) state = DEFAULT_STATE();
+            if (state.tabs.length >= 16) {
+                console.warn('[TabManager] tab cap reached (16)');
+                return null;
+            }
+            var newTab = {
+                id: genId(),
+                isMain: false,
+                profile: (opts.profile || (this.activeTab() && this.activeTab().profile) || 'Default')
+            };
+            state.tabs.push(newTab);
+            state.activeTabId = newTab.id;
+            this._emit({ type: 'tab_created', tab: newTab });
+            this._save();
+            return newTab;
+        },
         _init_for_test: function (initialState) { state = initialState; }
     };
 })();
