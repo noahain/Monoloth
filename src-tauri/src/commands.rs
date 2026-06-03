@@ -688,6 +688,11 @@ pub fn terminate_terminal(pty: State<PtyManager>, history: State<HistoryManager>
 }
 
 #[tauri::command]
+pub fn end_history_session(history: State<HistoryManager>) {
+    history.session_end();
+}
+
+#[tauri::command]
 pub fn get_current_version() -> String {
     env!("CARGO_PKG_VERSION").into()
 }
