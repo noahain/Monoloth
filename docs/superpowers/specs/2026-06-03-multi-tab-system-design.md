@@ -252,7 +252,7 @@ if confirmed (or none running):
 
 ### 4.10 Settings UI
 
-Add a new "Tabs" section to the settings page. Inject via the existing `MutationObserver` pattern that `sidebar.js` uses for settings tabs.
+Add a new "Tabs" section to the settings page. Inject via the same pattern `sidebar.js` uses for the "Sidebar" tab in `setupSettingsTab()` (deferred via `setTimeout(setupSettingsTab, 500)` so the DOM is ready, then insert a `<button class="settings-tab">` into `.settings-tabs` and a `<div class="tab-panel">` into `.settings-content`).
 
 Fields:
 - `tabBarEnabled` — toggle switch. Default `true`. Warning tooltip: "Disabling hides the tab bar and reverts to single-tab mode. Your tabs are saved and will be restored if you re-enable."
@@ -346,9 +346,9 @@ The menu is positioned at click coords, dismissed on outside-click or Escape.
 | File | Change |
 |---|---|
 | `src-tauri/src/pty.rs` | **No changes** — already keyed by string session ID. |
-| `src-tauri/src/commands.rs` | **No changes** — `start_terminal`, `terminate_terminal`, `send_input`, `resize_terminal`, `set_config`, `get_config` already accept arbitrary session IDs and config keys. |
-| `src-tauri/src/config.rs` | **No changes** — `set_config`/`get_config` already accept any key. No new `global_keys()` entry needed. |
-| `src-tauri/src/lib.rs` | **No changes** — `CloseRequested` already calls `pty.terminate_all()` which kills all `${tabId}_*` sessions. |
+| `src-tauri/src/commands.rs` | `start_terminal` `is_panel` check (line 359, `let is_panel = session_id == "panel";`) is a hardcoded match for the legacy `'panel'` session. The new design's panel session ID is `${tabId}_panel`, so this check must change to a prefix or pattern match (e.g. `session_id.ends_with("_panel")`). One-line fix. `terminate_terminal` (line 619-628) hard-codes `if sid == "main"` to call `history.session_end()` and also kill the legacy `'panel'` session. With composite keys, the new design must call `history.session_end()` from the frontend when the last tab is closed (and not assume killing `${tabId}_main` triggers it). One-line frontend addition. |
+| `src-tauri/src/config.rs` | **One-line addition:** add `"tabs_state"` to `global_keys()` (around line 63-70) so `tabs_state` is always written to `config.json` regardless of `active_profile`. Otherwise the value would land in the per-profile JSON file, which is not what the design intends. |
+| `src-tauri/src/lib.rs` | **No changes** — `CloseRequested` already calls `pty.terminate_all()` which kills all `${tabId}_*` sessions. `HistoryManager::session_end()` is also called there; if the last tab close must trigger this from JS, a small Rust addition may be needed (one new command, e.g. `end_history_session`). |
 | `frontend/index.html` | Add `<div id="tab-bar">` as a top-level child of `<body>`. Add `<div id="simplified-landing">` inside `#terminal-view`. Add `<script src="tabs.js?v=N">` and `<script src="simplified-landing.js?v=N">` after `app.js` in the load order. Bump `?v=N` for any changed file. |
 | `frontend/app.js` | Refactor terminal lifecycle: replace module-level `term`, `fitAddon`, `_sessionGeneration`, `_skipNextEof`, `_terminalRunning` with per-tab maps in `TabManager`. `initTerminal(dir)` becomes `TabManager.initTabTerminal(tabId, dir)`. `showTerminal`/`backToLanding` delegate to TabManager. `restartSession` accepts `tabId`. |
 | `frontend/sidebar.js` | Panel session ID becomes `${activeTabId}_panel` (was hardcoded `'panel'`). `executeBackground` button uses `${activeTabId}_bg_${buttonId}`. Settings tab injection adds a "Tabs" section. |
