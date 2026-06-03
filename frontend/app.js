@@ -3156,6 +3156,66 @@
         });
     }
 
+    // --- PTY Output Router (called by tauri-bridge setupPtyListener) ---
+    window.writeToTerm = (data, eof, sessionId, generation) => {
+        sessionId = sessionId || '';
+        generation = generation || 0;
+
+        if (!sessionId) {
+            console.warn('[Monoloth] writeToTerm: missing sessionId, dropping event');
+            return;
+        }
+
+        if (window.TabManager) {
+            if (generation > 0 && window.TabManager.getSessionGeneration(sessionId) > 0 &&
+                generation < window.TabManager.getSessionGeneration(sessionId)) {
+                return;
+            }
+            if (eof && window.TabManager.getSkipNextEof(sessionId)) {
+                window.TabManager.setSkipNextEof(sessionId, false);
+                return;
+            }
+        }
+
+        if (sessionId === 'main' || sessionId.endsWith('__main')) {
+            var tabId = sessionId === 'main' ? (window.TabManager && window.TabManager.activeTabId()) : sessionId.slice(0, -6);
+            if (!tabId) return;
+            var t = window.TabManager && window.TabManager.getTerminal(tabId);
+            if (t) {
+                if (eof) {
+                    t.write(data);
+                    if (window.TabManager && window.TabManager.scheduleExitTimer) {
+                        window.TabManager.scheduleExitTimer(tabId, function () {
+                            if (window.TabManager && window.TabManager.handleBack) {
+                                window.TabManager.handleBack(tabId);
+                            }
+                        }, 5000);
+                    }
+                    return;
+                }
+                t.write(data);
+                if (window.TabManager && window.TabManager.isFirstOutput && window.TabManager.isFirstOutput(tabId)) {
+                    setTimeout(function () { var f = window.TabManager.getFitAddon(tabId); if (f) f.fit(); }, 1500);
+                }
+                if (window.TabManager && window.TabManager.clearExitTimer) {
+                    window.TabManager.clearExitTimer(tabId);
+                }
+            }
+        } else if (sessionId === 'panel' || sessionId.endsWith('__panel')) {
+            if (typeof window.SidebarManager !== 'undefined') {
+                if (eof) {
+                    window.SidebarManager.terminateCmdPanel();
+                } else if (data) {
+                    window.SidebarManager.writeToPanel(data);
+                }
+            }
+        } else if (sessionId.includes('__bg__')) {
+            if (typeof window.SidebarManager !== 'undefined' && data && window.SidebarManager.writeToBgPanel) {
+                window.SidebarManager.writeToBgPanel(sessionId, data);
+            }
+        }
+    };
+
     // --- MonolothApp Facade (exposed to sidebar.js) ---
     window.MonolothApp = {
         getCurrentDir: function () { return _currentLaunchDir; },
