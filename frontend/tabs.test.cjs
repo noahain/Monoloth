@@ -39,3 +39,41 @@ test('createTab appends a new tab with cloned profile', () => {
     assert.equal(tm.state().tabs.length, before + 1);
     assert.equal(tm.state().activeTabId, newTab.id);
 });
+
+test('closeTab removes the tab and switches to adjacent', () => {
+    const ctx = makeContext();
+    const tm = ctx.window.TabManager;
+    tm._init_for_test({
+        tabs: [
+            { id: 'a', isMain: true, profile: 'Default' },
+            { id: 'b', isMain: false, profile: 'Default' }
+        ],
+        activeTabId: 'a'
+    });
+    let terminateCalls = 0;
+    ctx.monolithApi.terminate_tab_sessions = function (id) {
+        terminateCalls++;
+        assert.equal(id, 'a');
+        return Promise.resolve();
+    };
+    const result = tm.closeTab('a');
+    assert.equal(result.removed, true);
+    assert.equal(tm.state().tabs.length, 1);
+    assert.equal(tm.state().tabs[0].id, 'b');
+    assert.equal(tm.state().tabs[0].isMain, true, 'b promoted to isMain');
+    assert.equal(tm.state().activeTabId, 'b', 'active switched to b');
+    assert.equal(terminateCalls, 1);
+});
+
+test('closeTab on the only main tab preserves the tab', () => {
+    const ctx = makeContext();
+    const tm = ctx.window.TabManager;
+    tm._init_for_test({
+        tabs: [{ id: 'a', isMain: true, profile: 'Default' }],
+        activeTabId: 'a'
+    });
+    const result = tm.closeTab('a');
+    assert.equal(result.removed, false);
+    assert.equal(tm.state().tabs.length, 1);
+    assert.equal(tm.state().tabs[0].isMain, true);
+});

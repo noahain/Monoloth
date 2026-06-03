@@ -63,6 +63,47 @@
             delete _sessionsByTab[tabId];
         },
         _save: function () { },
+        closeTab: function (tabId, opts) {
+            opts = opts || {};
+            if (!state) return null;
+            var idx = state.tabs.findIndex(function (t) { return t.id === tabId; });
+            if (idx === -1) return null;
+            var tab = state.tabs[idx];
+            var wasActive = (state.activeTabId === tabId);
+            var isOnlyTab = (state.tabs.length === 1);
+
+            if (!opts.skipTerminate && window.monolithApi && window.monolithApi.terminate_tab_sessions) {
+                window.monolithApi.terminate_tab_sessions(tabId).catch(function (e) {
+                    console.error('[TabManager] terminate_tab_sessions failed', e);
+                });
+            }
+
+            this.unregisterAllForTab(tabId);
+            this._emit({ type: 'tab_closing', tabId: tabId });
+
+            if (isOnlyTab && tab.isMain) {
+                this._emit({ type: 'tab_close_main_only', tabId: tabId });
+                this._save();
+                return { removed: false, switchedTo: null, tab: tab };
+            }
+
+            if (tab.isMain) {
+                var newMain = state.tabs[idx + 1] || state.tabs[idx - 1];
+                if (newMain) newMain.isMain = true;
+            }
+
+            state.tabs.splice(idx, 1);
+
+            var switchedTo = null;
+            if (wasActive) {
+                switchedTo = state.tabs[idx] || state.tabs[idx - 1] || state.tabs[0] || null;
+                if (switchedTo) state.activeTabId = switchedTo.id;
+            }
+
+            this._emit({ type: 'tab_closed', tabId: tabId, switchedTo: switchedTo });
+            this._save();
+            return { removed: true, switchedTo: switchedTo, tab: tab };
+        },
         createTab: function (opts) {
             opts = opts || {};
             if (!state) state = DEFAULT_STATE();
