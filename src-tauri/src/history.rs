@@ -15,6 +15,7 @@ pub struct SessionEntry {
     pub start_time: String,
     pub end_time: Option<String>,
     pub directory: String,
+    pub activities: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -115,6 +116,7 @@ impl HistoryManager {
                 start_time: active.start_time,
                 end_time: Some(iso_now()),
                 directory: active.directory,
+                activities: active.activities,
             });
             self.purge_inner(inner);
             save_json(&history_path(), &inner.data);
@@ -333,5 +335,28 @@ mod tests {
         let data = manager.get_data();
         let last = data.sessions.last().expect("session should be recorded");
         assert_eq!(last.directory, "C:\\proj1");
+    }
+
+    #[test]
+    fn test_record_activity_persists_through_session_end() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let test_dir = std::env::temp_dir().join("monoloth_test_history");
+        let _ = std::fs::remove_dir_all(&test_dir);
+        std::fs::create_dir_all(&test_dir).unwrap();
+        std::env::set_var("APPDATA", test_dir.to_str().unwrap());
+
+        let manager = HistoryManager::new();
+        manager.session_start("Default", "opencode", "C:\\proj");
+        manager.record_activity("tab_open", serde_json::json!({"tabId": "abc"}));
+        manager.session_end();
+        let data = manager.get_data();
+        assert!(!data.sessions.is_empty(), "should have at least one session");
+        let last = data.sessions.last().unwrap();
+        let found = last.activities.iter().any(|a| {
+            a.get("type").and_then(|v| v.as_str()) == Some("tab_open")
+        });
+        assert!(found, "tab_open activity should persist through session_end");
+
+        let _ = std::fs::remove_dir_all(&test_dir);
     }
 }
