@@ -378,6 +378,53 @@
                 s.activeTabId = s.tabs[0].id;
             }
             return s;
+        },
+        renderTabs: function () {
+            var bar = document.getElementById('tab-bar');
+            var tabsContainer = document.getElementById('tab-bar-tabs');
+            if (!bar || !tabsContainer) return;
+            if (!state) return;
+
+            tabsContainer.innerHTML = '';
+
+            state.tabs.forEach(function (tab) {
+                var chip = document.createElement('div');
+                chip.className = 'tab-chip';
+                if (tab.id === state.activeTabId) chip.classList.add('active');
+                if (tab.isMain) chip.classList.add('is-main');
+                chip.setAttribute('data-tab-id', tab.id);
+
+                var label = document.createElement('span');
+                label.className = 'tab-chip-profile';
+                label.textContent = tab.profile || 'Default';
+                chip.appendChild(label);
+
+                if (tab.isMain) {
+                    var badge = document.createElement('span');
+                    badge.className = 'tab-chip-main-badge';
+                    badge.setAttribute('data-tooltip', 'Main tab');
+                    badge.textContent = '\u25CF';
+                    chip.appendChild(badge);
+                }
+
+                var closeBtn = document.createElement('button');
+                closeBtn.className = 'tab-chip-close';
+                closeBtn.setAttribute('data-tab-id', tab.id);
+                closeBtn.setAttribute('data-tooltip', 'Close');
+                closeBtn.textContent = '\u00d7';
+                chip.appendChild(closeBtn);
+
+                tabsContainer.appendChild(chip);
+            });
+
+            if (state.tabs.length < 16) {
+                var addBtn = document.createElement('button');
+                addBtn.className = 'tab-chip-add';
+                addBtn.id = 'tab-add-btn';
+                addBtn.setAttribute('data-tooltip', 'New Tab');
+                addBtn.textContent = '+';
+                tabsContainer.appendChild(addBtn);
+            }
         }
     };
 
