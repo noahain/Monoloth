@@ -289,10 +289,14 @@
                 mountToast(update);
                 if (status && window.MonolothUI && window.MonolothUI.showStatus) {
                     window.MonolothUI.showStatus('updater-status', 'Update available: v' + (update.version || '?'), false);
+                } else if (status) {
+                    status.textContent = 'Update available: v' + (update.version || '?');
                 }
             } else {
                 if (status && window.MonolothUI && window.MonolothUI.showStatus) {
                     window.MonolothUI.showStatus('updater-status', 'You are on the latest version.', false);
+                } else if (status) {
+                    status.textContent = 'You are on the latest version.';
                 }
             }
         }).catch(function (e) {
