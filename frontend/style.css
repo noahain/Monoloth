@@ -5371,7 +5371,7 @@ body[data-current-view="settings"] #tb-menu {
 
 /* Content Offset */
 body.custom-titlebar-active .landing { padding-top: 30px; }
-body.custom-titlebar-active #terminal { padding-top: 30px !important; }
+body.custom-titlebar-active #terminal-container { padding-top: 30px; }
 
 /* Settings Bar Offset */
 body.custom-titlebar-active .settings-bar {
