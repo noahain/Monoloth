@@ -1,77 +1,36 @@
-import { Resource, Channel, invoke } from '@tauri-apps/api/core';
+// IIFE wrapper replacing the broken ESM vendored updater plugin.
+// Monoloth's frontend has no build step, so we use window.__TAURI__.core directly.
+(function () {
+    'use strict';
 
-// Copyright 2019-2023 Tauri Programme within The Commons Conservancy
-// SPDX-License-Identifier: Apache-2.0
-// SPDX-License-Identifier: MIT
-class Update extends Resource {
-    constructor(metadata) {
-        super(metadata.rid);
-        this.available = true;
-        this.currentVersion = metadata.currentVersion;
-        this.version = metadata.version;
-        this.date = metadata.date;
-        this.body = metadata.body;
-        this.rawJson = metadata.rawJson;
+    if (!window.__TAURI__ || !window.__TAURI__.core || !window.__TAURI__.core.invoke) {
+        return;
     }
-    /** Download the updater package */
-    async download(onEvent, options) {
-        convertToRustHeaders(options);
-        const channel = new Channel();
-        if (onEvent) {
-            channel.onmessage = onEvent;
-        }
-        const downloadedBytesRid = await invoke('plugin:updater|download', {
-            onEvent: channel,
-            rid: this.rid,
-            ...options
-        });
-        this.downloadedBytes = new Resource(downloadedBytesRid);
-    }
-    /** Install downloaded updater package */
-    async install() {
-        if (!this.downloadedBytes) {
-            throw new Error('Update.install called before Update.download');
-        }
-        await invoke('plugin:updater|install', {
-            updateRid: this.rid,
-            bytesRid: this.downloadedBytes.rid
-        });
-        // Don't need to call close, we did it in rust side already
-        this.downloadedBytes = undefined;
-    }
-    /** Downloads the updater package and installs it */
-    async downloadAndInstall(onEvent, options) {
-        convertToRustHeaders(options);
-        const channel = new Channel();
-        if (onEvent) {
-            channel.onmessage = onEvent;
-        }
-        await invoke('plugin:updater|download_and_install', {
-            onEvent: channel,
-            rid: this.rid,
-            ...options
-        });
-    }
-    async close() {
-        await this.downloadedBytes?.close();
-        await super.close();
-    }
-}
-/** Check for updates, resolves to `null` if no updates are available */
-async function check(options) {
-    convertToRustHeaders(options);
-    const metadata = await invoke('plugin:updater|check', {
-        ...options
-    });
-    return metadata ? new Update(metadata) : null;
-}
-/**
- * Converts the headers in options to be an {@linkcode Array<[string, string]>} which is what the Rust side expects
- */
-function convertToRustHeaders(options) {
-    if (options?.headers) {
-        options.headers = Array.from(new Headers(options.headers).entries());
-    }
-}
 
-export { Update, check };
+    var core = window.__TAURI__.core;
+
+    function check() {
+        return core.invoke('plugin:updater|check').then(function (metadata) {
+            if (!metadata) return null;
+            return {
+                available: true,
+                version: metadata.version,
+                currentVersion: metadata.currentVersion,
+                notes: metadata.body != null ? String(metadata.body) : null,
+                pubdate: metadata.date != null ? String(metadata.date) : null,
+                downloadAndInstall: function (onEventCallback) {
+                    var channel = new core.Channel();
+                    if (typeof onEventCallback === 'function') {
+                        channel.onmessage = onEventCallback;
+                    }
+                    return core.invoke('plugin:updater|download_and_install', {
+                        update: { rid: metadata.rid },
+                        onEvent: channel
+                    });
+                }
+            };
+        });
+    }
+
+    window.__TAURI_PLUGIN_UPDATER__ = { check: check };
+})();

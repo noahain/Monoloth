@@ -1,42 +1,21 @@
-import { invoke } from '@tauri-apps/api/core';
+// IIFE wrapper replacing the broken ESM vendored process plugin.
+// Monoloth's frontend has no build step, so we use window.__TAURI__.core directly.
+(function () {
+    'use strict';
 
-// Copyright 2019-2023 Tauri Programme within The Commons Conservancy
-// SPDX-License-Identifier: Apache-2.0
-// SPDX-License-Identifier: MIT
-/**
- * Perform operations on the current process.
- * @module
- */
-/**
- * Exits immediately with the given `exitCode`.
- * @example
- * ```typescript
- * import { exit } from '@tauri-apps/plugin-process';
- * await exit(1);
- * ```
- *
- * @param code The exit code to use.
- * @returns A promise indicating the success or failure of the operation.
- *
- * @since 2.0.0
- */
-async function exit(code = 0) {
-    await invoke('plugin:process|exit', { code });
-}
-/**
- * Exits the current instance of the app then relaunches it.
- * @example
- * ```typescript
- * import { relaunch } from '@tauri-apps/plugin-process';
- * await relaunch();
- * ```
- *
- * @returns A promise indicating the success or failure of the operation.
- *
- * @since 2.0.0
- */
-async function relaunch() {
-    await invoke('plugin:process|restart');
-}
+    if (!window.__TAURI__ || !window.__TAURI__.core || !window.__TAURI__.core.invoke) {
+        return;
+    }
 
-export { exit, relaunch };
+    var core = window.__TAURI__.core;
+
+    function exit(code) {
+        return core.invoke('plugin:process|exit', { code: code || 0 });
+    }
+
+    function relaunch() {
+        return core.invoke('plugin:process|restart');
+    }
+
+    window.__TAURI_PLUGIN_PROCESS__ = { relaunch: relaunch, exit: exit };
+})();
