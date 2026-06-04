@@ -296,7 +296,7 @@
     };
 
     api.get_current_version = function () {
-        return callApiValue('get_current_version', {}, '0.1.0');
+        return callApiValue('get_current_version', {}, '2.0.0');
     };
 
     // --- Profiles ---
