@@ -1,53 +1,70 @@
-# Monoloth
 
-Desktop launcher for TUI coding agents. Pick a project folder, launch your preferred TUI agent (OpenCode, Claude Code, Qwen, Kimi, Codex, Pi, Gemini, or any custom command), and code.
+<div align="center">
+  <img src="assets/icon.png" width="144" height="144" alt="Monolith" />
+  <h1>Monolith</h1>
 
-Windows-only. Built with Rust + Tauri 2, vanilla HTML/CSS/JS frontend with xterm.js terminal.
+  <p><strong>Brutalist desktop launcher for OpenCode</strong></p>
 
-## Quick Start
+  <p>
+    <img src="https://img.shields.io/badge/version-1.0.0-blue" alt="version" />
+    <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
+    <img src="https://img.shields.io/badge/platform-Windows-lightgrey" alt="platform" />
+    <img src="https://img.shields.io/badge/python-3.12-blue" alt="python" />
+  </p>
+</div>
 
-### Prerequisites
+---
 
-- Rust toolchain (`rustup` + `cargo`)
-- Node.js (for npm global TUI agents)
-- Windows 10/11
+Monolith wraps OpenCode in a native window. Pick a project directory, and it launches your session. No terminal, no `cd`, no friction.
 
-### Development
+## What it does
+
+**Project launcher**
+- Select a directory via native file picker
+- Jumps directly into OpenCode
+- Remembers recent workspaces
+
+**Settings panel (three tabs)**
+
+| Tab | Function |
+| :--- | :--- |
+| **Setup** | Deploys config files to `~/.config/opencode/`, manages 21st.dev API keys, includes optional preset configurations |
+| **Config** | Live JSON editor for `opencode.json` with save and hot-reload |
+| **Updater** | Checks for app updates and pulls latest configs from GitHub |
+
+**Interface**
+- Pure black (`#000000`) background
+- Condensed all-caps typography
+- No decorative elements
+
+**Performance**
+- Built with PyWebView
+- Minimal RAM footprint
+
+## Install
+
+**Requirements**
+- [Python 3.12+](https://www.python.org/)
+- [OpenCode](https://github.com/anomalyco/opencode)
 
 ```bash
-cargo tauri dev
+git clone https://github.com/noahain/monolith
+cd monolith
+pip install -r requirements.txt
+python main.py
 ```
 
-### Release Build
+## Tech stack
 
-```bash
-cargo tauri build
-```
+Python 3.12 · PyWebView · HTML5/CSS3/Vanilla JS
 
-Output: `src-tauri/target/release/bundle/`
+## Development team
 
-## Features
+- **Lead:** Noahain - product vision, design language
+- **Primary developer:** OpenCode (Kimi K2.6) - TUI wrapping logic, directory orchestration, config bridge
+- **Technical consultant:** DeepSeek V4 Pro - filesystem handlers, UI responsiveness
 
-- **TUI Agent Presets** — OpenCode, Claude, Qwen, Kimi, Codex, Pi, Gemini, or any custom command
-- **Custom File Picker** — Windows-style file/folder browser with previews, or native Windows dialogs
-- **Profiles** — Separate configurations for different workflows
-- **Appearance** — Background images, colors, gradients, theme mode, button styles
-- **Secondary Commands** — Run commands before or parallel to the main TUI
-- **Keyboard Shortcuts** — Customizable `Ctrl+P` (command palette) and `Ctrl+,` (settings)
-- **Window State** — Remembers size and position across restarts
+## License
 
-## Architecture
+MIT
 
-| Layer | Tech |
-|---|---|
-| Backend | Rust + Tauri 2 |
-| Terminal | `portable_pty` + xterm.js (DOM renderer) |
-| Frontend | Vanilla HTML/CSS/JS |
-| Config | `%APPDATA%\Monoloth\config.json` |
-| Dialogs | `rfd` (native file picker) |
-
-See `AGENTS.md` for detailed architecture, config keys, and development notes.
-
-## Legacy
-
-The original Python/pywebview implementation is archived in `legacy/python/` for reference.
