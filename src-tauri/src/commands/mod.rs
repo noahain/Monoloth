@@ -8,7 +8,7 @@ mod image;
 mod profile;
 mod shell;
 mod terminal;
-mod updater;
+mod version;
 mod window;
 
 pub use config::*;
@@ -18,7 +18,7 @@ pub use image::*;
 pub use profile::*;
 pub use shell::*;
 pub use terminal::*;
-pub use updater::*;
+pub use version::*;
 pub use window::*;
 
 pub(super) fn expand_env_vars(path: &str) -> String {
