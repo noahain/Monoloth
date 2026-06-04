@@ -668,26 +668,10 @@
     // --- Advanced Tab ---
     const checkUpdateBtn = document.getElementById('check-update-btn');
     if (checkUpdateBtn) {
-        checkUpdateBtn.addEventListener('click', () => {
-            checkUpdateBtn.disabled = true;
-            showStatus('updater-status', 'Checking...', false);
-            window.monolithApi.check_for_updates()
-                .then((res) => {
-                    checkUpdateBtn.disabled = false;
-                    if (res.success) {
-                        if (res.has_update) {
-                            showStatus('updater-status', 'Update available: v' + res.latest_version + ' — view on GitHub to download', false);
-                        } else {
-                            showStatus('updater-status', 'You are on the latest version.', false);
-                        }
-                    } else {
-                        showStatus('updater-status', res.error, true);
-                    }
-                })
-                .catch((err) => {
-                    checkUpdateBtn.disabled = false;
-                    showStatus('updater-status', String(err), true);
-                });
+        checkUpdateBtn.addEventListener('click', function () {
+            if (window.MonolothUpdater && typeof window.MonolothUpdater.checkFromFooter === 'function') {
+                window.MonolothUpdater.checkFromFooter();
+            }
         });
     }
 
@@ -3906,9 +3890,14 @@
         window.SidebarManager.init();
     }
 
+    // Auto-check for updates (silent on failure, see MonolothUpdater.init)
+    if (window.MonolothUpdater && typeof window.MonolothUpdater.init === 'function') {
+        window.MonolothUpdater.init();
+    }
+
     // Scan for [data-tooltip] elements after all DOM is ready
-if (window.MonolothTooltip) {
-                    window.MonolothTooltip.scan(document.body);
+    if (window.MonolothTooltip) {
+        window.MonolothTooltip.scan(document.body);
     }
 
     // Load confirm dialog "don't ask again" prefs
