@@ -299,17 +299,6 @@
         return callApiValue('get_current_version', {}, '0.1.0');
     };
 
-    api.check_for_updates = function () {
-        return invoke('check_for_updates', {}).then(function (result) {
-            return {
-                success: true,
-                has_update: result.hasUpdate || false,
-                latest_version: result.latest || '0.1.0',
-                url: result.url || ''
-            };
-        }).catch(function (err) { return { success: false, error: String(err) }; });
-    };
-
     // --- Profiles ---
     api.get_profiles = function () {
         return invoke('get_profiles', {}).then(function (res) {
