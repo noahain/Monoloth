@@ -68,7 +68,11 @@ pub fn run() {
             window.on_window_event(move |event| {
                 match event {
                     tauri::WindowEvent::Resized(size) => {
-                        if size.width > 0 && size.height > 0 {
+                        if size.width >= 200 && size.height >= 150 {
+                            let is_minimized = window_clone.is_minimized().unwrap_or(false);
+                            if is_minimized {
+                                return;
+                            }
                             let is_max = window_clone.is_maximized().unwrap_or(false);
                             let was_max = cfg_for_events.get("window_maximized").as_bool().unwrap_or(false);
                             if is_max != was_max {
@@ -89,6 +93,12 @@ pub fn run() {
                         }
                     }
                     tauri::WindowEvent::Moved(pos) => {
+                        if window_clone.is_minimized().unwrap_or(false) {
+                            return;
+                        }
+                        if pos.x <= -32000 || pos.y <= -32000 {
+                            return;
+                        }
                         if !window_clone.is_maximized().unwrap_or(false) {
                             let mut last = last_pos_save.lock();
                             let now = std::time::Instant::now();

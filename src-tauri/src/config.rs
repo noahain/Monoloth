@@ -65,6 +65,29 @@ fn defaults() -> Map<String, Value> {
     m
 }
 
+fn sanitize_window_state(map: &mut Map<String, Value>) {
+    if let Some(w) = map.get("window_width").and_then(|v| v.as_i64()) {
+        if w < 200 || w > 10000 {
+            map.remove("window_width");
+        }
+    }
+    if let Some(h) = map.get("window_height").and_then(|v| v.as_i64()) {
+        if h < 150 || h > 10000 {
+            map.remove("window_height");
+        }
+    }
+    if let Some(x) = map.get("window_x").and_then(|v| v.as_i64()) {
+        if x < -10000 || x > 100000 {
+            map.remove("window_x");
+        }
+    }
+    if let Some(y) = map.get("window_y").and_then(|v| v.as_i64()) {
+        if y < -10000 || y > 100000 {
+            map.remove("window_y");
+        }
+    }
+}
+
 fn global_keys() -> Vec<&'static str> {
     vec![
         "active_profile", "last_directory", "window_width", "window_height",
@@ -131,7 +154,7 @@ impl AppConfig {
         let global_path = config_path();
         let global = if global_path.exists() {
             let mut map = load_json(&global_path);
-            // Merge with defaults
+            sanitize_window_state(&mut map);
             let defs = defaults();
             for (k, v) in defs {
                 map.entry(k).or_insert(v);
@@ -379,6 +402,28 @@ mod tests {
         assert_eq!(config.get("active_profile").as_str().unwrap(), "OldName");
         assert!(config.rename_profile("OldName", "NewName").is_ok());
         assert_eq!(config.get("active_profile").as_str().unwrap(), "NewName");
+        cleanup_test_env(&test_dir);
+    }
+
+    #[test]
+    fn test_corrupted_window_state_is_sanitized_on_load() {
+        let (test_dir, _lock) = setup_test_env();
+
+        let mut map = serde_json::Map::new();
+        map.insert("window_width".into(), serde_json::Value::Number(144.into()));
+        map.insert("window_height".into(), serde_json::Value::Number(19.into()));
+        map.insert("window_x".into(), serde_json::Value::Number((-32000).into()));
+        map.insert("window_y".into(), serde_json::Value::Number((-32000).into()));
+        map.insert("window_maximized".into(), serde_json::Value::Bool(false));
+        save_json(&config_path(), &map);
+
+        let config = AppConfig::new();
+
+        assert_eq!(config.get("window_width").as_i64().unwrap(), 1200);
+        assert_eq!(config.get("window_height").as_i64().unwrap(), 700);
+        assert!(config.get("window_x").is_null());
+        assert!(config.get("window_y").is_null());
+
         cleanup_test_env(&test_dir);
     }
 }
