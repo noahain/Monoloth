@@ -27,20 +27,29 @@
       "csp": null
     }
   },
-    "bundle": {
-      "active": true,
-      "targets": "all",
-      "icon": [
-        "icons/icon.png",
-        "icons/icon.ico"
-      ],
-      "windows": {
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
       "timestampUrl": "",
       "webviewInstallMode": {
         "type": "embedBootstrapper"
       }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "REPLACE_ME",
+      "endpoints": [
+        "https://github.com/noahain/Monoloth/releases/latest/download/latest.json"
+      ]
     }
   }
 }
