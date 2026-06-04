@@ -20,14 +20,14 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
+            app.handle().plugin(
+                tauri_plugin_log::Builder::default()
+                    .level(log::LevelFilter::Info)
+                    .build(),
+            )?;
 
             let pty = app.state::<PtyManager>();
             pty.set_app_handle(app.handle().clone());
@@ -141,7 +141,6 @@ pub fn run() {
             commands::resize_terminal,
             commands::terminate_terminal,
             commands::get_current_version,
-            commands::check_for_updates,
             commands::analyze_image_brightness,
             commands::read_image_as_data_url,
             commands::get_profiles,
