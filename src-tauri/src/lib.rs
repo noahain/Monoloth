@@ -72,7 +72,7 @@ pub fn run() {
                             let is_max = window_clone.is_maximized().unwrap_or(false);
                             let was_max = cfg_for_events.get("window_maximized").as_bool().unwrap_or(false);
                             if is_max != was_max {
-                                cfg_for_events.set("window_maximized", serde_json::Value::Bool(is_max));
+                                cfg_for_events.set_window_maximized(is_max);
                             }
                             if !is_max {
                                 let mut last = last_size_save.lock();
@@ -80,11 +80,9 @@ pub fn run() {
                                 if now.duration_since(*last) > std::time::Duration::from_millis(500) {
                                     *last = now;
                                     drop(last);
-                                    cfg_for_events.set("window_width", serde_json::Value::Number(size.width.into()));
-                                    cfg_for_events.set("window_height", serde_json::Value::Number(size.height.into()));
+                                    cfg_for_events.set_window_size(size.width, size.height);
                                     if let Ok(pos) = window_clone.outer_position() {
-                                        cfg_for_events.set("window_x", serde_json::Value::Number(pos.x.into()));
-                                        cfg_for_events.set("window_y", serde_json::Value::Number(pos.y.into()));
+                                        cfg_for_events.set_window_position(pos.x, pos.y);
                                     }
                                 }
                             }
@@ -97,23 +95,23 @@ pub fn run() {
                             if now.duration_since(*last) > std::time::Duration::from_millis(500) {
                                 *last = now;
                                 drop(last);
-                                cfg_for_events.set("window_x", serde_json::Value::Number(pos.x.into()));
-                                cfg_for_events.set("window_y", serde_json::Value::Number(pos.y.into()));
+                                cfg_for_events.set_window_position(pos.x, pos.y);
                             }
                         }
                     }
                     tauri::WindowEvent::CloseRequested { .. } => {
                         // Save final window state before closing, in case the
                         // last resize/move was within the 500ms throttle window.
-                        if let Ok(pos) = window_clone.outer_position() {
-                            cfg_for_events.set("window_x", serde_json::Value::Number(pos.x.into()));
-                            cfg_for_events.set("window_y", serde_json::Value::Number(pos.y.into()));
+                        let is_max = window_clone.is_maximized().unwrap_or(false);
+                        if !is_max {
+                            if let Ok(pos) = window_clone.outer_position() {
+                                cfg_for_events.set_window_position(pos.x, pos.y);
+                            }
+                            if let Ok(size) = window_clone.outer_size() {
+                                cfg_for_events.set_window_size(size.width, size.height);
+                            }
                         }
-                        if let Ok(size) = window_clone.outer_size() {
-                            cfg_for_events.set("window_width", serde_json::Value::Number(size.width.into()));
-                            cfg_for_events.set("window_height", serde_json::Value::Number(size.height.into()));
-                        }
-                        cfg_for_events.set("window_maximized", serde_json::Value::Bool(window_clone.is_maximized().unwrap_or(false)));
+                        cfg_for_events.set_window_maximized(is_max);
 
                         history_for_close.session_end();
                         pty_clone.terminate_all();
@@ -166,10 +164,6 @@ pub fn run() {
             commands::open_in_explorer,
             commands::execute_background,
             commands::open_external_terminal,
-            commands::end_history_session,
-            commands::record_history_activity,
-            commands::terminate_tab_sessions,
-            commands::get_profile_config_by_name,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -7,76 +7,55 @@
     const chooseBtn = document.getElementById('choose-dir-btn');
     const settingsBtn = document.getElementById('settings-btn');
     const settingsClose = document.getElementById('settings-close');
+    const terminalContainer = document.getElementById('terminal');
 
+    let term = null;
+    let fitAddon = null;
+    let webglAddon = null;
     let bridgeReady = false;
     let _bgImagePath = '';
     let _bgTransparency = 75;
     let _currentLaunchDir = '';
+    let _terminalRunning = false;
+    var _resizeObserver = null;
+    var _resizeHandler = null;
+    var _contextMenuHandler = null;
     var _keyDownHandler = null;
     var _mouseDownHandler = null;
     var _useCustomTitlebar = false;
     var _isMaximized = false;
     var _maximizeSyncTimer = null;
+    var _skipNextEof = { main: false, panel: false };
+    var _sessionGeneration = { main: 0, panel: 0 };
+    var _panelRunning = false;
     var _statusTimers = {};
-    var _focusBeforeModal = null;
-    var _trapHandler = null;
     var _bgType = 'none';
     var _currentColor = '#0a0a0a';
     var _currentGradient = '';
     var _bgLayer = 'behind';
     var _filePickerType = 'custom';
+    var _confirmPrefs = null;
 
-    function saveFocus() {
-        _focusBeforeModal = document.activeElement;
-    }
-
-    function restoreFocus() {
-        if (_focusBeforeModal && _focusBeforeModal.focus) {
-            try { _focusBeforeModal.focus(); } catch (e) {}
-            _focusBeforeModal = null;
-        }
-    }
-
-    function trapFocus(container) {
-        if (_trapHandler) {
-            document.removeEventListener('keydown', _trapHandler, true);
-            _trapHandler = null;
-        }
-        if (!container) return;
-        var focusable = container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-        if (focusable.length === 0) return;
-        var first = focusable[0];
-        var last = focusable[focusable.length - 1];
-        setTimeout(function () { first.focus(); }, 50);
-        _trapHandler = function (e) {
-            if (e.key !== 'Tab') return;
-            if (e.shiftKey) {
-                if (document.activeElement === first) {
-                    e.preventDefault();
-                    last.focus();
-                }
-            } else {
-                if (document.activeElement === last) {
-                    e.preventDefault();
-                    first.focus();
-                }
-            }
-        };
-        document.addEventListener('keydown', _trapHandler, true);
-    }
-
-    function releaseFocus() {
-        if (_trapHandler) {
-            document.removeEventListener('keydown', _trapHandler, true);
-            _trapHandler = null;
-        }
-        restoreFocus();
-    }
+    var UI = window.MonolothUI;
+    var saveFocus = UI.saveFocus;
+    var restoreFocus = UI.restoreFocus;
+    var trapFocus = UI.trapFocus;
+    var releaseFocus = UI.releaseFocus;
+    var escapeHtml = UI.escapeHtml;
+    var forceReflow = UI.forceReflow;
+    var silent = UI.silent;
+    var openModal = UI.openModal;
+    var closeModal = UI.closeModal;
 
     // --- Shortcut Management ---
     var DEFAULT_SHORTCUTS = {
         command_palette: 'Ctrl+P',
-        settings: 'Ctrl+,'
+        settings: 'Ctrl+,',
+        toggle_sidebar: 'Ctrl+B',
+        cmd_panel: 'Ctrl+J',
+        clear_terminal: 'Ctrl+K',
+        switch_profile: 'Ctrl+Shift+P',
+        back_to_launcher: 'Ctrl+Shift+W'
     };
 
     var _shortcuts = {};
@@ -191,6 +170,53 @@
         }
     }
 
+    function shortcutToKbdHtml(str) {
+        return str.split('+').map(function (part) {
+            return '<kbd>' + part.trim() + '</kbd>';
+        }).join('+');
+    }
+
+    function updateKbdHint() {
+        var cmds = getShortcut('command_palette');
+        var settings = getShortcut('settings');
+
+        var cmdsEl = document.getElementById('landing-shortcut-commands');
+        if (cmdsEl) {
+            cmdsEl.innerHTML = shortcutToKbdHtml(cmds) + ' Commands';
+        }
+
+        var settingsEl = document.getElementById('landing-shortcut-settings');
+        if (settingsEl) {
+            settingsEl.innerHTML = shortcutToKbdHtml(settings) + ' Settings';
+        }
+
+        var settingsBtn = document.getElementById('settings-btn');
+        if (settingsBtn) {
+            if (window.MonolothTooltip) {
+                window.MonolothTooltip.detach(settingsBtn);
+            }
+            var newTip = 'Settings (' + formatShortcutForDisplay(settings) + ')';
+            settingsBtn.setAttribute('data-tooltip', newTip);
+            settingsBtn.setAttribute('aria-label', 'Open ' + newTip);
+            if (window.MonolothTooltip) {
+                window.MonolothTooltip.attach(settingsBtn, newTip);
+            }
+        }
+
+        var tbMenu = document.getElementById('tb-menu');
+        if (tbMenu) {
+            if (window.MonolothTooltip) {
+                window.MonolothTooltip.detach(tbMenu);
+            }
+            var menuTip = 'Command Palette (' + formatShortcutForDisplay(cmds) + ')';
+            tbMenu.setAttribute('data-tooltip', menuTip);
+            tbMenu.setAttribute('aria-label', menuTip);
+            if (window.MonolothTooltip) {
+                window.MonolothTooltip.attach(tbMenu, menuTip);
+            }
+        }
+    }
+
     // --- Theme & CTA Style Management ---
     var _themeMode = 'dark';
     var _ctaButtonStyle = 'blur';
@@ -223,6 +249,8 @@
 
     function applyTheme(mode) {
         _themeMode = mode;
+        // Add transition class for smooth theme switching
+        document.body.classList.add('theme-transitioning');
         document.body.classList.remove('light-mode', 'adaptive-light');
         if (mode === 'light') {
             document.body.classList.add('light-mode');
@@ -231,12 +259,20 @@
                 document.body.classList.add('light-mode', 'adaptive-light');
             }
         }
+        // Remove transition class after transitions complete
+        setTimeout(function () {
+            document.body.classList.remove('theme-transitioning');
+        }, 350);
     }
 
     function applyCtaStyle(style) {
         _ctaButtonStyle = style;
+        document.body.classList.add('theme-transitioning');
         document.body.classList.remove('cta-blur', 'cta-glass', 'cta-solid', 'cta-outline');
         document.body.classList.add('cta-' + style);
+        setTimeout(function () {
+            document.body.classList.remove('theme-transitioning');
+        }, 350);
     }
 
     function analyzeWallpaperBrightness(imagePath) {
@@ -380,42 +416,11 @@
                     chooseBtn.style.color = 'var(--accent-red)';
                     return;
                 }
-                window.monolithApi.get_file_picker_type()
-                    .then(function (pickerType) {
-                        _filePickerType = pickerType || 'custom';
-                        if (_filePickerType === 'native') {
-                            window.monolithApi.native_pick_directory()
-                                .then(function (res) {
-                                    if (res && res.success && res.path) {
-                                        addToRecentDirectories(res.path);
-                                        showTerminal(res.path);
-                                    }
-                                })
-                                .catch(function () {});
-                        } else {
-                            openFilePicker({
-                                id: 'opencode_dir',
-                                title: 'Choose Directory',
-                                mode: 'folder'
-                            }).then(function (path) {
-                                if (path) {
-                                    addToRecentDirectories(path);
-                                    showTerminal(path);
-                                }
-                            }).catch(function () {});
-                        }
-                    })
-                    .catch(function () {
-                        openFilePicker({
-                            id: 'opencode_dir',
-                            title: 'Choose Directory',
-                            mode: 'folder'
-                        }).then(function (path) {
-                            if (path) {
-                                addToRecentDirectories(path);
-                                showTerminal(path);
-                            }
-                        }).catch(function () {});
+                pickPath({ id: 'opencode_dir', title: 'Choose Directory', mode: 'folder' })
+                    .then(function (path) {
+                        if (!path) return;
+                        addToRecentDirectories(path);
+                        showTerminal(path);
                     });
             });
         });
@@ -431,7 +436,7 @@
             _bridgeReady = true;
             updateStatusBar('Ready');
             loadShortcuts(function () {
-                // nothing to update in status bar — shortcuts are static
+                updateKbdHint();
             });
             var bgPromise = loadBackgroundConfig();
             var profilesPromise = loadProfiles();
@@ -477,21 +482,53 @@
         setCurrentView('settings');
 
         if (landing) landing.classList.add('hidden');
-        if (terminalView) terminalView.classList.remove('active');
-        if (settingsPage) settingsPage.classList.add('active');
+        if (terminalView) {
+            terminalView.classList.remove('active');
+            terminalView.classList.remove('anim-enter');
+        }
+        if (settingsPage) {
+            settingsPage.classList.remove('anim-exit');
+            settingsPage.classList.add('active');
+        }
         saveFocus();
         trapFocus(settingsPage);
-        switchTab('launcher');
+        switchTab('startup');
         loadUpdaterInfo();
     }
 
     function hideSettings() {
         releaseFocus();
-        if (settingsPage) settingsPage.classList.remove('active');
+        if (settingsPage) {
+            settingsPage.classList.add('anim-exit');
+            setTimeout(function () {
+                settingsPage.classList.remove('active', 'anim-exit');
+            }, 150);
+        }
         if (_currentViewState === 'terminal') {
-            if (terminalView) terminalView.classList.add('active');
+            setTimeout(function () {
+                if (terminalView) {
+                    terminalView.classList.add('active');
+                    terminalView.classList.add('anim-enter');
+                    terminalView.addEventListener('animationend', function handler() {
+                        terminalView.classList.remove('anim-enter');
+                        terminalView.removeEventListener('animationend', handler);
+                    });
+                }
+                if (window.MonolothApp && window.MonolothApp.refitTerminals) {
+                    window.MonolothApp.refitTerminals();
+                }
+            }, 160);
         } else {
-            if (landing) landing.classList.remove('hidden');
+            setTimeout(function () {
+                if (landing) {
+                    landing.classList.remove('hidden');
+                    landing.classList.add('anim-enter');
+                    landing.addEventListener('animationend', function handler() {
+                        landing.classList.remove('anim-enter');
+                        landing.removeEventListener('animationend', handler);
+                    });
+                }
+            }, 160);
         }
         setCurrentView(_currentViewState);
     }
@@ -530,8 +567,37 @@
         var chevron = trigger.querySelector('.collapsible-chevron');
         if (body) {
             var isHidden = body.style.display === 'none';
-            body.style.display = isHidden ? '' : 'none';
-            if (chevron) chevron.classList.toggle('open', isHidden);
+            if (isHidden) {
+                // Expanding
+                body.style.display = '';
+                body.style.maxHeight = body.scrollHeight + 'px';
+                body.style.opacity = '1';
+                body.classList.remove('anim-collapse');
+                body.classList.add('anim-expand');
+                if (chevron) chevron.classList.add('open');
+                // Clean up after transition
+                var onEnd = function () {
+                    body.style.maxHeight = '';
+                    body.removeEventListener('transitionend', onEnd);
+                };
+                body.addEventListener('transitionend', onEnd);
+            } else {
+                // Collapsing
+                body.style.maxHeight = body.scrollHeight + 'px';
+                body.offsetHeight; // force reflow
+                body.style.maxHeight = '0';
+                body.style.opacity = '0';
+                body.classList.remove('anim-expand');
+                body.classList.add('anim-collapse');
+                if (chevron) chevron.classList.remove('open');
+                var onEndCollapse = function () {
+                    body.style.display = 'none';
+                    body.style.maxHeight = '';
+                    body.style.opacity = '';
+                    body.removeEventListener('transitionend', onEndCollapse);
+                };
+                body.addEventListener('transitionend', onEndCollapse);
+            }
         }
     });
 
@@ -545,12 +611,18 @@
             loadShortcuts(function () {
                 renderShortcutUI();
             });
-        } else if (tabName === 'launcher') {
-            loadAdvancedSettings();
+        } else if (tabName === 'startup') {
+            loadFilePickerConfig();
+            loadStartupConfig();
+            loadSecondaryCommands();
         } else if (tabName === 'profiles') {
             loadProfiles();
         } else if (tabName === 'history') {
             loadHistoryTab();
+        } else if (tabName === 'sidebar') {
+            if (window.SidebarManager && window.SidebarManager.renderSettingsTab) {
+                window.SidebarManager.renderSettingsTab();
+            }
         }
     }
 
@@ -559,26 +631,36 @@
         const el = document.getElementById(id);
         if (!el) return;
         el.textContent = message;
-        el.classList.add(isError ? 'error' : 'success', 'dismissible');
+        el.classList.remove('anim-enter', 'anim-exit');
+        void el.offsetWidth; // reflow
+        el.classList.add(isError ? 'error' : 'success', 'dismissible', 'anim-enter');
 
         // Clear previous timer
         if (_statusTimers[id]) { clearTimeout(_statusTimers[id]); }
 
         // Auto-clear after 6 seconds
         _statusTimers[id] = setTimeout(function () {
-            el.textContent = '';
-            el.classList.remove('error', 'success', 'dismissible');
+            el.classList.remove('anim-enter');
+            el.classList.add('anim-exit');
+            setTimeout(function () {
+                el.textContent = '';
+                el.classList.remove('error', 'success', 'dismissible', 'anim-exit');
+            }, 300);
         }, 6000);
     }
 
     // Click status to dismiss immediately
-    ['updater-status', 'appearance-status', 'advanced-status', 'shortcuts-status', 'history-status'].forEach(function (id) {
+    ['updater-status', 'appearance-status', 'file-picker-status', 'shortcuts-status', 'history-status', 'profiles-status', 'startup-status', 'secondary-cmd-status', 'sidebar-status'].forEach(function (id) {
         var el = document.getElementById(id);
         if (el) {
             el.addEventListener('click', function () {
                 if (_statusTimers[id]) { clearTimeout(_statusTimers[id]); }
-                el.textContent = '';
-                el.classList.remove('error', 'success', 'dismissible');
+                el.classList.remove('anim-enter');
+                el.classList.add('anim-exit');
+                setTimeout(function () {
+                    el.textContent = '';
+                    el.classList.remove('error', 'success', 'dismissible', 'anim-exit');
+                }, 300);
             });
         }
     });
@@ -612,6 +694,7 @@
     // --- Appearance: Custom Background System ---
 
     const bgOverlay = document.getElementById('bg-overlay');
+    const terminalBgOverlay = document.getElementById('terminal-bg-overlay');
 
     function getBackgroundStyle(config) {
         var t = parseInt(config.transparency, 10);
@@ -666,6 +749,40 @@
         };
     }
 
+    function computeTerminalBg(config) {
+        var type = config.type || 'none';
+        if (type === 'none') return '#0a0a0a';
+        return 'transparent';
+    }
+
+    function shouldUseWebglRenderer(config) {
+        return false;
+    }
+
+    function syncTerminalWebglRenderer(config) {
+        if (!term) return;
+
+        if (!shouldUseWebglRenderer(config)) {
+            if (webglAddon) {
+                try { webglAddon.dispose(); } catch (e) {}
+                webglAddon = null;
+                if (term.rows > 0) {
+                    try { term.refresh(0, term.rows - 1); } catch (e) {}
+                }
+            }
+            return;
+        }
+
+        if (webglAddon || typeof WebglAddon === 'undefined') return;
+        try {
+            webglAddon = new WebglAddon.WebglAddon();
+            term.loadAddon(webglAddon);
+        } catch (e) {
+            webglAddon = null;
+            console.warn('[Monoloth] Failed to load WebGL addon, falling back to canvas renderer:', e);
+        }
+    }
+
     function applyBackground(config) {
         if (!bgOverlay) return;
         var style = getBackgroundStyle(config);
@@ -713,6 +830,174 @@
         _currentColor = config.color || '#0a0a0a';
         _currentGradient = config.gradient || '';
         _bgLayer = config.bgLayer || 'behind';
+
+        applyTerminalBg(config);
+        applyTerminalOverlay(config);
+    }
+
+    function getTerminalLightTheme() {
+        return {
+            foreground: '#2d2d2d',
+            cursor: '#333333',
+            selectionBackground: '#c0c0c0',
+            black: '#000000',
+            red: '#6e3030',
+            green: '#306030',
+            yellow: '#6e6e30',
+            blue: '#30306e',
+            magenta: '#6e306e',
+            cyan: '#306e6e',
+            white: '#808080',
+            brightBlack: '#505050',
+            brightRed: '#904040',
+            brightGreen: '#408040',
+            brightYellow: '#909040',
+            brightBlue: '#404090',
+            brightMagenta: '#904090',
+            brightCyan: '#409090',
+            brightWhite: '#b0b0b0'
+        };
+    }
+
+    function getTerminalDarkTheme(terminalBg) {
+        return {
+            foreground: '#b8b8b8',
+            cursor: '#c0c0c0',
+            selectionBackground: '#4a4a4a',
+            red: '#b0b0b0',
+            green: '#a0a0a0',
+            yellow: '#c0c0c0',
+            blue: '#909090',
+            magenta: '#b0b0b0',
+            cyan: '#a0a0a0',
+            white: '#e0e0e0',
+            brightBlack: '#4a4a4a',
+            brightRed: '#d0d0d0',
+            brightGreen: '#c0c0c0',
+            brightYellow: '#e0e0e0',
+            brightBlue: '#b0b0b0',
+            brightMagenta: '#d0d0d0',
+            brightCyan: '#c0c0c0',
+            brightWhite: '#ffffff'
+        };
+    }
+
+    function applyTerminalBg(config) {
+        if (!term || !term.setOption) return;
+        if (!config) {
+            config = {
+                type: _bgType,
+                transparency: _bgTransparency,
+                bgLayer: _bgLayer
+            };
+        }
+        var layer = config.bgLayer || 'behind';
+        var themeBg = layer === 'overlay' ? '#000000' : computeTerminalBg(config);
+        var isLight = document.body.classList.contains('light-mode') || document.body.classList.contains('adaptive-light');
+        try {
+            var useWebgl = shouldUseWebglRenderer(config);
+            if (!useWebgl) {
+                syncTerminalWebglRenderer(config);
+            }
+
+            var existing = {};
+            try { existing = Object.assign({}, term.getOption('theme')); } catch (e) {}
+            existing.background = themeBg;
+
+            var textTheme = isLight ? getTerminalLightTheme() : getTerminalDarkTheme(themeBg);
+            existing.foreground = textTheme.foreground;
+            existing.cursor = textTheme.cursor;
+            existing.selectionBackground = textTheme.selectionBackground;
+            existing.red = textTheme.red;
+            existing.green = textTheme.green;
+            existing.yellow = textTheme.yellow;
+            existing.blue = textTheme.blue;
+            existing.magenta = textTheme.magenta;
+            existing.cyan = textTheme.cyan;
+            existing.white = textTheme.white;
+            existing.brightBlack = textTheme.brightBlack;
+            existing.brightRed = textTheme.brightRed;
+            existing.brightGreen = textTheme.brightGreen;
+            existing.brightYellow = textTheme.brightYellow;
+            existing.brightBlue = textTheme.brightBlue;
+            existing.brightMagenta = textTheme.brightMagenta;
+            existing.brightCyan = textTheme.brightCyan;
+            existing.brightWhite = textTheme.brightWhite;
+
+            if (layer === 'overlay') {
+                existing.black = '#000000';
+            } else if (config.type !== 'none') {
+                existing.black = 'rgba(10, 10, 10, 0)';
+            } else {
+                existing.black = '#0a0a0a';
+            }
+
+            term.setOption('theme', existing);
+            if (term.rows > 0) {
+                term.refresh(0, term.rows - 1);
+            }
+
+            if (useWebgl) {
+                syncTerminalWebglRenderer(config);
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    function applyTerminalOverlay(config) {
+        if (!terminalBgOverlay) return;
+        var layer = config.bgLayer || 'behind';
+        if (layer === 'overlay' && config.type !== 'none') {
+            var isGifOverlay = false;
+            if (config.imageUrl) {
+                var isDataUrlOv = config.imageUrl.indexOf('data:') === 0;
+                if (isDataUrlOv) {
+                    isGifOverlay = config.imageUrl.indexOf('image/gif') !== -1 || config.imageUrl.indexOf('image/GIF') !== -1;
+                } else {
+                    isGifOverlay = config.imageUrl.toLowerCase().indexOf('.gif') !== -1 && config.imageUrl.toLowerCase().indexOf('.gif?') === -1;
+                }
+            }
+            if (isGifOverlay) {
+                terminalBgOverlay.style.backgroundImage = 'none';
+                terminalBgOverlay.style.backgroundColor = 'transparent';
+                terminalBgOverlay.style.display = 'none';
+                var existingGif = document.getElementById('terminal-bg-gif-img');
+                if (!existingGif) {
+                    var gifImg = document.createElement('img');
+                    gifImg.id = 'terminal-bg-gif-img';
+                    gifImg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;object-position:center;pointer-events:none;';
+                    terminalView.appendChild(gifImg);
+                    existingGif = gifImg;
+                }
+            var isDataUrlOvImg = config.imageUrl.indexOf('data:') === 0;
+            if (isDataUrlOvImg) {
+                existingGif.src = config.imageUrl;
+            } else {
+                var ovCacheBust = config.imageUrl.indexOf('?') === -1 ? '?t=' + Date.now() : '&t=' + Date.now();
+                existingGif.src = config.imageUrl + ovCacheBust;
+            }
+                existingGif.style.opacity = config.transparency != null ? parseInt(config.transparency, 10) / 100 : 0.75;
+                existingGif.style.display = 'block';
+            } else {
+                var existingTermGif = document.getElementById('terminal-bg-gif-img');
+                if (existingTermGif) { existingTermGif.remove(); }
+                var style = getBackgroundStyle(config);
+                terminalBgOverlay.style.backgroundImage = style.backgroundImage || 'none';
+                if (style.backgroundSize) terminalBgOverlay.style.backgroundSize = style.backgroundSize;
+                if (style.backgroundPosition) terminalBgOverlay.style.backgroundPosition = style.backgroundPosition;
+                if (style.backgroundRepeat) terminalBgOverlay.style.backgroundRepeat = style.backgroundRepeat;
+                if (style.backgroundColor) terminalBgOverlay.style.backgroundColor = style.backgroundColor;
+                terminalBgOverlay.style.opacity = style.opacity !== undefined ? style.opacity : 1;
+                terminalBgOverlay.style.display = 'block';
+            }
+            var tc = document.getElementById('terminal-container');
+            if (tc) tc.style.backgroundColor = '#000000';
+        } else {
+            terminalBgOverlay.style.display = 'none';
+            var tc2 = document.getElementById('terminal-container');
+            if (tc2) tc2.style.backgroundColor = '';
+            var terminalGifCleanup = document.getElementById('terminal-bg-gif-img');
+            if (terminalGifCleanup) { terminalGifCleanup.remove(); }
+        }
     }
 
     function renderBgPreview(config) {
@@ -805,6 +1090,10 @@
                     || (type === 'gradient' && id === 'bg-gradient-options');
                 panel.style.display = show ? '' : 'none';
             }
+        });
+        var bgDependent = document.querySelectorAll('.bg-dependent');
+        bgDependent.forEach(function (el) {
+            el.style.display = type !== 'none' ? '' : 'none';
         });
     }
 
@@ -922,24 +1211,12 @@
         window.monolithApi.set_background_config.apply(null, args)
             .then(function () {
                 loadBackgroundConfig();
-                if (msg) showAppearanceStatus(msg, false);
+                if (msg) showStatus('appearance-status', msg, false);
             })
             .catch(function (err) {
                 console.error('Failed to save background config:', err);
-                showAppearanceStatus('Failed to save: ' + err, true);
+                showStatus('appearance-status', 'Failed to save: ' + err, true);
             });
-    }
-
-    function showAppearanceStatus(msg, isError) {
-        var el = document.getElementById('appearance-status');
-        if (!el) return;
-        el.textContent = msg;
-        el.classList.add(isError ? 'error' : 'success', 'dismissible');
-        if (_statusTimers['appearance-status']) { clearTimeout(_statusTimers['appearance-status']); }
-        _statusTimers['appearance-status'] = setTimeout(function () {
-            el.textContent = '';
-            el.classList.remove('error', 'success', 'dismissible');
-        }, 6000);
     }
 
     // --- Appearance Tab Event Handlers ---
@@ -996,44 +1273,10 @@
     var bgPickBtn = document.getElementById('bg-pick-btn');
     if (bgPickBtn) {
         bgPickBtn.addEventListener('click', function () {
-            if (!window.monolithApi) return;
-            // Fetch latest picker type to avoid race condition
-            window.monolithApi.get_file_picker_type()
-                .then(function (pickerType) {
-                    _filePickerType = pickerType || 'custom';
-                    if (_filePickerType === 'native') {
-                        window.monolithApi.native_pick_file('All files|*.*')
-                            .then(function (res) {
-                                if (res && res.success && res.path) {
-                                    saveBackground('image', { image: res.path, color: null, gradient: null }, 'Background image set.');
-                                }
-                            })
-                            .catch(function () {});
-                    } else {
-                        openFilePicker({
-                            id: 'bg',
-                            title: 'Choose Background Image',
-                            mode: 'file',
-                            filter: 'All files|*.*'
-                        }).then(function (filePath) {
-                            if (filePath) {
-                                saveBackground('image', { image: filePath, color: null, gradient: null }, 'Background image set.');
-                            }
-                        }).catch(function () {});
-                    }
-                })
-                .catch(function () {
-                    // Fallback to custom picker if type check fails
-                    openFilePicker({
-                        id: 'bg',
-                        title: 'Choose Background Image',
-                        mode: 'file',
-                        filter: 'All files|*.*'
-                    }).then(function (filePath) {
-                        if (filePath) {
-                            saveBackground('image', { image: filePath, color: null, gradient: null }, 'Background image set.');
-                        }
-                    }).catch(function () {});
+            pickPath({ id: 'bg', title: 'Choose Background Image', mode: 'file', filter: 'All files|*.*' })
+                .then(function (filePath) {
+                    if (!filePath) return;
+                    saveBackground('image', { image: filePath, color: null, gradient: null }, 'Background image set.');
                 });
         });
     }
@@ -1100,15 +1343,15 @@
                 })
                 .then(function () {
                     loadBackgroundConfig();
-                    showAppearanceStatus('Transparency updated.', false);
+                    showStatus('appearance-status', 'Transparency updated.', false);
                 })
                 .catch(function () {});
         });
     }
 
-    // --- Advanced Tab ---
+    // --- File Picker ---
 
-    function loadAdvancedSettings() {
+    function loadFilePickerConfig() {
         if (!window.monolithApi) return;
         window.monolithApi.get_file_picker_type()
             .then(function (res) {
@@ -1130,23 +1373,11 @@
         _filePickerType = type;
         window.monolithApi.set_file_picker_type(type)
             .then(function () {
-                showAdvancedStatus('File picker type saved.', false);
+                showStatus('file-picker-status', 'File picker type saved.', false);
             })
             .catch(function () {
-                showAdvancedStatus('Failed to save.', true);
+                showStatus('file-picker-status', 'Failed to save.', true);
             });
-    }
-
-    function showAdvancedStatus(msg, isError) {
-        var el = document.getElementById('advanced-status');
-        if (!el) return;
-        el.textContent = msg;
-        el.classList.add(isError ? 'error' : 'success', 'dismissible');
-        if (_statusTimers['advanced-status']) { clearTimeout(_statusTimers['advanced-status']); }
-        _statusTimers['advanced-status'] = setTimeout(function () {
-            el.textContent = '';
-            el.classList.remove('error', 'success', 'dismissible');
-        }, 6000);
     }
 
     var pickerTypeBtns = document.querySelectorAll('.picker-type-btn');
@@ -1212,30 +1443,18 @@
         var customInput = document.getElementById('startup-custom-input');
         var cmd = _startupConfig.type === 'custom' ? (customInput ? customInput.value.trim() : '') : _startupConfig.command;
         if (_startupConfig.type === 'custom' && !cmd) {
-            showStartupStatus('Please enter a custom command.', true);
+            showStatus('startup-status', 'Please enter a custom command.', true);
             return;
         }
         window.monolithApi.set_startup_config(cmd, _startupConfig.type)
             .then(function () {
                 updateMainUILabels();
                 var label = getStartupLabel();
-                showStartupStatus('Startup command saved: ' + label, false);
+                showStatus('startup-status', 'Startup command saved: ' + label, false);
             })
             .catch(function () {
-                showStartupStatus('Failed to save.', true);
+                showStatus('startup-status', 'Failed to save.', true);
             });
-    }
-
-    function showStartupStatus(msg, isError) {
-        var el = document.getElementById('startup-status');
-        if (!el) return;
-        el.textContent = msg;
-        el.className = 'startup-status' + (isError ? ' error' : ' success');
-        if (_statusTimers['startup-status']) { clearTimeout(_statusTimers['startup-status']); }
-        _statusTimers['startup-status'] = setTimeout(function () {
-            el.textContent = '';
-            el.className = 'startup-status';
-        }, 6000);
     }
 
     var startupTypeBtns = document.querySelectorAll('.startup-type-btn');
@@ -1335,6 +1554,9 @@
             var removeBtn = document.createElement('button');
             removeBtn.className = 'secondary-cmd-remove';
             removeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+            if (window.MonolothTooltip) {
+                window.MonolothTooltip.attach(removeBtn, 'Remove this command');
+            }
             removeBtn.addEventListener('click', function () {
                 _secondaryCommands.splice(idx, 1);
                 renderSecondaryCommands();
@@ -1353,23 +1575,11 @@
         if (!window.monolithApi) return;
         window.monolithApi.set_secondary_commands(_secondaryCommands)
             .then(function () {
-                showSecondaryCmdStatus('Secondary commands saved.', false);
+                showStatus('secondary-cmd-status', 'Secondary commands saved.', false);
             })
             .catch(function () {
-                showSecondaryCmdStatus('Failed to save.', true);
+                showStatus('secondary-cmd-status', 'Failed to save.', true);
             });
-    }
-
-    function showSecondaryCmdStatus(msg, isError) {
-        var el = document.getElementById('secondary-cmd-status');
-        if (!el) return;
-        el.textContent = msg;
-        el.className = 'secondary-cmd-status' + (isError ? ' error' : ' success');
-        if (_statusTimers['secondary-cmd-status']) { clearTimeout(_statusTimers['secondary-cmd-status']); }
-        _statusTimers['secondary-cmd-status'] = setTimeout(function () {
-            el.textContent = '';
-            el.className = 'secondary-cmd-status';
-        }, 6000);
     }
 
     var addSecondaryCmdBtn = document.getElementById('add-secondary-cmd-btn');
@@ -1381,8 +1591,8 @@
         });
     }
 
-    // Load advanced settings on init
-    loadAdvancedSettings();
+    // Load file picker config on init
+    loadFilePickerConfig();
     loadStartupConfig();
     loadSecondaryCommands();
 
@@ -1421,7 +1631,10 @@
     function startEditingShortcut(key) {
         _editingShortcutKey = key;
         _editingShortcutKeys = { ctrl: false, shift: false, alt: false, meta: false, key: '' };
-        if (shortcutEditMode) shortcutEditMode.style.display = '';
+        if (shortcutEditMode) {
+            shortcutEditMode.style.display = '';
+            shortcutEditMode.style.animation = 'tabFadeIn 0.2s ease';
+        }
         if (shortcutEditName) shortcutEditName.textContent = key.replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
         if (shortcutEditPreview) shortcutEditPreview.textContent = 'Press keys...';
         if (shortcutEditError) shortcutEditError.textContent = '';
@@ -1505,48 +1718,37 @@
     }, true);
 
     function showShortcutsStatus(msg, isError) {
-        var el = document.getElementById('shortcuts-status');
-        if (!el) return;
-        el.textContent = msg;
-        el.className = 'shortcuts-status ' + (isError ? 'error' : 'success') + ' dismissible';
-        setTimeout(function () {
-            el.textContent = '';
-            el.className = 'shortcuts-status';
-        }, 6000);
+        showStatus('shortcuts-status', msg, isError);
     }
 
     // Click status to dismiss
-    var shortcutsStatusEl = document.getElementById('shortcuts-status');
-    if (shortcutsStatusEl) {
-        shortcutsStatusEl.addEventListener('click', function () {
-            shortcutsStatusEl.textContent = '';
-            shortcutsStatusEl.className = 'shortcuts-status';
-        });
-    }
 
     // --- Show Terminal View ---
-    async function showTerminal(dir) {
+    function showTerminal(dir) {
         setCurrentView('terminal');
         _currentLaunchDir = dir;
-        if (landing) landing.classList.add('hidden');
-        if (settingsPage) settingsPage.classList.remove('active');
-        if (terminalView) terminalView.classList.add('active');
-        if (window.monolithApi && dir) {
-            try { await window.monolithApi.set_config('last_directory', dir); } catch (e) { /* ignore */ }
+        if (_terminalRunning && window.monolithApi) {
+            window.monolithApi.terminate_terminal('main');
         }
-        document.body.classList.add('tab-bar-bottom');
-        if (window.TabManager) {
-            try {
-                var activeId = window.TabManager.getActiveTabId();
-                if (activeId) {
-                    await window.TabManager.transitionTabToTerminal(activeId, dir);
-                } else {
-                    await window.TabManager.createTab(null);
-                }
-            } catch (e) {
-                console.error('TabManager showTerminal failed:', e);
-            }
+        _terminalRunning = false;
+        if (landing) {
+            landing.classList.add('hidden');
         }
+        if (settingsPage) {
+            settingsPage.classList.remove('active');
+            settingsPage.classList.remove('anim-exit');
+        }
+        if (terminalView) {
+            terminalView.classList.add('active');
+            terminalView.classList.remove('anim-exit');
+            terminalView.classList.add('anim-enter');
+            terminalView.addEventListener('animationend', function handler() {
+                terminalView.classList.remove('anim-enter');
+                terminalView.removeEventListener('animationend', handler);
+            });
+        }
+        initTerminal(dir);
+        loadBackgroundConfig();
         if (typeof window.SidebarManager !== 'undefined') {
             window.SidebarManager.show();
             setTimeout(function () {
@@ -1555,49 +1757,63 @@
         }
     }
 
-    function handleGlobalBack() {
-        if (window.TabManager && window.TabManager.getActiveTabId()) {
-            var id = window.TabManager.getActiveTabId();
-            var rt = window.TabManager.getActiveRuntime ? window.TabManager.getActiveRuntime() : null;
-            if (rt && rt.view === 'landing') {
-                window.TabManager.closeTab(id).catch(function (err) { console.error(err); });
-            } else {
-                window.TabManager.revertTabToLanding(id).catch(function (err) { console.error(err); });
-            }
-        } else {
-            backToLanding();
-        }
+    // --- Back to Landing ---
+    function cleanupTerminalDomHandlers() {
+        if (_resizeObserver) { _resizeObserver.disconnect(); _resizeObserver = null; }
+        if (_resizeHandler) { window.removeEventListener('resize', _resizeHandler); _resizeHandler = null; }
+        if (_contextMenuHandler) { terminalContainer.removeEventListener('contextmenu', _contextMenuHandler); _contextMenuHandler = null; }
     }
 
-    // --- Back to Landing ---
     function backToLanding() {
         setCurrentView('landing');
         if (typeof window.SidebarManager !== 'undefined') {
-            window.SidebarManager.terminateCmdPanel();
+            window.SidebarManager.terminateCmdPanel(true);
             window.SidebarManager.hide();
         }
-        if (settingsPage) settingsPage.classList.remove('active');
-        if (terminalView) terminalView.classList.remove('active');
-        if (landing) landing.classList.remove('hidden');
+        if (window.monolithApi) {
+            window.monolithApi.terminate_terminal('main').catch(function () {});
+        }
+        if (settingsPage) {
+            settingsPage.classList.remove('active');
+            settingsPage.classList.remove('anim-exit');
+        }
+        if (terminalView) {
+            terminalView.classList.add('anim-exit');
+            setTimeout(function () {
+                terminalView.classList.remove('active', 'anim-exit');
+            }, 200);
+        }
+        if (landing) {
+            landing.classList.remove('hidden');
+            landing.classList.add('anim-enter');
+            landing.addEventListener('animationend', function handler() {
+                landing.classList.remove('anim-enter');
+                landing.removeEventListener('animationend', handler);
+            });
+        }
+        if (term) {
+            try { term.dispose(); } catch (e) {}
+            term = null;
+            fitAddon = null;
+            webglAddon = null;
+        }
+        terminalContainer.innerHTML = '';
+        cleanupTerminalDomHandlers();
         var existingGif = document.getElementById('bg-gif-img');
         if (existingGif) existingGif.remove();
         var terminalGif = document.getElementById('terminal-bg-gif-img');
         if (terminalGif) terminalGif.remove();
+        _terminalRunning = false;
+        _panelRunning = false;
     }
 
     var terminalBackBtn = document.getElementById('terminal-back-btn');
     if (terminalBackBtn) {
         terminalBackBtn.addEventListener('click', function () {
-            var hasActive = window.TabManager && window.TabManager.isMainActive && window.TabManager.isMainActive();
-            if (hasActive) {
-                var rt = window.TabManager.getActiveRuntime ? window.TabManager.getActiveRuntime() : null;
-                if (rt && rt.view === 'landing') {
-                    window.TabManager.closeTab(window.TabManager.getActiveTabId()).catch(function (err) { console.error(err); });
-                } else {
-                    showConfirm('Return to Launcher', 'Return to launcher? The current session will be terminated.')
-                        .then(function () { handleGlobalBack(); })
-                        .catch(function () {});
-                }
+            if (_terminalRunning) {
+                confirmBackToLauncher()
+                    .then(function () { backToLanding(); })
+                    .catch(function () {});
             } else {
                 backToLanding();
             }
@@ -1607,10 +1823,323 @@
 
 
 
+    // --- Terminal Setup ---
+    function initTerminal(dir) {
+        if (!terminalContainer) return;
+
+        cleanupTerminalDomHandlers();
+
+        // Dispose existing terminal and listeners before creating a new one
+        if (term) {
+            try { term.dispose(); } catch (e) { console.error('Error disposing term:', e); }
+            term = null;
+            webglAddon = null;
+        }
+        if (fitAddon) {
+            fitAddon = null;
+        }
+        terminalContainer.innerHTML = '';
+
+        if (typeof Terminal === 'undefined') {
+            terminalContainer.innerHTML = '<div style="color:#c0c0c0;padding:20px;font-family:monospace;">Error: Terminal library failed to load.</div>';
+            return;
+        }
+
+        var initBgConfig = { type: _bgType, bgLayer: _bgLayer };
+        var terminalBg = _bgLayer === 'overlay' ? '#000000' : computeTerminalBg(initBgConfig);
+        var terminalBlack = _bgLayer === 'overlay' ? '#000000' : (_bgType !== 'none' ? 'rgba(10, 10, 10, 0)' : '#0a0a0a');
+        var isLight = document.body.classList.contains('light-mode') || document.body.classList.contains('adaptive-light');
+        var initTheme = isLight ? getTerminalLightTheme() : getTerminalDarkTheme();
+        initTheme.background = terminalBg;
+        initTheme.black = terminalBlack;
+        term = new Terminal({
+            allowTransparency: true,
+            theme: initTheme,
+            fontFamily: '"Cascadia Mono", "Consolas", "Lucida Console", "Courier New", monospace',
+            fontSize: 14,
+            letterSpacing: 0,
+            lineHeight: 1.0,
+            cursorBlink: true,
+            cursorStyle: 'block',
+            scrollback: 2000,
+            smoothScrollDuration: 0,
+            scrollSensitivity: 1,
+            allowProposedApi: true,
+            windowsMode: true,
+            macOptionIsMeta: true,
+            macOptionClickForcesSelection: true,
+            minimumContrastRatio: 1,
+            fastScrollModifier: 'alt',
+            fastScrollSensitivity: 5,
+            scrollOnUserInput: true
+        });
+
+        term.open(terminalContainer);
+        term.focus();
+
+        if (typeof FitAddon !== 'undefined') {
+            fitAddon = new FitAddon.FitAddon();
+            term.loadAddon(fitAddon);
+        }
+
+        requestAnimationFrame(function() {
+            if (fitAddon) fitAddon.fit();
+            window.monolithApi.start_terminal('main', dir, true, null, term.cols, term.rows)
+                .then((result) => {
+                    if (!result || !result.success) {
+                        term.writeln('');
+                        term.writeln('Failed to start ' + getStartupLabel() + '. ' + (result && result.error ? result.error : 'Check that it is installed and in your PATH.'));
+                    } else {
+                        _terminalRunning = true;
+                        if (result.generation) {
+                            _sessionGeneration['main'] = result.generation;
+                        }
+                    }
+                })
+                .catch((err) => {
+                    term.writeln('');
+                    term.writeln('Error starting ' + getStartupLabel() + ': ' + err);
+                });
+        });
+
+        syncTerminalWebglRenderer(initBgConfig);
+
+        term.onScroll(function() {
+            term.refresh(0, term.rows - 1);
+        });
+
+        // --- Keyboard copy/paste shortcuts ---
+        term.attachCustomKeyEventHandler((e) => {
+            if (e.ctrlKey && !e.shiftKey && e.code === 'KeyC' && term.hasSelection()) {
+                navigator.clipboard.writeText(term.getSelection()).catch(() => {});
+                term.clearSelection();
+                return false;
+            }
+            if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
+                if (term.hasSelection()) {
+                    navigator.clipboard.writeText(term.getSelection()).catch(() => {});
+                    term.clearSelection();
+                }
+                return false;
+            }
+            if ((e.ctrlKey && e.code === 'KeyV') || (e.shiftKey && e.code === 'Insert')) {
+                return false;
+            }
+            if (e.ctrlKey && e.shiftKey && e.code === 'KeyW') {
+                return false;
+            }
+            if (shortcutMatches(e, getShortcut('command_palette'))) {
+                return false;
+            }
+            if (shortcutMatches(e, getShortcut('settings'))) {
+                return false;
+            }
+            if (shortcutMatches(e, getShortcut('toggle_sidebar'))) {
+                return false;
+            }
+            if (shortcutMatches(e, getShortcut('cmd_panel'))) {
+                return false;
+            }
+            if (shortcutMatches(e, getShortcut('clear_terminal'))) {
+                return false;
+            }
+            if (shortcutMatches(e, getShortcut('switch_profile'))) {
+                return false;
+            }
+            if (shortcutMatches(e, getShortcut('back_to_launcher'))) {
+                return false;
+            }
+            return true;
+        });
+
+        // --- Paste: DOM event avoids clipboard permission prompt & double-paste ---
+        term.element.addEventListener('paste', (e) => {
+            const text = e.clipboardData.getData('text');
+            if (text && window.monolithApi) {
+                e.preventDefault();
+                e.stopPropagation();
+                try { window.monolithApi.send_input('main', text); } catch (err) {}
+            }
+        });
+
+        // --- Right-click copy context menu ---
+        _contextMenuHandler = function (e) {
+            e.preventDefault();
+            var selection = term.getSelection();
+            if (selection) {
+                navigator.clipboard.writeText(selection).catch(function () {});
+                var indicator = document.createElement('div');
+                indicator.className = 'copied-toast';
+                indicator.textContent = 'Copied!';
+                indicator.style.cssText = 'position:fixed;top:' + e.clientY + 'px;left:' + e.clientX + 'px;background:#4a4a4a;color:#e0e0e0;padding:4px 8px;border-radius:4px;font-size:12px;font-family:monospace;pointer-events:none;z-index:9999;';
+                document.body.appendChild(indicator);
+                setTimeout(function () {
+                    indicator.classList.add('anim-exit');
+                    setTimeout(function () { indicator.remove(); }, 300);
+                }, 500);
+            } else {
+                navigator.clipboard.readText().then(function (text) {
+                    if (window.monolithApi && text) window.monolithApi.send_input(text);
+                }).catch(function () {});
+            }
+        };
+        terminalContainer.addEventListener('contextmenu', _contextMenuHandler);
+
+        function syncSize() {
+            if (!term || !fitAddon) return;
+            var el = term.element || terminalContainer;
+            if (!el || el.offsetParent === null) return;
+            var prevCols = term.cols;
+            var prevRows = term.rows;
+            fitAddon.fit();
+            if (window.monolithApi && (term.cols !== prevCols || term.rows !== prevRows)) {
+                try {
+                    window.monolithApi.resize_terminal('main', term.cols, term.rows);
+                } catch (e) {}
+            }
+            try { term.refresh(0, term.rows - 1); } catch (e) {}
+        }
+
+        var resizeTimeout;
+        var _resizeListener = function () {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(syncSize, 100);
+        };
+        window.addEventListener('resize', _resizeListener);
+        _resizeHandler = _resizeListener;
+
+        if (typeof ResizeObserver !== 'undefined') {
+            var resizeTimeout = null;
+            _resizeObserver = new ResizeObserver(function () {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(syncSize, 100);
+            });
+            _resizeObserver.observe(terminalContainer);
+        } else {
+            var pollTimer = setInterval(function () {
+                if (terminalContainer.offsetWidth > 0 && terminalContainer.offsetHeight > 0) {
+                    syncSize();
+                    clearInterval(pollTimer);
+                }
+            }, 50);
+            setTimeout(function () { clearInterval(pollTimer); syncSize(); }, 3000);
+        }
+
+        var firstOutput = true;
+        var _exitTimer = null;
+        window.writeToTerm = (data, eof, sessionId, generation) => {
+            sessionId = sessionId || 'main';
+            generation = generation || 0;
+            if (generation > 0 && _sessionGeneration[sessionId] > 0 &&
+                generation < _sessionGeneration[sessionId]) {
+                return;
+            }
+            if (eof && _skipNextEof[sessionId]) {
+                _skipNextEof[sessionId] = false;
+                return;
+            }
+            if (sessionId === 'main') {
+                if (term) {
+                    if (eof) {
+                        term.write(data);
+                        var exitBanner = document.createElement('div');
+                        exitBanner.className = 'session-exit-banner';
+                        exitBanner.style.cssText = 'position:absolute;bottom:40px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,0.9);color:#c0c0c0;padding:8px 16px;border-radius:6px;font-family:monospace;font-size:13px;z-index:101;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(4px);pointer-events:auto;cursor:pointer;';
+                        exitBanner.textContent = 'Session ended \u2014 returning to launcher in 5s (click to stay)';
+                        if (terminalView) terminalView.appendChild(exitBanner);
+                        var countdown = 5;
+                        var cancelled = false;
+                        exitBanner.addEventListener('click', function () {
+                            cancelled = true;
+                            if (exitBanner.parentNode) exitBanner.remove();
+                        });
+                        var countdownInterval = setInterval(function () {
+                            if (cancelled) { clearInterval(countdownInterval); return; }
+                            countdown--;
+                            if (countdown <= 0) {
+                                clearInterval(countdownInterval);
+                                if (exitBanner.parentNode) exitBanner.remove();
+                                backToLanding();
+                            } else {
+                                exitBanner.textContent = 'Session ended \u2014 returning to launcher in ' + countdown + 's (click to stay)';
+                            }
+                        }, 1000);
+                        if (_exitTimer) { clearTimeout(_exitTimer); _exitTimer = null; }
+                        _exitTimer = setTimeout(function () {
+                            if (!cancelled) backToLanding();
+                        }, 5000);
+                        return;
+                    }
+                    term.write(data);
+                    if (firstOutput) {
+                        firstOutput = false;
+                        setTimeout(syncSize, 1500);
+                    }
+                    if (_exitTimer) { clearTimeout(_exitTimer); _exitTimer = null; }
+                    if (typeof data === 'string' && data.indexOf('[session ended]') !== -1) {
+                        _exitTimer = setTimeout(function () {
+                            backToLanding();
+                        }, 5000);
+                    }
+                }
+            } else if (sessionId === 'panel') {
+                if (typeof window.SidebarManager !== 'undefined') {
+                    if (eof) {
+                        if (window.SidebarManager.consumePanelClosing()) {
+                            _panelRunning = false;
+                        } else {
+                            window.SidebarManager.terminateCmdPanel();
+                        }
+                    } else if (data) {
+                        window.SidebarManager.writeToPanel(data);
+                    }
+                }
+            }
+        };
+
+        term.onData((data) => {
+            if (window.monolithApi) {
+                try {
+                    window.monolithApi.send_input('main', data);
+                } catch (e) {}
+            }
+        });
+
+        applyTerminalBg();
+
+        term.writeln('');
+        term.writeln('Monoloth Terminal');
+        term.writeln('Directory: ' + dir);
+        term.writeln('Starting ' + getStartupLabel() + '...');
+        term.writeln('');
+
+        if (!window.monolithApi) {
+            term.writeln('Error: Bridge not available.');
+            return;
+        }
+    }
+
     // --- Command Palette (Ctrl+P) ---
+    var _paletteState = { active: false, subPalette: null, parentCommands: null, selectedIndex: 0 };
+
+    var _paletteIcons = {
+        folder: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+        'folder-open': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><path d="M2 10h20"/></svg>',
+        'arrow-left': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>',
+        copy: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+        menu: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
+        terminal: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
+        trash: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
+        gear: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+        palette: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>',
+        clock: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+        user: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+        'chevron-left': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>'
+    };
+
     var commands = [
-        { id: 'back', category: 'navigation', label: 'Back to Launcher', action: function () { backToLanding(); } },
-        { id: 'last-dir', category: 'navigation', label: 'Open Last Directory', action: function () {
+        { id: 'open-dir', icon: 'folder-open', label: 'Open Directory', group: 'nav', action: { type: 'sub-palette', id: 'directory-search' } },
+        { id: 'last-dir', icon: 'folder', label: 'Open Last Directory', group: 'nav', action: function () {
             backToLanding();
             setTimeout(function () {
                 if (window.monolithApi) {
@@ -1620,44 +2149,111 @@
                 }
             }, 200);
         }},
-        { id: 'settings', category: 'configuration', label: 'Settings', action: function () { showSettings(); }, shortcutKey: 'settings' },
-        { id: 'appearance', category: 'configuration', label: 'Appearance Settings', action: function () { openAppearanceSettings(); } },
-        { id: 'history', category: 'configuration', label: 'History', action: function () { openHistorySettings(); } },
-        { id: 'profiles', category: 'configuration', label: 'Switch Profile', action: function () { openProfileSwitcher('global'); } },
+        { id: 'back', icon: 'arrow-left', label: 'Back to Launcher', group: 'nav', shortcutKey: 'back_to_launcher', action: function () { backToLanding(); } },
+        { id: 'copy-path', icon: 'copy', label: 'Copy Current Path', group: 'nav', action: function () {
+            if (window.SidebarManager) {
+                var dir = (window.MonolothApp && window.MonolothApp.getCurrentDir) ? window.MonolothApp.getCurrentDir() : '';
+                if (dir) navigator.clipboard.writeText(dir).catch(function () {});
+            }
+        }},
+        { id: 'toggle-sidebar', icon: 'menu', label: 'Toggle Sidebar', group: 'actions', shortcutKey: 'toggle_sidebar', action: function () {
+            if (typeof window.SidebarManager !== 'undefined') window.SidebarManager.toggleSidebar();
+        }},
+        { id: 'cmd-panel', icon: 'terminal', label: 'CMD Panel', group: 'actions', shortcutKey: 'cmd_panel', action: function () {
+            if (typeof window.SidebarManager !== 'undefined') window.SidebarManager.toggleCmdPanel();
+        }},
+        { id: 'clear-term', icon: 'trash', label: 'Clear Terminal', group: 'actions', shortcutKey: 'clear_terminal', action: function () { if (term) term.clear(); }},
+        { id: 'settings', icon: 'gear', label: 'Settings', group: 'config', shortcutKey: 'settings', action: function () { showSettings(); } },
+        { id: 'appearance', icon: 'palette', label: 'Appearance Settings', group: 'config', action: function () { openAppearanceSettings(); } },
+        { id: 'history', icon: 'clock', label: 'History', group: 'config', action: function () { openHistorySettings(); } },
+        { id: 'profiles', icon: 'user', label: 'Switch Profile', group: 'config', shortcutKey: 'switch_profile', action: function () { openProfileSwitcher(); } },
     ];
+
+    var _subPalettes = {
+        'directory-search': {
+            render: function (query) {
+                var items = [];
+                if (window.monolithApi && window.monolithApi.get_last_directory) {
+                    items.push({ id: 'open-last', icon: 'folder', label: 'Open Last Directory', action: function () {
+                        window.monolithApi.get_last_directory().then(function (res) {
+                            if (res && res.success && res.path) showTerminal(res.path);
+                        });
+                    }});
+                }
+                items.push({ id: 'browse', icon: 'folder-open', label: 'Browse...', action: function () {
+                    backToLanding();
+                    setTimeout(function () {
+                        var chooseBtn = document.getElementById('choose-dir-btn');
+                        if (chooseBtn) chooseBtn.click();
+                    }, 200);
+                }});
+                if (query) {
+                    items = items.filter(function (item) {
+                        return item.label.toLowerCase().indexOf(query.toLowerCase()) !== -1;
+                    });
+                }
+                return items;
+            },
+            placeholder: 'Open directory...',
+            backLabel: 'Back'
+        }
+    };
 
     var paletteEl = document.createElement('div');
     paletteEl.id = 'command-palette';
     paletteEl.className = 'command-palette';
-    paletteEl.innerHTML = '<div class="command-palette-overlay"></div><div class="command-palette-modal"><input type="text" id="command-palette-input" class="command-palette-input" placeholder="Type a command..." spellcheck="false"><div id="command-palette-list" class="command-palette-list"></div></div>';
+    paletteEl.innerHTML = '<div class="command-palette-overlay"></div>' +
+        '<div class="command-palette-modal" role="dialog" aria-modal="true" aria-label="Command palette">' +
+        '<input type="text" id="command-palette-input" class="command-palette-input" placeholder="Type a command..." spellcheck="false" aria-label="Search commands" autocomplete="off">' +
+        '<div id="command-palette-list" class="command-palette-list" role="listbox"></div>' +
+        '<div class="command-palette-hint">Press <kbd>Esc</kbd> to close</div>' +
+        '</div>';
     document.body.appendChild(paletteEl);
 
     var paletteInput = document.getElementById('command-palette-input');
     var paletteList = document.getElementById('command-palette-list');
 
-    paletteEl.addEventListener('click', function (e) {
-        if (e.target === paletteEl) {
-            closePalette();
-        }
-    });
-
     function openPalette() {
         if (!paletteEl || !paletteInput || !paletteList) return;
-        paletteEl.classList.add('active');
         paletteInput.value = '';
-        renderCommands(commands);
-        saveFocus();
-        trapFocus(paletteEl);
+        _paletteState.subPalette = null;
+        _paletteState.parentCommands = null;
+        paletteInput.placeholder = 'Type a command...';
+        renderPaletteCommands(commands);
+        openModal(paletteEl);
         paletteInput.focus();
     }
 
     function closePalette() {
         if (!paletteEl) return;
-        releaseFocus();
-        paletteEl.classList.remove('active');
+        _paletteState.active = false;
+        _paletteState.subPalette = null;
+        _paletteState.parentCommands = null;
+        closeModal(paletteEl);
     }
 
-    function renderCommands(list) {
+    function enterSubPalette(subId, query) {
+        var sub = _subPalettes[subId];
+        if (!sub) return;
+        _paletteState.subPalette = subId;
+        _paletteState.parentCommands = commands;
+        paletteInput.placeholder = sub.placeholder || 'Type to search...';
+        paletteInput.value = '';
+        var items = sub.render(query || '');
+        renderPaletteCommands(items, true);
+        paletteInput.focus();
+    }
+
+    function exitSubPalette() {
+        if (!_paletteState.subPalette) return false;
+        _paletteState.subPalette = null;
+        paletteInput.placeholder = 'Type a command...';
+        paletteInput.value = '';
+        renderPaletteCommands(commands);
+        return true;
+    }
+
+    function renderPaletteCommands(list, isSub) {
         if (!paletteList) return;
         paletteList.innerHTML = '';
         if (list.length === 0) {
@@ -1668,60 +2264,127 @@
             return;
         }
 
+        var groupLabels = { nav: 'NAVIGATION', actions: 'ACTIONS', config: 'CONFIGURATION' };
+        var lastGroup = null;
         var cmdIdx = 0;
-        var categories = {};
+
+        if (isSub && _subPalettes[_paletteState.subPalette]) {
+            var backItem = document.createElement('div');
+            backItem.className = 'command-palette-item command-palette-back';
+            backItem.dataset.cmdIndex = 'back';
+            var backIcon = document.createElement('span');
+            backIcon.className = 'command-palette-icon';
+            backIcon.innerHTML = _paletteIcons['chevron-left'] || '';
+            backItem.appendChild(backIcon);
+            var backLabel = document.createElement('span');
+            backLabel.className = 'command-palette-label';
+            backLabel.textContent = _subPalettes[_paletteState.subPalette].backLabel || 'Back';
+            backItem.appendChild(backLabel);
+            backItem.addEventListener('click', function () {
+                exitSubPalette();
+            });
+            paletteList.appendChild(backItem);
+            var sep = document.createElement('div');
+            sep.className = 'command-palette-separator';
+            paletteList.appendChild(sep);
+        }
+
         list.forEach(function (cmd) {
-            if (!categories[cmd.category]) categories[cmd.category] = [];
-            categories[cmd.category].push(cmd);
-        });
+            if (!isSub && cmd.group !== lastGroup) {
+                if (lastGroup !== null) {
+                    var sep = document.createElement('div');
+                    sep.className = 'command-palette-separator';
+                    paletteList.appendChild(sep);
+                }
+                var header = document.createElement('div');
+                header.className = 'command-palette-category';
+                header.textContent = groupLabels[cmd.group] || (cmd.group || '').toUpperCase();
+                paletteList.appendChild(header);
+                lastGroup = cmd.group;
+            }
 
-        var categoryLabels = { navigation: 'NAVIGATION', configuration: 'CONFIGURATION' };
+            var item = document.createElement('div');
+            item.className = 'command-palette-item' + (cmdIdx === 0 ? ' selected' : '');
+            item.dataset.cmdIndex = cmdIdx;
+            item.id = 'palette-item-' + cmdIdx;
+            item.setAttribute('role', 'option');
+            item.setAttribute('aria-selected', cmdIdx === 0 ? 'true' : 'false');
 
-        Object.keys(categories).forEach(function (cat) {
-            var header = document.createElement('div');
-            header.className = 'command-palette-category';
-            header.textContent = categoryLabels[cat] || cat.toUpperCase();
-            paletteList.appendChild(header);
+            var iconSpan = document.createElement('span');
+            iconSpan.className = 'command-palette-icon';
+            iconSpan.innerHTML = _paletteIcons[cmd.icon] || '';
+            item.appendChild(iconSpan);
 
-            categories[cat].forEach(function (cmd) {
-                var item = document.createElement('div');
-                item.className = 'command-palette-item' + (cmdIdx === 0 ? ' selected' : '');
-                item.dataset.cmdIndex = cmdIdx;
+            var labelSpan = document.createElement('span');
+            labelSpan.className = 'command-palette-label';
+            labelSpan.textContent = cmd.label;
+            item.appendChild(labelSpan);
 
-                var labelSpan = document.createElement('span');
-                labelSpan.textContent = cmd.label;
-                item.appendChild(labelSpan);
-
-                if (cmd.shortcutKey) {
+            if (cmd.shortcutKey) {
+                var shortcutStr = formatShortcutForDisplay(getShortcut(cmd.shortcutKey));
+                if (shortcutStr) {
                     var shortcutSpan = document.createElement('span');
                     shortcutSpan.className = 'command-palette-shortcut';
-                    shortcutSpan.textContent = formatShortcutForDisplay(getShortcut(cmd.shortcutKey));
+                    shortcutSpan.textContent = shortcutStr;
                     item.appendChild(shortcutSpan);
                 }
+            }
 
-                item.addEventListener('click', function () {
-                    closePalette();
-                    cmd.action();
-                });
-                paletteList.appendChild(item);
-                cmdIdx++;
+            var cmdData = cmd;
+            item.addEventListener('click', function () {
+                executePaletteItem(cmdData);
             });
+            paletteList.appendChild(item);
+            cmdIdx++;
         });
     }
 
-    function filterCommands(query) {
+    function executePaletteItem(cmd) {
+        if (!cmd) return;
+        if (cmd.action && cmd.action.type === 'sub-palette') {
+            enterSubPalette(cmd.action.id, '');
+            return;
+        }
+        closePalette();
+        if (typeof cmd.action === 'function') cmd.action();
+    }
+
+    function filterPaletteCommands(query) {
+        if (_paletteState.subPalette) {
+            var sub = _subPalettes[_paletteState.subPalette];
+            if (sub) {
+                var items = sub.render(query);
+                renderPaletteCommands(items, true);
+                return;
+            }
+        }
+        if (!query) {
+            renderPaletteCommands(commands);
+            return;
+        }
         var filtered = commands.filter(function (cmd) {
             return cmd.label.toLowerCase().indexOf(query.toLowerCase()) !== -1;
         });
-        renderCommands(filtered);
+        renderPaletteCommands(filtered);
     }
 
-    // Keyboard shortcuts (customizable)
+    function updatePaletteSelection(items, idx) {
+        if (!items || !items.length) return;
+        items.forEach(function (it) {
+            it.classList.remove('selected');
+            it.setAttribute('aria-selected', 'false');
+        });
+        if (items[idx]) {
+            items[idx].classList.add('selected');
+            items[idx].setAttribute('aria-selected', 'true');
+            items[idx].scrollIntoView({ block: 'nearest' });
+        }
+        _paletteState.selectedIndex = idx;
+    }
+
     document.addEventListener('keydown', function (e) {
-        // Don't trigger shortcuts while editing a shortcut
         if (_editingShortcutKey && shortcutEditMode && shortcutEditMode.style.display !== 'none') return;
 
-        // Command palette shortcut
         if (shortcutMatches(e, getShortcut('command_palette'))) {
             e.preventDefault();
             if (paletteEl && paletteEl.classList.contains('active')) {
@@ -1730,7 +2393,6 @@
                 openPalette();
             }
         }
-        // Settings shortcut
         if (shortcutMatches(e, getShortcut('settings'))) {
             e.preventDefault();
             if (settingsPage && settingsPage.classList.contains('active')) {
@@ -1739,8 +2401,38 @@
                 showSettings();
             }
         }
+        if (shortcutMatches(e, getShortcut('toggle_sidebar'))) {
+            e.preventDefault();
+            if (typeof window.SidebarManager !== 'undefined') window.SidebarManager.toggleSidebar();
+        }
+        if (shortcutMatches(e, getShortcut('cmd_panel'))) {
+            e.preventDefault();
+            if (typeof window.SidebarManager !== 'undefined') window.SidebarManager.toggleCmdPanel();
+        }
+        if (shortcutMatches(e, getShortcut('clear_terminal'))) {
+            e.preventDefault();
+            if (term) term.clear();
+        }
+        if (shortcutMatches(e, getShortcut('switch_profile'))) {
+            e.preventDefault();
+            openProfileSwitcher();
+        }
+        if (shortcutMatches(e, getShortcut('back_to_launcher'))) {
+            e.preventDefault();
+            if (_terminalRunning) {
+                confirmBackToLauncher()
+                    .then(function() { backToLanding(); })
+                    .catch(function() {});
+            } else {
+                backToLanding();
+            }
+        }
         if (e.code === 'Escape' && paletteEl && paletteEl.classList.contains('active')) {
-            closePalette();
+            if (_paletteState.subPalette) {
+                exitSubPalette();
+            } else {
+                closePalette();
+            }
         }
         if (e.code === 'Escape' && settingsPage && settingsPage.classList.contains('active') && !_editingShortcutKey) {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -1760,13 +2452,16 @@
                 var idx = Array.prototype.indexOf.call(items, sel);
                 if (e.code === 'ArrowDown') idx = Math.min(idx + 1, items.length - 1);
                 if (e.code === 'ArrowUp') idx = Math.max(idx - 1, 0);
-                items.forEach(function (it) { it.classList.remove('selected'); });
-                if (items[idx]) items[idx].classList.add('selected');
+                updatePaletteSelection(items, idx);
             }
             if (e.code === 'Enter') {
                 e.preventDefault();
                 var sel = paletteList.querySelector('.command-palette-item.selected');
-                if (sel) { closePalette(); sel.click(); }
+                if (sel) sel.click();
+            }
+            if (e.code === 'Backspace' && !paletteInput.value && _paletteState.subPalette) {
+                e.preventDefault();
+                exitSubPalette();
             }
         }
         if (e.code === 'ArrowRight' || e.code === 'ArrowLeft') {
@@ -1781,53 +2476,10 @@
                 switchTab(settingsTabs[nextIdx].dataset.tab);
             }
         }
-
-        // Tab shortcuts (hardcoded, per spec)
-        if (e.ctrlKey && window.TabManager) {
-            if (e.shiftKey && (e.key === 'T' || e.key === 't')) {
-                e.preventDefault();
-                if (typeof window.TabManager.pickAndCreateTab === 'function') {
-                    window.TabManager.pickAndCreateTab();
-                } else {
-                    window.TabManager.createTab(null);
-                }
-            } else if (e.shiftKey && (e.key === 'W' || e.key === 'w')) {
-                e.preventDefault();
-                var activeId = window.TabManager.getActiveTabId();
-                if (activeId) window.TabManager.closeTab(activeId);
-            } else if (e.key === 'PageUp' || e.key === 'PageDown') {
-                e.preventDefault();
-                if (window.monolithApi && typeof window.monolithApi.getTabsConfig === 'function') {
-                    window.monolithApi.getTabsConfig().then(function (cfg) {
-                        if (!cfg || !cfg.tabs || cfg.tabs.length === 0) return;
-                        var id = window.TabManager.getActiveTabId();
-                        var idx = -1;
-                        for (var i = 0; i < cfg.tabs.length; i++) {
-                            if (cfg.tabs[i].id === id) { idx = i; break; }
-                        }
-                        if (idx < 0) idx = 0;
-                        var nextIdx = e.key === 'PageUp'
-                            ? (idx - 1 + cfg.tabs.length) % cfg.tabs.length
-                            : (idx + 1) % cfg.tabs.length;
-                        window.TabManager.switchTab(cfg.tabs[nextIdx].id);
-                    });
-                }
-            } else if (/^[1-9]$/.test(e.key)) {
-                e.preventDefault();
-                var n = parseInt(e.key, 10) - 1;
-                if (window.monolithApi && typeof window.monolithApi.getTabsConfig === 'function') {
-                    window.monolithApi.getTabsConfig().then(function (cfg) {
-                        if (cfg && cfg.tabs && cfg.tabs[n]) {
-                            window.TabManager.switchTab(cfg.tabs[n].id);
-                        }
-                    });
-                }
-            }
-        }
     });
 
     if (paletteInput) {
-        paletteInput.addEventListener('input', function () { filterCommands(this.value); });
+        paletteInput.addEventListener('input', function () { filterPaletteCommands(this.value); });
     }
 
     if (paletteEl) {
@@ -1992,12 +2644,6 @@
         return d + 'd ' + h + 'h ' + m + 'm';
     }
 
-    function escapeHtml(str) {
-        var div = document.createElement('div');
-        div.appendChild(document.createTextNode(str));
-        return div.innerHTML;
-    }
-
     // ================================================================
     // Custom File / Folder Picker
     // ================================================================
@@ -2081,6 +2727,30 @@
         }
     }
 
+    function pickPath(opts) {
+        if (!window.monolithApi) return Promise.resolve(null);
+        var customPicker = function () {
+            return openFilePicker({
+                id: opts.id,
+                title: opts.title,
+                mode: opts.mode,
+                filter: opts.filter
+            }).catch(function () { return null; });
+        };
+        return window.monolithApi.get_file_picker_type()
+            .then(function (pickerType) {
+                _filePickerType = pickerType || 'custom';
+                if (_filePickerType === 'native') {
+                    var nativeMethod = opts.mode === 'file' ? 'native_pick_file' : 'native_pick_directory';
+                    return window.monolithApi[nativeMethod](opts.filter)
+                        .then(function (res) { return (res && res.success && res.path) ? res.path : null; })
+                        .catch(function () { return null; });
+                }
+                return customPicker();
+            })
+            .catch(customPicker);
+    }
+
     function openFilePicker(opts) {
         console.log('[Monoloth][Picker] openFilePicker called with opts:', JSON.stringify(opts));
         if (!fpEl) { console.error('[Monoloth][Picker] fpEl is null'); return Promise.reject(new Error('Picker element not found')); }
@@ -2098,9 +2768,7 @@
 
         fpTitle.textContent = opts.title || (fpState.mode === 'folder' ? 'Choose Directory' : 'Choose File');
         buildFilterSelect(opts.filter || '*.*');
-        fpEl.classList.add('active');
-        saveFocus();
-        trapFocus(fpEl);
+        openModal(fpEl);
         fpOk.textContent = fpState.mode === 'folder' ? 'Select Folder' : 'Open';
 
         var startPath = opts.startPath || _getLastDirectory(fpState.pickerId) || 'C:\\';
@@ -2317,12 +2985,23 @@
     function showPreview(filePath, entry) {
         if (!fpPreviewPane) return;
         var ext = (entry.extension || '').toLowerCase();
-        if ('.png.jpg.jpeg.gif.bmp.webp.svg.ico'.indexOf(ext) === -1) { fpPreviewPane.style.display = 'none'; return; }
+        if ('.png.jpg.jpeg.gif.bmp.webp.svg.ico'.indexOf(ext) === -1) {
+            fpPreviewPane.style.display = 'none';
+            fpPreviewPane.classList.remove('anim-enter');
+            return;
+        }
         fpPreviewPane.style.display = 'flex';
+        fpPreviewPane.classList.remove('anim-enter');
+        void fpPreviewPane.offsetWidth;
+        fpPreviewPane.classList.add('anim-enter');
+        // Reset image opacity for fade-in
+        if (fpPreviewImg) fpPreviewImg.classList.remove('loaded');
         window.monolithApi.get_file_preview(filePath).then(function (res) {
             if (res && res.success && res.dataUrl) {
                 fpPreviewImg.src = res.dataUrl;
                 fpPreviewImg.style.display = 'block';
+                // Fade in image after load
+                fpPreviewImg.onload = function () { fpPreviewImg.classList.add('loaded'); };
                 fpPreviewInfo.textContent = formatSize(entry.size) + ' | ' + ext.toUpperCase();
             } else { noPreview(); }
         }).catch(function () { noPreview(); });
@@ -2332,7 +3011,8 @@
     function clearPreview() {
         if (!fpPreviewPane) return;
         fpPreviewPane.style.display = 'none';
-        if (fpPreviewImg) fpPreviewImg.src = '';
+        fpPreviewPane.classList.remove('anim-enter');
+        if (fpPreviewImg) { fpPreviewImg.src = ''; fpPreviewImg.classList.remove('loaded'); }
         if (fpPreviewInfo) fpPreviewInfo.textContent = '';
     }
 
@@ -2566,8 +3246,7 @@
 
     function closePicker(result) {
         if (!fpEl) return;
-        releaseFocus();
-        fpEl.classList.remove('active');
+        closeModal(fpEl);
         fpState.selectedPath = '';
         if (fpFilename) fpFilename.value = '';
         if (fpOk) fpOk.disabled = true;
@@ -2665,6 +3344,9 @@
                 var deleteBtn = document.createElement('button');
                 deleteBtn.className = 'profile-action-btn profile-delete-btn';
                 deleteBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+                if (window.MonolothTooltip) {
+                    window.MonolothTooltip.attach(deleteBtn, 'Delete this profile');
+                }
                 deleteBtn.addEventListener('click', function () {
                     deleteProfileConfirm(profile.name);
                 });
@@ -2685,39 +3367,39 @@
         if (!window.monolithApi) return;
         window.monolithApi.switch_profile(name)
             .then(function (res) {
-                    if (res && res.success) {
-                        _activeProfile = name;
-                        updateProfileUI();
-                        if (window.TabManager && window.TabManager.isMainActive && window.TabManager.isMainActive()) {
-                            showProfilesStatus('Profile switched \u2014 changes apply on next launch.', false);
-                        } else {
-                            showProfilesStatus('Switched to ' + name, false);
-                        }
+                if (res && res.success) {
+                    _activeProfile = name;
+                    updateProfileUI();
+                    if (_terminalRunning) {
+                        showStatus('profiles-status', 'Profile switched \u2014 changes apply on next launch.', false);
+                    } else {
+                        showStatus('profiles-status', 'Switched to ' + name, false);
+                    }
                     // Reload all settings from new profile
                     loadAllSettingsForProfile();
                 } else {
-                    showProfilesStatus(res.error || 'Failed to switch', true);
+                    showStatus('profiles-status', res.error || 'Failed to switch', true);
                 }
             })
             .catch(function (err) {
-                showProfilesStatus('Error: ' + err, true);
+                showStatus('profiles-status', 'Error: ' + err, true);
             });
     }
 
     function deleteProfileConfirm(name) {
-        showConfirm('Delete Profile', 'Delete profile "' + name + '"? This cannot be undone.').then(function () {
+        showConfirm('Delete Profile', 'Delete profile "' + name + '"? This cannot be undone.', 'delete_profile').then(function () {
             if (!window.monolithApi) return;
             window.monolithApi.delete_profile(name)
                 .then(function (res) {
                     if (res && res.success) {
                         loadProfiles();
-                        showProfilesStatus('Profile deleted', false);
+                        showStatus('profiles-status', 'Profile deleted', false);
                     } else {
-                        showProfilesStatus(res.error || 'Failed to delete', true);
+                        showStatus('profiles-status', res.error || 'Failed to delete', true);
                     }
                 })
                 .catch(function (err) {
-                    showProfilesStatus('Error: ' + err, true);
+                    showStatus('profiles-status', 'Error: ' + err, true);
                 });
         }).catch(function () {});
     }
@@ -2730,13 +3412,13 @@
                 .then(function (res) {
                     if (res && res.success) {
                         loadProfiles();
-                        showProfilesStatus('Profile renamed to ' + newName, false);
+                        showStatus('profiles-status', 'Profile renamed to ' + newName, false);
                     } else {
-                        showProfilesStatus(res.error || 'Failed to rename profile', true);
+                        showStatus('profiles-status', res.error || 'Failed to rename profile', true);
                     }
                 })
                 .catch(function (err) {
-                    showProfilesStatus('Error: ' + err, true);
+                    showStatus('profiles-status', 'Error: ' + err, true);
                 });
         }).catch(function () {});
     }
@@ -2749,17 +3431,7 @@
         loadShortcuts(function () { renderShortcutUI(); updateKbdHint(); });
     }
 
-    function showProfilesStatus(msg, isError) {
-        var el = document.getElementById('profiles-status');
-        if (!el) return;
-        el.textContent = msg;
-        el.className = 'profiles-status' + (isError ? ' error' : ' success');
-        if (_statusTimers['profiles-status']) { clearTimeout(_statusTimers['profiles-status']); }
-        _statusTimers['profiles-status'] = setTimeout(function () {
-            el.textContent = '';
-            el.className = 'profiles-status';
-        }, 6000);
-    }
+
 
     // --- Inline Dialog (replaces prompt/confirm) ---
     var idEl = document.getElementById('inline-dialog');
@@ -2773,8 +3445,7 @@
 
     function closeDialog(result) {
         if (!idEl) return;
-        releaseFocus();
-        idEl.classList.remove('active');
+        closeModal(idEl);
         if (result !== undefined) {
             _idResolve(result);
         } else {
@@ -2828,7 +3499,7 @@
                     closeDialog(val);
                 });
             }
-            if (idEl) { idEl.classList.add('active'); saveFocus(); trapFocus(idEl); }
+            openModal(idEl);
         });
     }
 
@@ -2916,16 +3587,10 @@
         var tbBack = document.getElementById('tb-back');
         if (tbBack) {
             tbBack.addEventListener('click', function() {
-                var hasActive = window.TabManager && window.TabManager.isMainActive && window.TabManager.isMainActive();
-                if (hasActive) {
-                    var rt = window.TabManager.getActiveRuntime ? window.TabManager.getActiveRuntime() : null;
-                    if (rt && rt.view === 'landing') {
-                        window.TabManager.closeTab(window.TabManager.getActiveTabId()).catch(function (err) { console.error(err); });
-                    } else {
-                        showConfirm('Return to Launcher', 'Return to launcher? The current session will be terminated.')
-                            .then(function() { handleGlobalBack(); })
-                            .catch(function() {});
-                    }
+                if (_terminalRunning) {
+                    confirmBackToLauncher()
+                        .then(function() { backToLanding(); })
+                        .catch(function() {});
                 } else {
                     backToLanding();
                 }
@@ -2935,8 +3600,15 @@
         var tbRefresh = document.getElementById('tb-refresh');
         if (tbRefresh) {
             tbRefresh.addEventListener('click', function() {
-                if (window.TabManager && typeof window.TabManager.refreshActiveTab === 'function') {
-                    window.TabManager.refreshActiveTab().catch(function (err) { console.error('refreshActiveTab failed:', err); });
+                if (_currentLaunchDir) {
+                    // Skip the old session's EOF event to prevent back-to-landing
+                    _skipNextEof['main'] = true;
+                    if (_terminalRunning && window.monolithApi) {
+                        window.monolithApi.terminate().catch(function () {});
+                    }
+                    _terminalRunning = false;
+                    initTerminal(_currentLaunchDir);
+                    loadBackgroundConfig();
                 }
             });
         }
@@ -2970,9 +3642,8 @@
         var tbClose = document.getElementById('tb-close');
         if (tbClose) {
             tbClose.addEventListener('click', function() {
-                var hasActive = window.TabManager && window.TabManager.isMainActive && window.TabManager.isMainActive();
-                if (hasActive) {
-                    showConfirm('Exit Monoloth', 'A terminal session is running. Exit anyway?')
+                if (_terminalRunning) {
+                    showConfirm('Exit Monoloth', 'A terminal session is running. Exit anyway?', 'exit_monoloth')
                         .then(function() { if (window.monolithApi) window.monolithApi.close_window(); })
                         .catch(function() {});
                 } else {
@@ -2992,23 +3663,59 @@
         }
     }
 
-    function showConfirm(title, message) {
+    function showConfirm(title, message, skipKey) {
+        if (skipKey && _confirmPrefs && _confirmPrefs[skipKey] === true) {
+            return Promise.resolve(true);
+        }
         return new Promise(function (resolve, reject) {
             _idResolve = resolve;
             _idReject = reject;
             if (idTitle) idTitle.textContent = title;
             if (idBody) {
-                idBody.innerHTML = '<p>' + message + '</p>';
+                if (skipKey) {
+                    idBody.innerHTML = '<p>' + message + '</p>' +
+                        '<label class="id-skip">' +
+                        '<input type="checkbox" id="id-skip-cb-el">' +
+                        '<span class="id-skip-label">Don\'t ask again</span>' +
+                        '</label>';
+                } else {
+                    idBody.innerHTML = '<p>' + message + '</p>';
+                }
             }
             if (idFooter) {
                 idFooter.innerHTML = '<button id="id-btn-cancel-el" class="id-btn-cancel">Cancel</button><button id="id-btn-ok-el" class="id-btn-primary">OK</button>';
                 var cancelBtn = document.getElementById('id-btn-cancel-el');
                 var okBtn = document.getElementById('id-btn-ok-el');
                 if (cancelBtn) cancelBtn.addEventListener('click', function () { closeDialog(); });
-                if (okBtn) okBtn.addEventListener('click', function () { closeDialog(true); });
+                if (okBtn) okBtn.addEventListener('click', function () {
+                    if (skipKey) {
+                        var cb = document.getElementById('id-skip-cb-el');
+                        if (cb && cb.checked) setConfirmPref(skipKey, true);
+                    }
+                    closeDialog(true);
+                });
             }
-            if (idEl) { idEl.classList.add('active'); saveFocus(); trapFocus(idEl); }
+            openModal(idEl);
         });
+    }
+
+    function confirmBackToLauncher() {
+        return showConfirm('Return to Launcher', 'Return to launcher? The current session will be terminated.', 'return_to_launcher');
+    }
+
+    function loadConfirmPrefs() {
+        if (!window.monolithApi) { _confirmPrefs = {}; return; }
+        window.monolithApi.get_config('confirm_dialog_prefs')
+            .then(function (val) { _confirmPrefs = (val && typeof val === 'object') ? val : {}; })
+            .catch(function () { _confirmPrefs = {}; });
+    }
+
+    function setConfirmPref(key, value) {
+        if (!_confirmPrefs || typeof _confirmPrefs !== 'object') _confirmPrefs = {};
+        _confirmPrefs[key] = value;
+        if (window.monolithApi) {
+            window.monolithApi.set_config('confirm_dialog_prefs', _confirmPrefs).catch(function () {});
+        }
     }
 
     // Add profile button
@@ -3019,20 +3726,20 @@
                 if (!window.monolithApi) return;
                 var filenameRegex = /^[^\\/:\*\?"<>\|]+$/;
                 if (!filenameRegex.test(name)) {
-                    showProfilesStatus('Invalid characters: \\ / : * ? " < > |', true);
+                    showStatus('profiles-status', 'Invalid characters: \\ / : * ? " < > |', true);
                     return;
                 }
                 window.monolithApi.create_profile(name)
                     .then(function (res) {
                         if (res && res.success) {
                             loadProfiles();
-                            showProfilesStatus('Profile created', false);
+                            showStatus('profiles-status', 'Profile created', false);
                         } else {
-                            showProfilesStatus(res.error || 'Failed to create', true);
+                            showStatus('profiles-status', res.error || 'Failed to create', true);
                         }
                     })
                     .catch(function (err) {
-                        showProfilesStatus('Error: ' + err, true);
+                        showStatus('profiles-status', 'Error: ' + err, true);
                     });
             }).catch(function () {});
         });
@@ -3047,7 +3754,7 @@
     var psClose = document.getElementById('ps-close');
     var psBody = document.getElementById('ps-body');
 
-    function renderProfileSwitcher(scope, tabId) {
+    function renderProfileSwitcher() {
         if (!psBody) return;
         psBody.innerHTML = '';
         _profiles.forEach(function (profile) {
@@ -3064,39 +3771,26 @@
                 item.appendChild(checkSpan);
             }
             item.addEventListener('click', function () {
+                switchToProfile(profile.name);
                 closeProfileSwitcher();
-                if (scope === 'tab' && tabId && window.TabManager) {
-                    window.TabManager.setTabProfile(tabId, profile.name);
-                    if (tabId === window.TabManager.activeTabId()) {
-                        if (typeof loadBackgroundConfig === 'function') loadBackgroundConfig();
-                    }
-                } else {
-                    switchToProfile(profile.name);
-                }
             });
             psBody.appendChild(item);
         });
     }
 
-    function openProfileSwitcher(scope, tabId) {
-        scope = scope || 'global';
+    function openProfileSwitcher() {
         if (!profileSwitcher) return;
-        renderProfileSwitcher(scope, tabId);
-        profileSwitcher.classList.add('active');
-        saveFocus();
-        trapFocus(profileSwitcher);
+        renderProfileSwitcher();
+        openModal(profileSwitcher);
     }
-
-    window.openProfileSwitcher = openProfileSwitcher;
 
     function closeProfileSwitcher() {
         if (!profileSwitcher) return;
-        releaseFocus();
-        profileSwitcher.classList.remove('active');
+        closeModal(profileSwitcher);
     }
 
     if (profileSelectorBtn) {
-        profileSelectorBtn.addEventListener('click', function () { openProfileSwitcher('global'); });
+        profileSelectorBtn.addEventListener('click', openProfileSwitcher);
     }
 
     if (psClose) {
@@ -3151,7 +3845,7 @@
     var clearHistoryBtn = document.getElementById('clear-history-btn');
     if (clearHistoryBtn) {
         clearHistoryBtn.addEventListener('click', function() {
-            showConfirm('Clear History', 'Delete all history data? This cannot be undone.')
+            showConfirm('Clear History', 'Delete all history data? This cannot be undone.', 'clear_history')
                 .then(function() {
                     if (window.monolithApi) {
                         window.monolithApi.clear_history().then(function() {
@@ -3164,93 +3858,47 @@
         });
     }
 
-    // --- PTY Output Router (called by tauri-bridge setupPtyListener) ---
-    window.writeToTerm = (data, eof, sessionId, generation) => {
-        sessionId = sessionId || '';
-        generation = generation || 0;
-
-        if (!sessionId) {
-            console.warn('[Monoloth] writeToTerm: missing sessionId, dropping event');
-            return;
-        }
-
-        if (window.TabManager) {
-            if (generation > 0 && window.TabManager.getSessionGeneration(sessionId) > 0 &&
-                generation < window.TabManager.getSessionGeneration(sessionId)) {
-                return;
-            }
-            if (eof && window.TabManager.getSkipNextEof(sessionId)) {
-                window.TabManager.setSkipNextEof(sessionId, false);
-                return;
-            }
-        }
-
-        if (sessionId === 'main' || sessionId.endsWith('__main')) {
-            var tabId = sessionId === 'main' ? (window.TabManager && window.TabManager.activeTabId()) : sessionId.slice(0, -6);
-            if (!tabId) return;
-            var t = window.TabManager && window.TabManager.getTerminal(tabId);
-            if (t) {
-                if (eof) {
-                    t.write(data);
-                    if (window.TabManager && window.TabManager.scheduleExitTimer) {
-                        window.TabManager.scheduleExitTimer(tabId, function () {
-                            if (window.TabManager && window.TabManager.handleBack) {
-                                window.TabManager.handleBack(tabId);
-                            }
-                        }, 5000);
-                    }
-                    return;
-                }
-                t.write(data);
-                if (window.TabManager && window.TabManager.isFirstOutput && window.TabManager.isFirstOutput(tabId)) {
-                    setTimeout(function () { var f = window.TabManager.getFitAddon(tabId); if (f) f.fit(); }, 1500);
-                }
-                if (window.TabManager && window.TabManager.clearExitTimer) {
-                    window.TabManager.clearExitTimer(tabId);
-                }
-            }
-        } else if (sessionId === 'panel' || sessionId.endsWith('__panel')) {
-            if (typeof window.SidebarManager !== 'undefined') {
-                if (eof) {
-                    window.SidebarManager.terminateCmdPanel();
-                } else if (data) {
-                    window.SidebarManager.writeToPanel(data);
-                }
-            }
-        } else if (sessionId.includes('__bg__')) {
-            if (typeof window.SidebarManager !== 'undefined' && data && window.SidebarManager.writeToBgPanel) {
-                window.SidebarManager.writeToBgPanel(sessionId, data);
-            }
-        }
-    };
-
     // --- MonolothApp Facade (exposed to sidebar.js) ---
     window.MonolothApp = {
         getCurrentDir: function () { return _currentLaunchDir; },
         restartSession: function (sessionId) {
             sessionId = sessionId || 'main';
             if (sessionId === 'main') {
-                if (window.TabManager && typeof window.TabManager.refreshActiveTab === 'function') {
-                    return window.TabManager.refreshActiveTab();
+                if (_terminalRunning) {
+                    _skipNextEof['main'] = true;
+                    window.monolithApi.terminate_terminal('main')
+                        .finally(function () { _skipNextEof['main'] = false; _terminalRunning = false; initTerminal(_currentLaunchDir); });
+                } else {
+                    initTerminal(_currentLaunchDir);
                 }
-                return Promise.resolve();
+            } else if (sessionId === 'panel') {
+                if (_panelRunning) {
+                    _skipNextEof['panel'] = true;
+                    window.monolithApi.terminate_terminal('panel')
+                        .finally(function () { _skipNextEof['panel'] = false; _panelRunning = false; if (typeof window.SidebarManager !== 'undefined') { window.SidebarManager.showCmdPanel(); window.SidebarManager.initCmdPanel(_currentLaunchDir); } });
+                } else {
+                    if (typeof window.SidebarManager !== 'undefined') {
+                        window.SidebarManager.showCmdPanel();
+                        window.SidebarManager.initCmdPanel(_currentLaunchDir);
+                    }
+                }
             }
-            if (sessionId === 'panel' && typeof window.SidebarManager !== 'undefined') {
-                window.SidebarManager.showCmdPanel();
-                window.SidebarManager.initCmdPanel(_currentLaunchDir);
-            }
+        },
+        setSkipNextEof: function (sessionId, val) {
+            _skipNextEof[sessionId] = val;
+        },
+        setSessionGeneration: function (sessionId, gen) {
+            _sessionGeneration[sessionId] = gen;
         },
         refitTerminals: function () {
-            if (window.TabManager && typeof window.TabManager.refitActive === 'function') {
-                return window.TabManager.refitActive();
+            if (term && fitAddon) {
+                fitAddon.fit();
+                if (window.monolithApi) window.monolithApi.resize_terminal('main', term.cols, term.rows);
+                try { term.refresh(0, term.rows - 1); } catch (e) {}
             }
         },
-        isMainActive: function () {
-            return !!(window.TabManager && window.TabManager.isMainActive && window.TabManager.isMainActive());
-        },
-        openFilePicker: function (opts) {
-            return openFilePicker(opts);
-        }
+        isMainActive: function () { return _terminalRunning; },
+        switchTab: switchTab
     };
 
     // Initialize sidebar on first terminal show
@@ -3258,25 +3906,12 @@
         window.SidebarManager.init();
     }
 
-    // Initialize tab manager
-    if (typeof window.TabManager !== 'undefined') {
-        window.TabManager.init(function (s) {
-            if (s && s.tabBarEnabled) {
-                window.TabManager.renderTabs();
-                if (s.tabBarPosition === 'top') {
-                    document.body.classList.add('tab-bar-top');
-                    document.body.classList.remove('tab-bar-bottom');
-                } else {
-                    document.body.classList.add('tab-bar-bottom');
-                    document.body.classList.remove('tab-bar-top');
-                }
-            }
-        });
-    }
-
     // Scan for [data-tooltip] elements after all DOM is ready
 if (window.MonolothTooltip) {
                     window.MonolothTooltip.scan(document.body);
     }
+
+    // Load confirm dialog "don't ask again" prefs
+    loadConfirmPrefs();
 
 })();

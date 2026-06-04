@@ -2,7 +2,6 @@ use parking_lot::Mutex;
 use portable_pty::{CommandBuilder, PtySize, PtySystem};
 use std::collections::HashMap;
 use std::io::Write;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::thread;
 use tauri::Emitter;
@@ -22,7 +21,6 @@ struct PtySession {
     resizer: Option<Arc<Mutex<Box<dyn portable_pty::MasterPty + Send>>>>,
     child: Box<dyn portable_pty::ChildKiller + Send>,
     read_thread: Option<thread::JoinHandle<()>>,
-    cancel: Arc<AtomicBool>,
 }
 
 #[derive(Clone)]
@@ -88,12 +86,10 @@ impl PtyManager {
             *g
         };
 
-        let cancel = Arc::new(AtomicBool::new(false));
-        let cancel_for_thread = cancel.clone();
         let app_ref = self.app_handle.clone();
         let sid = session_id.to_string();
         let read_handle = thread::spawn(move || {
-            Self::read_loop(app_ref, reader, sid, gen, cancel_for_thread);
+            Self::read_loop(app_ref, reader, sid, gen);
         });
 
         let session = PtySession {
@@ -101,7 +97,6 @@ impl PtyManager {
             resizer: Some(Arc::new(Mutex::new(pair.master))),
             child,
             read_thread: Some(read_handle),
-            cancel,
         };
 
         self.sessions.lock().insert(session_id.to_string(), session);
@@ -109,47 +104,39 @@ impl PtyManager {
         Ok(gen)
     }
 
+    fn emit_output(
+        app_handle: &OnceLock<tauri::AppHandle>,
+        data: String,
+        eof: bool,
+        session_id: &str,
+        generation: u64,
+    ) {
+        if let Some(handle) = app_handle.get() {
+            let _ = handle.emit(
+                "pty-output",
+                PtyOutput {
+                    data,
+                    eof,
+                    session_id: session_id.to_string(),
+                    generation,
+                },
+            );
+        }
+    }
+
     fn read_loop(
         app_handle: OnceLock<tauri::AppHandle>,
         mut reader: Box<dyn std::io::Read + Send>,
         session_id: String,
         generation: u64,
-        cancel: Arc<AtomicBool>,
     ) {
         let mut buf = [0u8; 8192];
         let mut leftover = Vec::new();
         loop {
-            if cancel.load(Ordering::Relaxed) {
-                break;
-            }
             match reader.read(&mut buf) {
                 Ok(0) => {
-                    if !leftover.is_empty() {
-                        let output = String::from_utf8_lossy(&leftover).to_string();
-                        leftover.clear();
-                        if let Some(handle) = app_handle.get() {
-                            let _ = handle.emit(
-                                "pty-output",
-                                PtyOutput {
-                                    data: output,
-                                    eof: false,
-                                    session_id: session_id.clone(),
-                                    generation,
-                                },
-                            );
-                        }
-                    }
-                    if let Some(handle) = app_handle.get() {
-                        let _ = handle.emit(
-                            "pty-output",
-                            PtyOutput {
-                                data: String::new(),
-                                eof: true,
-                                session_id: session_id.clone(),
-                                generation,
-                            },
-                        );
-                    }
+                    Self::flush_leftover(&app_handle, &mut leftover, &session_id, generation);
+                    Self::emit_output(&app_handle, String::new(), true, &session_id, generation);
                     break;
                 }
                 Ok(n) => {
@@ -183,50 +170,30 @@ impl PtyManager {
 
                     if !emit_buf.is_empty() {
                         let output = String::from_utf8_lossy(&emit_buf).to_string();
-                        if let Some(handle) = app_handle.get() {
-                            let _ = handle.emit(
-                                "pty-output",
-                                PtyOutput {
-                                    data: output,
-                                    eof: false,
-                                    session_id: session_id.clone(),
-                                    generation,
-                                },
-                            );
-                        }
+                        Self::emit_output(&app_handle, output, false, &session_id, generation);
                     }
                 }
                 Err(_) => {
-                    if !leftover.is_empty() {
-                        let output = String::from_utf8_lossy(&leftover).to_string();
-                        leftover.clear();
-                        if let Some(handle) = app_handle.get() {
-                            let _ = handle.emit(
-                                "pty-output",
-                                PtyOutput {
-                                    data: output,
-                                    eof: false,
-                                    session_id: session_id.clone(),
-                                    generation,
-                                },
-                            );
-                        }
-                    }
-                    if let Some(handle) = app_handle.get() {
-                        let _ = handle.emit(
-                            "pty-output",
-                            PtyOutput {
-                                data: String::new(),
-                                eof: true,
-                                session_id: session_id.clone(),
-                                generation,
-                            },
-                        );
-                    }
+                    Self::flush_leftover(&app_handle, &mut leftover, &session_id, generation);
+                    Self::emit_output(&app_handle, String::new(), true, &session_id, generation);
                     break;
                 }
             }
         }
+    }
+
+    fn flush_leftover(
+        app_handle: &OnceLock<tauri::AppHandle>,
+        leftover: &mut Vec<u8>,
+        session_id: &str,
+        generation: u64,
+    ) {
+        if leftover.is_empty() {
+            return;
+        }
+        let output = String::from_utf8_lossy(leftover).to_string();
+        leftover.clear();
+        Self::emit_output(app_handle, output, false, session_id, generation);
     }
 
     pub fn write_input(&self, session_id: &str, data: &str) -> Result<(), String> {
@@ -271,14 +238,10 @@ impl PtyManager {
         };
 
         if let Some(mut s) = session {
-            s.cancel.store(true, Ordering::Relaxed);
             let _ = s.child.kill();
-
             drop(s.writer);
-            drop(s.resizer.take());
-
-            if let Some(_handle) = s.read_thread.take() {
-            }
+            s.resizer = None;
+            let _ = s.read_thread.take();
         }
     }
 
@@ -287,20 +250,6 @@ impl PtyManager {
             self.sessions.lock().keys().cloned().collect()
         };
         for sid in all_sessions {
-            self.terminate(&sid);
-        }
-    }
-
-    pub fn terminate_tab(&self, tab_id: &str) {
-        let prefix = format!("{}__", tab_id);
-        let matching: Vec<String> = {
-            self.sessions.lock()
-                .keys()
-                .filter(|k| k.starts_with(&prefix))
-                .cloned()
-                .collect()
-        };
-        for sid in matching {
             self.terminate(&sid);
         }
     }

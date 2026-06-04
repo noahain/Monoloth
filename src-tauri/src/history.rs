@@ -15,7 +15,6 @@ pub struct SessionEntry {
     pub start_time: String,
     pub end_time: Option<String>,
     pub directory: String,
-    pub activities: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,7 +49,6 @@ struct ActiveSession {
     command: String,
     directory: String,
     start_time: String,
-    activities: Vec<serde_json::Value>,
 }
 
 impl HistoryManager {
@@ -90,16 +88,12 @@ impl HistoryManager {
         if !inner.data.enabled {
             return;
         }
-        if inner.active_session.is_some() {
-            return;
-        }
         self.session_end_inner(&mut inner);
         inner.active_session = Some(ActiveSession {
             profile: profile.to_string(),
             command: command.to_string(),
             directory: directory.to_string(),
             start_time: iso_now(),
-            activities: Vec::new(),
         });
     }
 
@@ -116,7 +110,6 @@ impl HistoryManager {
                 start_time: active.start_time,
                 end_time: Some(iso_now()),
                 directory: active.directory,
-                activities: active.activities,
             });
             self.purge_inner(inner);
             save_json(&history_path(), &inner.data);
@@ -124,41 +117,15 @@ impl HistoryManager {
     }
 
     fn purge_inner(&self, inner: &mut HistoryInner) {
-        let retention_days: Option<i64> = match inner.data.retention.as_str() {
-            "7d" => Some(7),
-            "30d" => Some(30),
-            _ => None,
-        };
-
-        if let Some(days) = retention_days {
-            let now = epoch_seconds();
-            let cutoff = now - days * 86400;
-            inner.data.sessions.retain(|s| {
-                parse_iso_to_epoch(&s.start_time)
-                    .map(|ts| ts >= cutoff)
-                    .unwrap_or(true)
-            });
-        }
+        let retention = inner.data.retention.clone();
+        apply_retention(&mut inner.data.sessions, &retention);
     }
 
     pub fn get_data(&self) -> HistoryData {
         let inner = self.inner.lock();
         // Purge before returning
         let mut data = inner.data.clone();
-        let retention_days: Option<i64> = match data.retention.as_str() {
-            "7d" => Some(7),
-            "30d" => Some(30),
-            _ => None,
-        };
-        if let Some(days) = retention_days {
-            let now = epoch_seconds();
-            let cutoff = now - days * 86400;
-            data.sessions.retain(|s| {
-                parse_iso_to_epoch(&s.start_time)
-                    .map(|ts| ts >= cutoff)
-                    .unwrap_or(true)
-            });
-        }
+        apply_retention(&mut data.sessions, &data.retention);
         data
     }
 
@@ -176,17 +143,6 @@ impl HistoryManager {
         inner.data.retention = retention.to_string();
         self.purge_inner(&mut inner);
         save_json(&history_path(), &inner.data);
-    }
-
-    pub fn record_activity(&self, activity_type: &str, payload: serde_json::Value) {
-        let mut inner = self.inner.lock();
-        if let Some(session) = inner.active_session.as_mut() {
-            session.activities.push(serde_json::json!({
-                "type": activity_type,
-                "payload": payload,
-                "timestamp": epoch_seconds().to_string(),
-            }));
-        }
     }
 
     pub fn clear_history(&self) {
@@ -207,6 +163,26 @@ fn epoch_seconds() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs() as i64
+}
+
+fn retention_days(retention: &str) -> Option<i64> {
+    match retention {
+        "7d" => Some(7),
+        "30d" => Some(30),
+        _ => None,
+    }
+}
+
+fn apply_retention(sessions: &mut Vec<SessionEntry>, retention: &str) {
+    let Some(days) = retention_days(retention) else {
+        return;
+    };
+    let cutoff = epoch_seconds() - days * 86400;
+    sessions.retain(|s| {
+        parse_iso_to_epoch(&s.start_time)
+            .map(|ts| ts >= cutoff)
+            .unwrap_or(true)
+    });
 }
 
 fn epoch_to_iso(secs: i64) -> String {
@@ -316,47 +292,5 @@ fn save_json(path: &Path, data: &HistoryData) {
             }
         }
         Err(e) => eprintln!("[Monoloth] Failed to serialize history: {}", e),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::Mutex;
-    static TEST_LOCK: Mutex<()> = Mutex::new(());
-
-    #[test]
-    fn test_session_start_is_idempotent() {
-        let _lock = TEST_LOCK.lock().unwrap();
-        let manager = HistoryManager::new();
-        manager.session_start("Default", "opencode", "C:\\proj1");
-        manager.session_start("Default", "opencode", "C:\\proj2");
-        manager.session_end();
-        let data = manager.get_data();
-        let last = data.sessions.last().expect("session should be recorded");
-        assert_eq!(last.directory, "C:\\proj1");
-    }
-
-    #[test]
-    fn test_record_activity_persists_through_session_end() {
-        let _lock = TEST_LOCK.lock().unwrap();
-        let test_dir = std::env::temp_dir().join("monoloth_test_history");
-        let _ = std::fs::remove_dir_all(&test_dir);
-        std::fs::create_dir_all(&test_dir).unwrap();
-        std::env::set_var("APPDATA", test_dir.to_str().unwrap());
-
-        let manager = HistoryManager::new();
-        manager.session_start("Default", "opencode", "C:\\proj");
-        manager.record_activity("tab_open", serde_json::json!({"tabId": "abc"}));
-        manager.session_end();
-        let data = manager.get_data();
-        assert!(!data.sessions.is_empty(), "should have at least one session");
-        let last = data.sessions.last().unwrap();
-        let found = last.activities.iter().any(|a| {
-            a.get("type").and_then(|v| v.as_str()) == Some("tab_open")
-        });
-        assert!(found, "tab_open activity should persist through session_end");
-
-        let _ = std::fs::remove_dir_all(&test_dir);
     }
 }

@@ -3,6 +3,7 @@
 
     var _tooltipEl = null;
     var _tooltipTimer = null;
+    var _removeTimer = null;
     var _tooltipTarget = null;
     var _lastX = 0;
     var _lastY = 0;
@@ -29,6 +30,7 @@
     }
 
     function show(e, text) {
+        if (_removeTimer) { clearTimeout(_removeTimer); _removeTimer = null; }
         _lastX = e.clientX;
         _lastY = e.clientY;
         var tt = getEl();
@@ -39,8 +41,10 @@
         _tooltipTarget = e.currentTarget;
         _tooltipTimer = setTimeout(function () {
             if (!_tooltipTarget) return;
-            tt.classList.add('visible');
             position(null);
+            // Force reflow so the new left/top commit before .visible activates the position transition
+            void tt.offsetWidth;
+            tt.classList.add('visible');
         }, 500);
     }
 
@@ -55,12 +59,18 @@
 
     function hide() {
         if (_tooltipTimer) { clearTimeout(_tooltipTimer); _tooltipTimer = null; }
+        if (_removeTimer) { clearTimeout(_removeTimer); _removeTimer = null; }
         _tooltipTarget = null;
         if (_tooltipEl) {
             _tooltipEl.classList.remove('visible');
-            if (_tooltipEl.parentNode) {
-                _tooltipEl.parentNode.removeChild(_tooltipEl);
-            }
+            // Wait for exit transition before removing from DOM
+            var el = _tooltipEl;
+            _removeTimer = setTimeout(function () {
+                _removeTimer = null;
+                if (el.parentNode && !el.classList.contains('visible')) {
+                    el.parentNode.removeChild(el);
+                }
+            }, 120);
         }
     }
 

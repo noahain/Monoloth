@@ -1,6 +1,13 @@
 (function () {
     'use strict';
 
+    var UI = window.MonolothUI;
+    var escapeHtml = UI.escapeHtml;
+    var forceReflow = UI.forceReflow;
+    var silent = UI.silent;
+    var openModal = UI.openModal;
+    var closeModal = UI.closeModal;
+
     var sidebar = document.getElementById('sidebar');
     var sidebarButtons = document.getElementById('sidebar-buttons');
     var terminalView = document.getElementById('terminal-view');
@@ -15,6 +22,7 @@
     var _sidebarPosition = 'left';
     var _cmdPanelOpen = false;
     var _panelRunning = false;
+    var _panelClosing = false;
     var _panelHeight = 250;
     var _panelShell = 'cmd';
     var panelTerm = null;
@@ -25,12 +33,6 @@
     var _resizeDebounceTimer = null;
     var _configSaveTimer = null;
     var _panelRestoreNeeded = false;
-
-    function panelSessionId() {
-        if (typeof window === 'undefined' || !window.TabManager) return 'panel';
-        var tabId = window.TabManager.activeTabId();
-        return tabId ? tabId + '__panel' : 'panel';
-    }
 
     // ---- SVG Icons ----
     var ICONS = {
@@ -138,7 +140,7 @@
             if (!_cmdPanelOpen) {
                 showCmdPanel();
             }
-            window.monolithApi.send_input(panelSessionId(), cmd + '\n').catch(function () {});
+            window.monolithApi.send_input('panel', cmd + '\n').catch(function () {});
         }
     }
 
@@ -254,8 +256,16 @@
         tv.classList.add('sidebar-visible');
         sidebar.style.display = 'flex';
         document.body.classList.add('sidebar-visible-' + _sidebarPosition);
+
+        // Force reflow so margin transition animates from 0
+        sidebar.offsetHeight;
+
+        // Add slide-in animation
+        sidebar.classList.remove('anim-slide-left', 'anim-slide-right');
+        void sidebar.offsetWidth; // reflow to restart animation
+        sidebar.classList.add('anim-slide-' + _sidebarPosition);
     } else {
-        tv.classList.remove('sidebar-visible');
+        tv.classList.remove('sidebar-visible', 'has-sidebar-left', 'has-sidebar-right');
         sidebar.style.display = 'none';
     }
     }
@@ -265,6 +275,8 @@
         var tv = terminalView;
         if (!tv) return;
         tv.classList.remove('has-sidebar-left', 'has-sidebar-right');
+        // Force reflow so margin transition animates
+        void tv.offsetWidth;
         tv.classList.add('has-sidebar-' + pos);
     }
 
@@ -272,6 +284,15 @@
         updateSidebarVisibility();
         setSidebarPosition(_sidebarPosition);
         renderSidebarButtons();
+    }
+
+    function toggleSidebar() {
+        _sidebarEnabled = !_sidebarEnabled;
+        if (_sidebarConfig) _sidebarConfig.enabled = _sidebarEnabled;
+        applySidebar();
+        if (window.monolithApi) {
+            window.monolithApi.set_config('sidebar_config', _sidebarConfig);
+        }
     }
 
     function cleanSidebarButtons(buttons) {
@@ -347,7 +368,13 @@
 
     function showCmdPanel() {
         _cmdPanelOpen = true;
-        if (cmdPanel) cmdPanel.classList.add('open');
+        if (cmdPanel) {
+            cmdPanel.classList.remove('anim-close');
+            cmdPanel.classList.add('open');
+            // Force reflow then animate
+            void cmdPanel.offsetWidth;
+            cmdPanel.classList.add('anim-open');
+        }
         var panelBtn = sidebarButtons.querySelector('[data-btn-id="open_cmd_panel"]');
         if (panelBtn) panelBtn.classList.add('active');
         if (window.monolithApi) {
@@ -360,14 +387,21 @@
 
     function hideCmdPanel() {
         _cmdPanelOpen = false;
-        if (cmdPanel) cmdPanel.classList.remove('open');
+        if (cmdPanel) {
+            cmdPanel.classList.remove('anim-open');
+            cmdPanel.classList.add('anim-close');
+            // Wait for animation to finish before hiding
+            setTimeout(function () {
+                cmdPanel.classList.remove('open', 'anim-close');
+            }, 200);
+        }
         var panelBtn = sidebarButtons.querySelector('[data-btn-id="open_cmd_panel"]');
         if (panelBtn) panelBtn.classList.remove('active');
         if (window.monolithApi) {
             window.monolithApi.set_config('cmdPanelOpen', false).catch(function () {});
         }
         if (window.MonolothApp && window.MonolothApp.refitTerminals) {
-            setTimeout(function () { window.MonolothApp.refitTerminals(); }, 50);
+            setTimeout(function () { window.MonolothApp.refitTerminals(); }, 250);
         }
     }
 
@@ -416,7 +450,7 @@
 
             panelTerm.onData(function (data) {
                 if (window.monolithApi) {
-                    window.monolithApi.send_input(panelSessionId(), data).catch(function () {});
+                    window.monolithApi.send_input('panel', data).catch(function () {});
                 }
             });
         }
@@ -424,20 +458,21 @@
         _panelRunning = true;
         var pCols = panelTerm ? panelTerm.cols : 80;
         var pRows = panelTerm ? panelTerm.rows : 24;
-        window.monolithApi.start_terminal(panelSessionId(), dir, false, _panelShell, pCols, pRows)
+        window.monolithApi.start_terminal('panel', dir, false, _panelShell, pCols, pRows)
             .then(function (result) {
                 if (!result || !result.success) {
                     _panelRunning = false;
                     showPanelExitBanner();
                 } else if (result.generation && window.MonolothApp && typeof window.MonolothApp.setSessionGeneration === 'function') {
-                    window.MonolothApp.setSessionGeneration(panelSessionId(), result.generation);
+                    window.MonolothApp.setSessionGeneration('panel', result.generation);
                 }
                 if (panelFitAddon && panelTerm) {
                     setTimeout(function () {
                         panelFitAddon.fit();
                         if (window.monolithApi) {
-                            window.monolithApi.resize_terminal(panelSessionId(), panelTerm.cols, panelTerm.rows).catch(function () {});
+                            window.monolithApi.resize_terminal('panel', panelTerm.cols, panelTerm.rows).catch(function () {});
                         }
+                        try { panelTerm.refresh(0, panelTerm.rows - 1); } catch (e) {}
                     }, 100);
                 }
             })
@@ -450,28 +485,24 @@
     function showPanelExitBanner() {
         _panelRunning = false;
         if (cmdPanelExitBanner) {
-            cmdPanelExitBanner.style.display = '';
-            cmdPanelExitBanner.onclick = function () {
+            UI.togglePanelExitBanner(cmdPanelExitBanner, true, function () {
                 if (window.MonolothApp && window.MonolothApp.restartSession) {
-                    var activeTabId = window.TabManager ? window.TabManager.activeTabId() : null;
-                    window.MonolothApp.restartSession(activeTabId);
+                    window.MonolothApp.restartSession('panel');
                 }
-            };
+            });
         }
     }
 
     function hidePanelExitBanner() {
-        if (cmdPanelExitBanner) {
-            cmdPanelExitBanner.style.display = 'none';
-            cmdPanelExitBanner.onclick = null;
-        }
+        UI.togglePanelExitBanner(cmdPanelExitBanner, false);
     }
 
-    function terminateCmdPanel() {
+    function terminateCmdPanel(skipHide) {
+        if (skipHide) _panelClosing = true;
         _panelRunning = false;
         hidePanelExitBanner();
         if (window.monolithApi) {
-            window.monolithApi.terminate_terminal(panelSessionId()).catch(function () {});
+            window.monolithApi.terminate_terminal('panel').catch(function () {});
         }
         if (panelTerm) {
             try { panelTerm.dispose(); } catch (e) {}
@@ -481,7 +512,9 @@
         if (cmdPanelTerminal) {
             cmdPanelTerminal.innerHTML = '';
         }
-        hideCmdPanel();
+        if (!skipHide) {
+            hideCmdPanel();
+        }
     }
 
     // ---- CMD Panel Resize ----
@@ -545,24 +578,36 @@
 
         var cfg = _sidebarConfig || getDefaultSidebarConfig();
 
-        var html = '<div class="settings-card">';
-        html += '<div class="card-icon">' + ICONS.panel + '</div>';
+        var html = '';
+
+        // --- Sidebar Settings Card ---
+        html += '<div class="settings-card">';
+        html += '<div class="card-icon">' + ICONS.gear + '</div>';
         html += '<div class="card-body">';
         html += '<h3>Sidebar</h3>';
-        html += '<p class="card-desc">Configure the terminal sidebar and CMD panel.</p>';
+        html += '<p class="card-desc">Enable or disable the sidebar and choose its position.</p>';
 
-        // Enable toggle
         html += '<div class="form-group"><label>Enable Sidebar</label>';
         html += '<div class="sidebar-toggle-btns">';
         html += '<button class="sidebar-toggle-btn' + (_sidebarEnabled ? ' active' : '') + '" data-enabled="true">On</button>';
         html += '<button class="sidebar-toggle-btn' + (!_sidebarEnabled ? ' active' : '') + '" data-enabled="false">Off</button>';
         html += '</div></div>';
 
-        // Position toggle
         html += '<div class="form-group"><label>Position</label>';
         html += '<div class="sidebar-toggle-btns">';
         html += '<button class="sidebar-pos-btn' + (_sidebarPosition === 'left' ? ' active' : '') + '" data-pos="left">Left</button>';
         html += '<button class="sidebar-pos-btn' + (_sidebarPosition === 'right' ? ' active' : '') + '" data-pos="right">Right</button>';
+        html += '</div></div>';
+
+        html += '</div></div>';
+
+        // --- Buttons Card (vertical layout) ---
+        html += '<div class="settings-card settings-card--vertical">';
+        html += '<div class="card-icon-row">';
+        html += '<div class="card-icon">' + ICONS.panel + '</div>';
+        html += '<div class="card-header-text">';
+        html += '<h3>Buttons</h3>';
+        html += '<p class="card-desc">Configure default and custom sidebar buttons.</p>';
         html += '</div></div>';
 
         // Default Buttons
@@ -572,7 +617,7 @@
             var def = findDefaultButton(b.id);
             var name = def ? def.name : b.id;
             html += '<div class="sidebar-setting-row" data-id="' + b.id + '" data-type="default">';
-            html += '<span class="sidebar-drag-handle" data-tooltip="Drag to reorder">⠿</span>';
+            html += '<span class="sidebar-drag-handle" data-tooltip="Drag to reorder"></span>';
             html += '<span class="sidebar-setting-icon">' + (ICONS[def ? def.icon : 'terminal'] || ICONS.terminal) + '</span>';
             html += '<span class="sidebar-setting-name">' + name + '</span>';
             html += '<label class="sidebar-toggle-label">';
@@ -583,12 +628,12 @@
         });
         html += '</div></div>';
 
-        // Divider
+        // Custom Buttons
         html += '<div class="adv-section"><h4>Custom Buttons</h4>';
         html += '<div class="sidebar-custom-buttons" id="sidebar-custom-buttons">';
         (cfg.customButtons || []).sort(function (a, b) { return a.order - b.order; }).forEach(function (b) {
             html += '<div class="sidebar-setting-row" data-id="' + b.id + '" data-type="custom">';
-            html += '<span class="sidebar-drag-handle" data-tooltip="Drag to reorder">⠿</span>';
+            html += '<span class="sidebar-drag-handle" data-tooltip="Drag to reorder"></span>';
             html += '<span class="sidebar-setting-icon">' + (ICONS[b.icon] || ICONS.terminal) + '</span>';
             html += '<span class="sidebar-setting-name">' + escapeHtml(b.name) + '</span>';
             html += '<span class="sidebar-setting-mode">' + escapeHtml(b.mode || 'background') + '</span>';
@@ -602,28 +647,30 @@
         });
         html += '</div>';
 
-        // Add custom button
         html += '<button id="add-custom-btn" class="btn-secondary add-cmd-btn" style="margin-top:0.5rem;">';
         html += ICONS.plus + ' Add Custom Button';
         html += '</button>';
 
-        // Custom button editor
         html += '<div id="custom-btn-editor" class="custom-btn-editor" style="display:none;"></div>';
 
         html += '</div>'; // end adv-section
+        html += '</div>'; // end buttons card
 
-        // CMD Panel config
-        html += '<div class="adv-section"><h4>CMD Panel Configuration</h4>';
+        // --- CMD Panel Card ---
+        html += '<div class="settings-card">';
+        html += '<div class="card-icon">' + ICONS.terminal + '</div>';
+        html += '<div class="card-body">';
+        html += '<h3>CMD Panel</h3>';
+        html += '<p class="card-desc">Configure the embedded command panel shell.</p>';
 
-        html += '<div class="form-group"><label>Shell</label>';
+        html += '<div class="form-group"><label>Panel Shell</label>';
         html += '<select id="panel-shell-select" class="secondary-cmd-mode" style="width:100%;">';
         html += '<option value="cmd"' + (_panelShell === 'cmd' ? ' selected' : '') + '>cmd (Command Prompt)</option>';
         html += '<option value="powershell"' + (_panelShell === 'powershell' ? ' selected' : '') + '>PowerShell</option>';
         html += '</select></div>';
 
-        html += '</div>'; // end adv-section
+        html += '</div></div>';
 
-        html += '</div></div>'; // end card-body, settings-card
         html += '<div id="sidebar-status" class="appearance-status"></div>';
 
         if (window.MonolothTooltip) {
@@ -634,60 +681,7 @@
         if (window.MonolothTooltip) {
             window.MonolothTooltip.scan(panel);
         }
-        // Wire up event handlers
         wireSettingsEvents();
-        renderTabsSettings();
-    }
-
-    function renderTabsSettings() {
-        var panel = document.getElementById('tab-sidebar');
-        if (!panel) return;
-        var state = window.TabManager && window.TabManager.state();
-        var enabled = state ? state.tabBarEnabled : true;
-        var position = state ? state.tabBarPosition : 'bottom';
-
-        var tabsSection = document.createElement('div');
-        tabsSection.className = 'settings-card';
-        tabsSection.innerHTML = ''
-            + '<div class="card-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>'
-            + '<div class="card-body">'
-            + '  <h3>Tabs</h3>'
-            + '  <p class="card-desc">Configure the tab bar position and visibility.</p>'
-            + '  <div class="setting-row">'
-            + '    <label><input type="checkbox" id="tabs-enabled-toggle" ' + (enabled ? 'checked' : '') + ' /> Enable tab bar</label>'
-            + '  </div>'
-            + '  <p class="setting-hint">Disabling hides the tab bar and reverts to single-tab mode. Your tabs are saved and will be restored if you re-enable.</p>'
-            + '  <div class="setting-row">'
-            + '    <label>Position: '
-            + '      <select id="tabs-position-select">'
-            + '        <option value="bottom"' + (position === 'bottom' ? ' selected' : '') + '>Bottom</option>'
-            + '        <option value="top"' + (position === 'top' ? ' selected' : '') + '>Top</option>'
-            + '      </select>'
-            + '    </label>'
-            + '  </div>'
-            + '</div>';
-
-        panel.appendChild(tabsSection);
-
-        document.getElementById('tabs-enabled-toggle').addEventListener('change', function (e) {
-            var s = window.TabManager.state();
-            s.tabBarEnabled = e.target.checked;
-            window.TabManager._save();
-            if (e.target.checked) {
-                document.body.classList.remove('tab-bar-disabled');
-                document.body.classList.add(s.tabBarPosition === 'top' ? 'tab-bar-top' : 'tab-bar-bottom');
-            } else {
-                document.body.classList.add('tab-bar-disabled');
-            }
-        });
-
-        document.getElementById('tabs-position-select').addEventListener('change', function (e) {
-            var s = window.TabManager.state();
-            s.tabBarPosition = e.target.value;
-            window.TabManager._save();
-            document.body.classList.toggle('tab-bar-top', s.tabBarPosition === 'top');
-            document.body.classList.toggle('tab-bar-bottom', s.tabBarPosition === 'bottom');
-        });
     }
 
     function wireSettingsEvents() {
@@ -994,13 +988,14 @@
             opt.addEventListener('click', function () {
                 editor.querySelectorAll('.sidebar-icon-option').forEach(function (o) { o.classList.remove('selected'); });
                 this.classList.add('selected');
+                // Pulse animation
+                this.classList.remove('just-selected');
+                void this.offsetWidth;
+                this.classList.add('just-selected');
+                var self = this;
+                setTimeout(function () { self.classList.remove('just-selected'); }, 200);
             });
         });
-    }
-
-    function escapeHtml(str) {
-        if (!str) return '';
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     // ---- Settings Tab Integration ----
@@ -1011,25 +1006,20 @@
         // Check if sidebar tab already exists
         if (document.querySelector('.settings-tab[data-tab="sidebar"]')) return;
 
-        // Insert sidebar tab between Launcher and Appearance
-        var appearanceTab = document.querySelector('.settings-tab[data-tab="appearance"]');
-        if (!appearanceTab) return;
+        // Insert sidebar tab after Keybinds
+        var keybindsTab = document.querySelector('.settings-tab[data-tab="keybinds"]');
+        if (!keybindsTab) return;
 
         var sidebarTab = document.createElement('button');
         sidebarTab.className = 'settings-tab';
         sidebarTab.dataset.tab = 'sidebar';
         sidebarTab.textContent = 'Sidebar';
         sidebarTab.addEventListener('click', function () {
-            var tabs = document.querySelectorAll('.settings-tab');
-            var panels = document.querySelectorAll('.tab-panel');
-            tabs.forEach(function (t) { t.classList.remove('active'); });
-            panels.forEach(function (p) { p.classList.remove('active'); });
-            this.classList.add('active');
-            var panel = document.getElementById('tab-sidebar');
-            if (panel) panel.classList.add('active');
-            renderSettingsTab();
+            if (window.MonolothApp && window.MonolothApp.switchTab) {
+                window.MonolothApp.switchTab('sidebar');
+            }
         });
-        tabsContainer.insertBefore(sidebarTab, appearanceTab);
+        tabsContainer.insertBefore(sidebarTab, keybindsTab.nextSibling);
 
         // Create sidebar tab panel
         var settingsContent = document.querySelector('.settings-content');
@@ -1039,68 +1029,6 @@
         sidebarPanel.id = 'tab-sidebar';
         sidebarPanel.className = 'tab-panel';
         settingsContent.appendChild(sidebarPanel);
-    }
-
-    // ---- Tabs Settings Section (inside dedicated Tabs settings tab) ----
-    function injectTabsSettingsSection() {
-        function tryInject() {
-            var mount = document.getElementById('tabs-settings-mount');
-            if (!mount) return;
-            if (!document.body.contains(mount)) return;
-            if (mount.dataset.tabsInjected === '1') return;
-            mount.dataset.tabsInjected = '1';
-
-            var section = document.createElement('div');
-            section.className = 'settings-section';
-            section.innerHTML = [
-                '<label class="settings-row">',
-                '  <input type="checkbox" id="tabs-enabled" />',
-                '  <span>Show tab bar</span>',
-                '</label>',
-                '<label class="settings-row">',
-                '  <span>Position</span>',
-                '  <select id="tabs-position">',
-                '    <option value="top">Top</option>',
-                '    <option value="bottom">Bottom</option>',
-                '  </select>',
-                '</label>'
-            ].join('');
-
-            mount.appendChild(section);
-
-            var enabled = section.querySelector('#tabs-enabled');
-            var position = section.querySelector('#tabs-position');
-
-            function readAndApply() {
-                if (!window.monolithApi || typeof window.monolithApi.getTabsConfig !== 'function') return;
-                window.monolithApi.getTabsConfig().then(function (cfg) {
-                    if (!cfg) return;
-                    enabled.checked = cfg.enabled !== false;
-                    position.value = cfg.position === 'bottom' ? 'bottom' : 'top';
-                });
-            }
-
-            readAndApply();
-
-            enabled.addEventListener('change', function () {
-                if (!window.monolithApi || typeof window.monolithApi.getTabsConfig !== 'function') return;
-                window.monolithApi.getTabsConfig().then(function (cfg) {
-                    var next = Object.assign({}, cfg, { enabled: enabled.checked });
-                    return window.monolithApi.setTabsConfig(next);
-                }).catch(function (e) { console.error('setTabsConfig failed:', e); });
-            });
-
-            position.addEventListener('change', function () {
-                if (!window.monolithApi || typeof window.monolithApi.getTabsConfig !== 'function') return;
-                window.monolithApi.getTabsConfig().then(function (cfg) {
-                    var next = Object.assign({}, cfg, { position: position.value });
-                    return window.monolithApi.setTabsConfig(next);
-                }).catch(function (e) { console.error('setTabsConfig failed:', e); });
-            });
-        }
-        tryInject();
-        var tabsObserver = new MutationObserver(tryInject);
-        tabsObserver.observe(document.body, { childList: true, subtree: true });
     }
 
     // ---- Window Resize Handler ----
@@ -1120,13 +1048,6 @@
             setupSettingsTab();
         }, 500);
 
-        // Tabs settings section (lives inside its own Tabs tab). The settings dialog
-        // is destroyed/recreated on every open, so we use a MutationObserver.
-        // Also retry on the same delay as setupSettingsTab for the first run.
-        setTimeout(function () {
-            injectTabsSettingsSection();
-        }, 500);
-
         window.addEventListener('resize', function () {
             if (window._sidebarResizeTimer) clearTimeout(window._sidebarResizeTimer);
             window._sidebarResizeTimer = setTimeout(onWindowResize, 100);
@@ -1143,26 +1064,34 @@
         },
         hide: function () {
             sidebar.style.display = 'none';
-            if (terminalView) terminalView.classList.remove('sidebar-visible');
+            sidebar.classList.remove('anim-slide-left', 'anim-slide-right');
+            if (terminalView) {
+                terminalView.classList.remove('sidebar-visible', 'has-sidebar-left', 'has-sidebar-right');
+            }
             document.body.classList.remove('sidebar-visible-left', 'sidebar-visible-right');
         },
         isPanelOpen: function () { return _cmdPanelOpen; },
         isPanelRunning: function () { return _panelRunning; },
+        consumePanelClosing: function () { if (_panelClosing) { _panelClosing = false; return true; } return false; },
         toggleCmdPanel: toggleCmdPanel,
         showCmdPanel: showCmdPanel,
         hideCmdPanel: hideCmdPanel,
         terminateCmdPanel: terminateCmdPanel,
         initCmdPanel: initCmdPanel,
         applySidebar: applySidebar,
+        toggleSidebar: toggleSidebar,
+        renderSettingsTab: renderSettingsTab,
         getPanelShell: function () { return _panelShell; },
         writeToPanel: function (data) { if (panelTerm) { panelTerm.write(data); } },
         restorePanelState: function () {
-            if (_panelRestoreNeeded && typeof Terminal !== 'undefined') {
-                _panelRestoreNeeded = false;
-                var dir = getCurrentDir() || '%USERPROFILE%';
-                showCmdPanel();
-                initCmdPanel(dir);
-            }
+            if (typeof Terminal === 'undefined' || !window.monolithApi) return;
+            window.monolithApi.get_config('cmdPanelOpen').then(function (val) {
+                if (val === true) {
+                    var dir = getCurrentDir() || '%USERPROFILE%';
+                    showCmdPanel();
+                    initCmdPanel(dir);
+                }
+            }).catch(function () {});
         }
     };
 

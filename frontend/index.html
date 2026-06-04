@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=block" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=91">
+    <link rel="stylesheet" href="style.css?v=118">
     <link rel="stylesheet" href="lib/xterm.css?v=12">
     <style>
         .landing-brand, .landing-card, .landing-status-bar {
@@ -35,7 +35,7 @@
         <span class="titlebar-title">Monoloth</span>
       </div>
       <div class="titlebar-section titlebar-right">
-        <button id="tb-menu" class="titlebar-btn" data-tooltip="Menu" aria-label="Open menu">
+        <button id="tb-menu" class="titlebar-btn" data-tooltip="Command Palette" aria-label="Open command palette">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
         <button id="tb-minimize" class="titlebar-btn" data-tooltip="Minimize" aria-label="Minimize window">
@@ -96,9 +96,9 @@
             </div>
 
             <div class="landing-status-bar" id="landing-status-bar">
-                <span class="landing-kbd-text"><kbd>Ctrl</kbd>+<kbd>P</kbd> Commands</span>
+                <span class="landing-kbd-text" id="landing-shortcut-commands"><kbd>Ctrl</kbd>+<kbd>P</kbd> Commands</span>
                 <span class="landing-status-sep">·</span>
-                <span class="landing-kbd-text"><kbd>Ctrl</kbd>+<kbd>,</kbd> Settings</span>
+                <span class="landing-kbd-text" id="landing-shortcut-settings"><kbd>Ctrl</kbd>+<kbd>,</kbd> Settings</span>
             </div>
         </div>
     </div>
@@ -111,90 +111,95 @@
                 <button id="settings-close" class="settings-close" data-tooltip="Close (Esc)" aria-label="Close modal">&times;</button>
             </div>
             <div class="settings-tabs">
-                <button class="settings-tab active" data-tab="launcher">Launcher</button>
+                <button class="settings-tab active" data-tab="startup">Startup</button>
                 <button class="settings-tab" data-tab="appearance">Appearance</button>
-                <button class="settings-tab" data-tab="tabs">Tabs</button>
                 <button class="settings-tab" data-tab="keybinds">Keybinds</button>
                 <button class="settings-tab" data-tab="profiles">Profiles</button>
                 <button class="settings-tab" data-tab="history">History</button>
             </div>
             <div class="settings-content">
-                <!-- Commands Tab -->
-                <div id="tab-launcher" class="tab-panel">
+                <!-- Startup Tab -->
+                <div id="tab-startup" class="tab-panel">
+                    <!-- Startup Command Card -->
                     <div class="settings-card">
                         <div class="card-icon">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                         </div>
                         <div class="card-body">
-                            <h3>Launcher</h3>
-                            <p class="card-desc">Configure which AI agent or command launches when you open a directory.</p>
-
-                            <!-- Startup Command -->
-                            <div class="adv-section">
-                                <h4>Startup Command</h4>
-                                <p class="section-desc">Command that launches when you open a project.</p>
-                                <div class="startup-type-selector" id="startup-type-selector">
-                                    <button class="startup-type-btn active" data-type="preset" data-cmd="opencode">OpenCode</button>
-                                    <button class="startup-type-btn" data-type="preset" data-cmd="claude">Claude</button>
-                                    <button class="startup-type-btn" data-type="preset" data-cmd="qwen">Qwen</button>
-                                    <button class="startup-type-btn" data-type="preset" data-cmd="kimi">Kimi</button>
-                                    <button class="startup-type-btn" data-type="preset" data-cmd="codex">Codex</button>
-                                    <button class="startup-type-btn" data-type="preset" data-cmd="pi">Pi</button>
-                                    <button class="startup-type-btn" data-type="preset" data-cmd="gemini">Gemini</button>
-                                    <button class="startup-type-btn" data-type="custom">Custom</button>
-                                </div>
-                                <div id="startup-custom-row" class="startup-custom-row" style="display:none;">
-                                    <input type="text" id="startup-custom-input" class="settings-input" placeholder="e.g. python main.py, node server.js, bash">
-                                </div>
-                                <div id="startup-status" class="startup-status"></div>
+                            <h3>Startup Command</h3>
+                            <p class="card-desc">Command that launches when you open a project.</p>
+                            <div class="startup-type-selector" id="startup-type-selector">
+                                <button class="startup-type-btn active" data-type="preset" data-cmd="opencode">OpenCode</button>
+                                <button class="startup-type-btn" data-type="preset" data-cmd="claude">Claude</button>
+                                <button class="startup-type-btn" data-type="preset" data-cmd="qwen">Qwen</button>
+                                <button class="startup-type-btn" data-type="preset" data-cmd="kimi">Kimi</button>
+                                <button class="startup-type-btn" data-type="preset" data-cmd="codex">Codex</button>
+                                <button class="startup-type-btn" data-type="preset" data-cmd="pi">Pi</button>
+                                <button class="startup-type-btn" data-type="preset" data-cmd="gemini">Gemini</button>
+                                <button class="startup-type-btn" data-type="custom" data-tooltip="Use a custom shell command instead of a preset">Custom</button>
                             </div>
-
-                            <!-- Secondary Commands -->
-                            <div class="adv-section collapsible-section">
-                                <button class="collapsible-trigger" type="button">
-                                    <svg class="collapsible-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                                    <span>Secondary Commands</span>
-                                </button>
-                                <p class="section-desc">Additional commands to run alongside the startup command.</p>
-                                <div class="collapsible-body" style="display:none">
-                                    <div class="secondary-commands-list" id="secondary-commands-list"></div>
-                                    <button id="add-secondary-cmd-btn" class="btn-secondary add-cmd-btn">
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                                        Add Command
-                                    </button>
-                                    <div id="secondary-cmd-status" class="secondary-cmd-status"></div>
-                                </div>
+                            <div id="startup-custom-row" class="startup-custom-row" style="display:none;">
+                                <input type="text" id="startup-custom-input" class="settings-input" placeholder="e.g. python main.py, node server.js, bash">
                             </div>
+                            <div id="startup-status" class="startup-status"></div>
+                        </div>
+                    </div>
 
-                            <!-- File Picker -->
-                            <div class="adv-section collapsible-section">
-                                <button class="collapsible-trigger" type="button">
-                                    <svg class="collapsible-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                                    <span>File Picker</span>
+                    <!-- Secondary Commands Card -->
+                    <div class="settings-card settings-card--vertical">
+                        <div class="card-icon-row">
+                            <div class="card-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                            </div>
+                            <div class="card-header-text">
+                                <h3>Secondary Commands</h3>
+                                <p class="card-desc">Commands that run before or alongside your startup command.</p>
+                            </div>
+                        </div>
+                        <div class="collapsible-section">
+                            <button class="collapsible-trigger" type="button" data-tooltip="Show or hide secondary commands">
+                                <svg class="collapsible-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                                 <span>Show Commands</span>
+                             </button>
+                            <div class="collapsible-body" style="display:none">
+                                <div class="secondary-commands-list" id="secondary-commands-list"></div>
+                                <button id="add-secondary-cmd-btn" class="btn-secondary add-cmd-btn" data-tooltip="Add a command to run before or alongside startup">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                    Add Command
                                 </button>
-                                <p class="section-desc">Choose which folder picker to use when selecting directories.</p>
-                                <div class="collapsible-body" style="display:none">
-                                    <div class="picker-type-selector" id="picker-type-selector">
-                                        <button class="picker-type-btn active" data-type="custom">Custom Picker</button>
-                                        <button class="picker-type-btn" data-type="native">Windows Native</button>
-                                    </div>
-                                </div>
+                                <div id="secondary-cmd-status" class="secondary-cmd-status"></div>
                             </div>
                         </div>
                     </div>
-                    <div id="advanced-status" class="appearance-status"></div>
+
+                    <!-- Directory Picker Card -->
+                    <div class="settings-card">
+                        <div class="card-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                        </div>
+                        <div class="card-body">
+                            <h3>Directory Picker</h3>
+                            <p class="card-desc">Choose which folder picker dialog to use when selecting project directories.</p>
+                            <div class="picker-type-selector" id="picker-type-selector">
+                                <button class="picker-type-btn active" data-type="custom">Custom Picker</button>
+                                <button class="picker-type-btn" data-type="native">Windows Native</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="file-picker-status" class="appearance-status"></div>
                 </div>
 
                 <!-- Appearance Tab -->
                 <div id="tab-appearance" class="tab-panel">
+                    <!-- Theme Card -->
                     <div class="settings-card">
                         <div class="card-icon">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
                         </div>
                         <div class="card-body">
-                            <h3>Appearance</h3>
-                            <p class="card-desc">Customize the background behind the terminal and UI.</p>
-
+                            <h3>Theme</h3>
+                            <p class="card-desc">Choose between dark, light, or auto-adaptive theme based on your background.</p>
                             <div class="form-group">
                                 <label>Theme</label>
                                 <div class="theme-selector" id="theme-selector">
@@ -212,65 +217,108 @@
                                     </button>
                                 </div>
                             </div>
+                        </div>
+                    </div>
 
-                            <div class="form-group">
-                                <label>Type</label>
-                                <div class="bg-type-selector" id="bg-type-selector">
-                                    <button class="bg-type-btn active" data-type="none">None</button>
-                                    <button class="bg-type-btn" data-type="image">Image</button>
-                                    <button class="bg-type-btn" data-type="color">Color</button>
-                                    <button class="bg-type-btn" data-type="gradient">Gradient</button>
-                                </div>
+                    <!-- Background Card -->
+                    <div class="settings-card settings-card--vertical">
+                        <div class="card-icon-row">
+                            <div class="card-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                             </div>
+                            <div class="card-header-text">
+                                <h3>Background</h3>
+                                <p class="card-desc">Set a wallpaper, solid color, or gradient behind your terminal.</p>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Background Type</label>
+                            <div class="bg-type-selector" id="bg-type-selector">
+                                <button class="bg-type-btn active" data-type="none">None</button>
+                                <button class="bg-type-btn" data-type="image">Image</button>
+                                <button class="bg-type-btn" data-type="color">Color</button>
+                                <button class="bg-type-btn" data-type="gradient">Gradient</button>
+                            </div>
+                        </div>
 
-                            <div id="bg-image-options" class="bg-options-panel" style="display:none;">
-                                <div class="form-group">
-                                    <label>Image File</label>
-                                    <div class="bg-image-row">
-                                        <span id="bg-image-path" class="bg-image-path">None selected</span>
-                                        <button id="bg-pick-btn" class="btn-secondary">Choose</button>
-                                        <button id="bg-clear-btn" class="btn-secondary btn-danger">Clear</button>
+                        <div class="bg-layout">
+                            <div class="bg-controls">
+                                <div id="bg-image-options" class="bg-options-panel" style="display:none;">
+                                    <div class="form-group">
+                                        <label>Image File</label>
+                                        <div class="bg-image-row">
+                                            <span id="bg-image-path" class="bg-image-path">None selected</span>
+                                            <button id="bg-pick-btn" class="btn-secondary" data-tooltip="Choose a background image file">Choose</button>
+                                            <button id="bg-clear-btn" class="btn-secondary btn-danger" data-tooltip="Remove the current background image">Clear</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="bg-color-options" class="bg-options-panel" style="display:none;">
+                                    <div class="form-group">
+                                        <label for="bg-color-picker">Solid Color</label>
+                                        <div class="bg-color-row">
+                                            <input type="color" id="bg-color-picker" class="bg-color-picker" value="#0a0a0a" aria-label="Background solid color">
+                                            <span id="bg-color-hex" class="bg-color-hex">#0a0a0a</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="bg-gradient-options" class="bg-options-panel" style="display:none;">
+                                    <div class="form-group">
+                                        <label>Gradient Presets</label>
+                                        <div class="bg-gradient-presets" id="bg-gradient-presets">
+                                            <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a, #1a1a2e)">Navy Tint</button>
+                                            <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a, #2d1b00)">Warm Tint</button>
+                                            <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a, #1a0a2e)">Violet Tint</button>
+                                            <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a, #001f1f)">Teal Tint</button>
+                                            <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a, #2e1a0a)">Copper Tint</button>
+                                            <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a, #1a1a1a)">Charcoal</button>
+                                            <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%)">Midnight Wave</button>
+                                            <button class="gradient-btn" data-value="radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a0a 100%)">Radial Dark</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="bg-opacity-group" class="form-group bg-dependent" style="display:none;">
+                                    <label for="bg-transparency-slider">Background Opacity: <span id="bg-transparency-value">75%</span></label>
+                                    <input type="range" id="bg-transparency-slider" class="transparency-slider" min="0" max="100" value="75">
+                                    <div class="slider-labels">
+                                        <span>Transparent</span>
+                                        <span>Opaque</span>
+                                    </div>
+                                </div>
+
+                                <div id="bg-layer-group" class="form-group bg-dependent" style="display:none;">
+                                    <label>Background Layer</label>
+                                    <div class="bg-layer-selector" id="bg-layer-selector">
+                                        <button class="bg-layer-btn active" data-layer="behind">Behind Terminal</button>
+                                        <button class="bg-layer-btn" data-layer="overlay">Above Terminal</button>
                                     </div>
                                 </div>
                             </div>
 
-                            <div id="bg-color-options" class="bg-options-panel" style="display:none;">
-                                <div class="form-group">
-                                    <label for="bg-color-picker">Solid Color</label>
-                                    <div class="bg-color-row">
-                                        <input type="color" id="bg-color-picker" class="bg-color-picker" value="#0a0a0a" aria-label="Background solid color">
-                                        <span id="bg-color-hex" class="bg-color-hex">#0a0a0a</span>
+                            <div id="bg-preview-section" class="bg-dependent bg-preview-side" style="display:none;">
+                                <div class="bg-preview">
+                                    <div class="bg-preview-label">Preview</div>
+                                    <div id="bg-preview-thumb" class="bg-preview-thumb">
+                                        <span class="bg-preview-placeholder">No background</span>
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
 
-                            <div id="bg-gradient-options" class="bg-options-panel" style="display:none;">
-                                <div class="form-group">
-                                    <label>Gradient Presets</label>
-                                    <div class="bg-gradient-presets" id="bg-gradient-presets">
-                                        <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a, #1a1a2e)">Navy Tint</button>
-                                        <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a, #2d1b00)">Warm Tint</button>
-                                        <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a, #1a0a2e)">Violet Tint</button>
-                                        <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a, #001f1f)">Teal Tint</button>
-                                        <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a, #2e1a0a)">Copper Tint</button>
-                                        <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a, #1a1a1a)">Charcoal</button>
-                                        <button class="gradient-btn" data-value="linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%)">Midnight Wave</button>
-                                        <button class="gradient-btn" data-value="radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a0a 100%)">Radial Dark</button>
-                                    </div>
-                                </div>
-                            </div>
-
+                    <!-- Window Card -->
+                    <div class="settings-card">
+                        <div class="card-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                        </div>
+                        <div class="card-body">
+                            <h3>Window</h3>
+                            <p class="card-desc">Button styling and window frame options.</p>
                             <div class="form-group">
-                                <label for="bg-transparency-slider">Opacity: <span id="bg-transparency-value">75%</span></label>
-                                <input type="range" id="bg-transparency-slider" class="transparency-slider" min="0" max="100" value="75">
-                                <div class="slider-labels">
-                                    <span>Transparent</span>
-                                    <span>Opaque</span>
-                                </div>
-                            </div>
-
-                            <div class="form-group">
-                                <label>CTA Button Style</label>
+                                <label>UI Style</label>
                                 <div class="cta-style-selector" id="cta-style-selector">
                                     <button class="cta-style-btn active" data-style="blur">Blur</button>
                                     <button class="cta-style-btn" data-style="glass">Glass</button>
@@ -278,47 +326,17 @@
                                     <button class="cta-style-btn" data-style="outline">Outline</button>
                                 </div>
                             </div>
-
                             <div class="form-group">
-                                <label>Window Chrome</label>
+                                <label>Title Bar</label>
                                 <div class="titlebar-toggle" id="titlebar-toggle">
                                     <button class="titlebar-toggle-btn active" data-titlebar="native">Native</button>
                                     <button class="titlebar-toggle-btn" data-titlebar="custom">Custom</button>
                                 </div>
                             </div>
-
-                            <div class="form-group">
-                                <label>Background Layer</label>
-                                <div class="bg-layer-selector" id="bg-layer-selector">
-                                    <button class="bg-layer-btn active" data-layer="behind">Behind TUI</button>
-                                    <button class="bg-layer-btn" data-layer="overlay">Above Terminal</button>
-                                </div>
-                            </div>
-
-                            <div class="bg-preview">
-                                <div class="bg-preview-label">Preview</div>
-                                <div id="bg-preview-thumb" class="bg-preview-thumb">
-                                    <span class="bg-preview-placeholder">No background</span>
-                                </div>
-                            </div>
-
-                            <div id="appearance-status" class="appearance-status"></div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Tabs Tab -->
-                <div id="tab-tabs" class="tab-panel">
-                    <div class="settings-card">
-                        <div class="card-icon">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
-                        </div>
-                        <div class="card-body">
-                            <h3>Tabs</h3>
-                            <p class="card-desc">Configure the tab bar that sits above or below the terminal.</p>
-                            <div id="tabs-settings-mount"></div>
-                        </div>
-                    </div>
+                    <div id="appearance-status" class="appearance-status"></div>
                 </div>
 
                 <!-- Keyboard Tab -->
@@ -351,6 +369,56 @@
                                         <button class="shortcut-reset-btn" data-key="settings" data-tooltip="Reset to default">Reset</button>
                                     </div>
                                 </div>
+                                <div class="shortcut-row" data-key="toggle_sidebar">
+                                    <div class="shortcut-info">
+                                        <span class="shortcut-name">Toggle Sidebar</span>
+                                        <span class="shortcut-description">Show or hide the sidebar</span>
+                                    </div>
+                                    <div class="shortcut-keys">
+                                        <span class="shortcut-current" id="shortcut-toggle_sidebar"></span>
+                                        <button class="shortcut-reset-btn" data-key="toggle_sidebar" data-tooltip="Reset to default">Reset</button>
+                                    </div>
+                                </div>
+                                <div class="shortcut-row" data-key="cmd_panel">
+                                    <div class="shortcut-info">
+                                        <span class="shortcut-name">CMD Panel</span>
+                                        <span class="shortcut-description">Open the command input panel</span>
+                                    </div>
+                                    <div class="shortcut-keys">
+                                        <span class="shortcut-current" id="shortcut-cmd_panel"></span>
+                                        <button class="shortcut-reset-btn" data-key="cmd_panel" data-tooltip="Reset to default">Reset</button>
+                                    </div>
+                                </div>
+                                <div class="shortcut-row" data-key="clear_terminal">
+                                    <div class="shortcut-info">
+                                        <span class="shortcut-name">Clear Terminal</span>
+                                        <span class="shortcut-description">Clear the terminal output</span>
+                                    </div>
+                                    <div class="shortcut-keys">
+                                        <span class="shortcut-current" id="shortcut-clear_terminal"></span>
+                                        <button class="shortcut-reset-btn" data-key="clear_terminal" data-tooltip="Reset to default">Reset</button>
+                                    </div>
+                                </div>
+                                <div class="shortcut-row" data-key="switch_profile">
+                                    <div class="shortcut-info">
+                                        <span class="shortcut-name">Switch Profile</span>
+                                        <span class="shortcut-description">Quick switch between profiles</span>
+                                    </div>
+                                    <div class="shortcut-keys">
+                                        <span class="shortcut-current" id="shortcut-switch_profile"></span>
+                                        <button class="shortcut-reset-btn" data-key="switch_profile" data-tooltip="Reset to default">Reset</button>
+                                    </div>
+                                </div>
+                                <div class="shortcut-row" data-key="back_to_launcher">
+                                    <div class="shortcut-info">
+                                        <span class="shortcut-name">Back to Launcher</span>
+                                        <span class="shortcut-description">Return to the launcher screen</span>
+                                    </div>
+                                    <div class="shortcut-keys">
+                                        <span class="shortcut-current" id="shortcut-back_to_launcher"></span>
+                                        <button class="shortcut-reset-btn" data-key="back_to_launcher" data-tooltip="Reset to default">Reset</button>
+                                    </div>
+                                </div>
                             </div>
                             <div class="shortcut-edit-mode" id="shortcut-edit-mode" style="display:none;">
                                 <div class="shortcut-edit-prompt">
@@ -361,8 +429,8 @@
                                     <span id="shortcut-edit-preview" class="shortcut-edit-preview">Press keys...</span>
                                 </div>
                                 <div class="shortcut-edit-actions">
-                                    <button id="shortcut-edit-save" class="btn-secondary">Save</button>
-                                    <button id="shortcut-edit-cancel" class="btn-secondary">Cancel</button>
+                                    <button id="shortcut-edit-save" class="btn-secondary" data-tooltip="Save this shortcut (Enter)">Save</button>
+                                    <button id="shortcut-edit-cancel" class="btn-secondary" data-tooltip="Cancel (Esc)">Cancel</button>
                                 </div>
                                 <div id="shortcut-edit-error" class="shortcut-edit-error"></div>
                             </div>
@@ -419,12 +487,12 @@
                             </div>
 
                             <div class="history-actions">
-                                <button id="clear-history-btn" class="btn-secondary btn-danger">Clear All History</button>
+                                <button id="clear-history-btn" class="btn-secondary btn-danger" data-tooltip="Permanently delete all session history">Clear All History</button>
                             </div>
 
                             <div class="history-display" id="history-display">
                                 <div class="history-section">
-                                    <h4 class="history-section-title">Most Used Tools</h4>
+                                     <h4 class="history-section-title">Time by Tool</h4>
                                     <div id="history-ranking" class="history-ranking">
                                         <span class="history-empty">No history data yet. Start a session to begin tracking.</span>
                                     </div>
@@ -442,7 +510,7 @@
                 <div class="sf-updater">
                     <span class="sf-label">Version</span>
                     <span id="current-version" class="version-number">--</span>
-                    <button id="check-update-btn" class="btn-primary">Check for Updates</button>
+                    <button id="check-update-btn" class="btn-primary" data-tooltip="Check GitHub for a newer version">Check for Updates</button>
                     <a id="github-link" class="github-link" href="https://github.com/noahain/Monoloth" target="_blank" rel="noopener">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 2.638.973.816-.226 1.696-.34 2.572-.344.876.004 1.756.118 2.572.344 1.63-1.295 2.638-.973 2.638-.973.652 1.652.241 2.873.118 3.176.77.84 1.235 1.91 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
                         GitHub
@@ -451,12 +519,6 @@
                 <div id="updater-status" class="sf-status"></div>
             </div>
         </div>
-    </div>
-
-    <!-- Tab Bar -->
-    <div id="tab-bar" class="tab-bar tab-bar-bottom">
-        <div class="tab-bar-tabs" id="tab-bar-tabs"></div>
-        <div class="tab-new" data-tooltip="New tab (Ctrl+Shift+T)" id="tab-new">+</div>
     </div>
 
     <!-- Terminal View -->
@@ -471,7 +533,10 @@
                 <span>Back to Launcher</span>
             </button>
         </div>
-        <div class="terminal-container" id="terminal-container"></div>
+        <div class="terminal-container" id="terminal-container">
+            <div id="terminal"></div>
+            <div id="terminal-bg-overlay"></div>
+        </div>
         <!-- CMD Panel -->
         <div id="cmd-panel" class="cmd-panel">
             <div class="cmd-panel-resize-handle" id="cmd-panel-resize-handle"></div>
@@ -484,8 +549,6 @@
                 <span>Session ended — Click to restart</span>
             </div>
         </div>
-        <div class="terminal-instances" id="terminal-instances"></div>
-        <div id="simplified-landing" class="simplified-landing" style="display:none"></div>
     </div>
 
     <!-- Profile Switcher Modal -->
@@ -606,9 +669,6 @@
         </div>
     </div>
 
-    <!-- Off-screen pool for inactive tab terminals -->
-    <div id="tab-xterm-pool" style="position:absolute;left:-9999px;top:0;width:800px;height:600px;visibility:hidden;"></div>
-
     <script>
         // Prevent font flash: show landing text only after fonts load
         (function() {
@@ -624,15 +684,13 @@
     <script src="lib/xterm.js?v=12"></script>
     <script src="lib/xterm-addon-fit.js?v=14"></script>
     <script src="lib/xterm-addon-webgl.js?v=13"></script>
-    <script src="tauri-bridge.js?v=23"></script>
+    <script src="tauri-bridge.js?v=20"></script>
 
-    <script src="tooltip.js?v=4"></script>
+    <script src="lib/dom-utils.js?v=1"></script>
+    <script src="tooltip.js?v=6"></script>
 
-    <script src="tabs.js?v=2"></script>
-    <script src="simplified-landing.js?v=1"></script>
+    <script src="app.js?v=70"></script>
 
-    <script src="app.js?v=52"></script>
-
-    <script src="sidebar.js?v=17"></script>
+    <script src="sidebar.js?v=26"></script>
 </body>
 </html>

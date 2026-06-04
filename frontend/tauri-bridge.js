@@ -2,7 +2,7 @@
     'use strict';
 
     var api = {};
-    
+
     function invoke(cmd, args) {
         var tauriInvoke = null;
         if (window.__TAURI__) {
@@ -15,13 +15,7 @@
             }
         }
         if (tauriInvoke) {
-            return Promise.resolve(tauriInvoke(cmd, args || {}))
-                .then(function (result) {
-                    return result;
-                })
-                .catch(function (err) {
-                    throw err;
-                });
+            return Promise.resolve(tauriInvoke(cmd, args || {}));
         }
         return Promise.reject('Tauri invoke not available');
     }
@@ -44,272 +38,167 @@
         return Promise.reject('Tauri listen not available');
     }
 
+    // callApi: invoke a command and wrap the result in { success: true, ...transform(result) }
+    // or { success: false, error: String(err) } on rejection.
+    // The optional `transform` receives the raw result and returns an object of extra fields.
+    function callApi(cmd, args, transform) {
+        return invoke(cmd, args || {}).then(function (result) {
+            var response = { success: true };
+            if (transform) {
+                var extra = transform(result);
+                if (extra && typeof extra === 'object') Object.assign(response, extra);
+            }
+            return response;
+        }).catch(function (err) {
+            return { success: false, error: String(err) };
+        });
+    }
+
+    // callApiValue: invoke a command and return the raw result, with a fallback on error.
+    function callApiValue(cmd, args, fallback) {
+        return invoke(cmd, args || {}).catch(function () { return fallback; });
+    }
+
     // --- Terminal ---
     api.start_terminal = function (sessionId, dir, recordHistory, shell, cols, rows) {
         cols = cols || 80;
         rows = rows || 24;
-        return invoke('start_terminal', { sessionId: sessionId, directory: dir, recordHistory: recordHistory, shell: shell, cols: cols, rows: rows })
-            .then(function (gen) { return { success: true, path: dir, generation: gen }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('start_terminal', {
+            sessionId: sessionId,
+            directory: dir,
+            recordHistory: recordHistory,
+            shell: shell,
+            cols: cols,
+            rows: rows
+        }, function (gen) { return { generation: gen }; });
+    };
+
+    api.start_opencode = function (dir) {
+        return api.start_terminal('main', dir, true, null, null, null);
     };
 
     api.send_input = function (sessionId, data) {
-        return invoke('send_input', { sessionId: sessionId, data: data })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('send_input', { sessionId: sessionId, data: data });
     };
 
     api.resize_terminal = function (sessionId, cols, rows) {
-        return invoke('resize_terminal', { sessionId: sessionId, cols: cols, rows: rows })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('resize_terminal', { sessionId: sessionId, cols: cols, rows: rows });
     };
 
     api.terminate_terminal = function (sessionId) {
-        var sid = sessionId || 'main';
-        return invoke('terminate_terminal', { sessionId: sid })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('terminate_terminal', { sessionId: sessionId || 'main' });
     };
 
-    api.end_history_session = function () {
-        return invoke('end_history_session', {})
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
-    };
-
-    api.record_history_activity = function (activityType, payload) {
-        return invoke('record_history_activity', { activityType: activityType, payload: payload })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
-    };
-
-    api.terminate_tab_sessions = function (tabId) {
-        return invoke('terminate_tab_sessions', { tabId: tabId })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
-    };
-
-    // --- Tabs (Unit E) ---
-    api.getTabsConfig = function () {
-        return invoke('get_tabs_config');
-    };
-
-    api.setTabsConfig = function (cfg) {
-        return invoke('set_tabs_config', { cfg: cfg });
-    };
-
-    api.createTab = function (tabId, profile, dir, cols, rows, view) {
-        return invoke('create_tab', { tabId: tabId, profile: profile, dir: dir, cols: cols, rows: rows, view: view || null });
-    };
-
-    api.closeTab = function (tabId, force) {
-        return invoke('close_tab', { tabId: tabId, force: force || false });
-    };
-
-    api.restoreTabSessions = function () {
-        return invoke('restore_tab_sessions');
-    };
-
-    api.setTabActiveView = function (tabId, view) {
-        return invoke('set_tab_active_view', { tabId: tabId, view: view });
-    };
-
-    api.setActiveTab = function (tabId) {
-        return invoke('set_active_tab', { tabId: tabId });
-    };
-
-    api.setTabPinned = function (tabId, pinned) {
-        return invoke('set_tab_pinned', { tabId: tabId, pinned: pinned });
-    };
-
-    api.setTabColor = function (tabId, color) {
-        return invoke('set_tab_color', { tabId: tabId, color: color });
-    };
-
-    api.setTabProfile = function (tabId, profile, cols, rows) {
-        return invoke('set_tab_profile', { tabId: tabId, profile: profile, cols: cols, rows: rows });
-    };
-
-    api.reorderTabs = function (newOrder) {
-        return invoke('reorder_tabs', { newOrder: newOrder });
-    };
-
-    api.refreshTab = function (tabId, cols, rows) {
-        return invoke('refresh_tab', { tabId: tabId, cols: cols, rows: rows });
-    };
-
-    api.getProfileConfigByName = function (name) {
-        return invoke('get_profile_config_by_name', { name: name });
+    api.terminate = function () {
+        return api.terminate_terminal('main');
     };
 
     // --- System commands ---
     api.open_in_explorer = function (path) {
-        return invoke('open_in_explorer', { path: path })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('open_in_explorer', { path: path });
     };
 
     api.execute_background = function (command, cwd) {
-        return invoke('execute_background', { command: command, cwd: cwd })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('execute_background', { command: command, cwd: cwd });
     };
 
     api.open_external_terminal = function (command, cwd) {
-        return invoke('open_external_terminal', { command: command, cwd: cwd })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('open_external_terminal', { command: command, cwd: cwd });
     };
 
     // --- File Picker ---
     api.list_directory = function (path) {
-        console.log('[Monoloth][Bridge] list_directory called:', path);
-        return invoke('list_directory', { path: path })
-            .then(function (result) {
-                console.log('[Monoloth][Bridge] list_directory returned', result ? result.length : 0, 'entries');
-                return { success: true, entries: result };
-            })
-            .catch(function (err) {
-                console.error('[Monoloth][Bridge] list_directory ERROR:', err);
-                return { success: false, error: String(err) };
-            });
+        return callApi('list_directory', { path: path }, function (entries) { return { entries: entries }; });
     };
 
     api.get_drives = function () {
-        return invoke('get_drives', {})
-            .then(function (drives) { return drives; })
-            .catch(function () { return []; });
+        return callApiValue('get_drives', {}, []);
     };
 
     api.get_path_info = function (path) {
-        console.log('[Monoloth][Bridge] get_path_info called:', path);
-        return invoke('get_path_info', { path: path })
-            .then(function (info) {
-                console.log('[Monoloth][Bridge] get_path_info result:', JSON.stringify(info));
-                return info;
-            })
-            .catch(function (err) {
-                console.error('[Monoloth][Bridge] get_path_info ERROR:', err);
-                return { success: false, exists: false };
-            });
+        return callApiValue('get_path_info', { path: path }, { success: false, exists: false });
     };
 
     // --- File Preview ---
     api.get_file_preview = function (path) {
-        return invoke('get_file_preview', { path: path })
-            .then(function (result) {
-                if (typeof result === 'string') {
-                    // Text preview
-                    return { success: true, text: result };
-                }
-                if (result && result.Image) {
-                    return { success: true, dataUrl: result.Image };
-                }
-                return { success: false, error: 'No preview' };
-            })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return invoke('get_file_preview', { path: path }).then(function (result) {
+            if (typeof result === 'string') {
+                return { success: true, text: result };
+            }
+            if (result && result.Image) {
+                return { success: true, dataUrl: result.Image };
+            }
+            return { success: false, error: 'No preview' };
+        }).catch(function (err) {
+            return { success: false, error: String(err) };
+        });
     };
 
     api.native_pick_directory = function () {
-        console.log('[Monoloth][Bridge] native_pick_directory called');
-        return invoke('pick_directory', {})
-            .then(function (dir) {
-                console.log('[Monoloth][Bridge] native_pick_directory result:', dir);
-                if (dir) {
-                    return { success: true, path: dir };
-                }
-                return { success: false, path: '' };
-            })
-            .catch(function (err) {
-                console.error('[Monoloth][Bridge] native_pick_directory ERROR:', err);
-                return { success: false, path: '', error: String(err) };
-            });
+        return invoke('pick_directory', {}).then(function (dir) {
+            if (dir) return { success: true, path: dir };
+            return { success: false, path: '' };
+        }).catch(function (err) {
+            return { success: false, path: '', error: String(err) };
+        });
     };
 
     api.native_pick_file = function (filter) {
-        console.log('[Monoloth][Bridge] native_pick_file called with filter:', filter);
-        return invoke('pick_file', { filter: filter || null })
-            .then(function (file) {
-                console.log('[Monoloth][Bridge] native_pick_file result:', file);
-                if (file) {
-                    return { success: true, path: file };
-                }
-                return { success: false, path: '' };
-            })
-            .catch(function (err) {
-                console.error('[Monoloth][Bridge] native_pick_file ERROR:', err);
-                return { success: false, path: '', error: String(err) };
-            });
+        return invoke('pick_file', { filter: filter || null }).then(function (file) {
+            if (file) return { success: true, path: file };
+            return { success: false, path: '' };
+        }).catch(function (err) {
+            return { success: false, path: '', error: String(err) };
+        });
     };
 
     // --- Config getters/setters ---
     api.get_shortcuts = function () {
-        return invoke('get_config', { key: 'shortcuts' })
-            .then(function (val) { return { success: true, shortcuts: val || {} }; })
-            .catch(function () { return { success: false, shortcuts: {} }; });
+        return callApi('get_config', { key: 'shortcuts' }, function (val) { return { shortcuts: val || {} }; });
     };
 
     api.save_shortcuts = function (shortcuts) {
-        return invoke('set_config', { key: 'shortcuts', value: shortcuts })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('set_config', { key: 'shortcuts', value: shortcuts });
     };
 
     api.get_last_directory = function () {
-        return invoke('get_config', { key: 'last_directory' })
-            .then(function (val) {
-                if (val) {
-                    return { success: true, path: val };
-                }
-                return { success: false, path: '' };
-            })
-            .catch(function () { return { success: false, path: '' }; });
+        return callApi('get_config', { key: 'last_directory' }, function (val) {
+            return val ? { path: val } : { path: '' };
+        });
     };
 
     api.save_last_directory = function (path) {
-        return invoke('set_config', { key: 'last_directory', value: path })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('set_config', { key: 'last_directory', value: path });
     };
 
     api.get_file_picker_type = function () {
-        return invoke('get_config', { key: 'file_picker_type' })
-            .then(function (val) { return val || 'custom'; })
-            .catch(function () { return 'custom'; });
+        return callApiValue('get_config', { key: 'file_picker_type' }, 'custom');
     };
 
     api.set_file_picker_type = function (type) {
-        return invoke('set_config', { key: 'file_picker_type', value: type })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('set_config', { key: 'file_picker_type', value: type });
     };
 
+    var PICKER_DIR_KEYS = { bg: 'fp_last_dir_bg_image', choose: 'fp_last_dir_choose' };
+    function pickerDirKey(id) { return PICKER_DIR_KEYS[id] || 'fp_last_dir_choose'; }
+
     api.get_picker_last_dir = function (id) {
-        var key = id === 'bg' ? 'fp_last_dir_bg_image' : 'fp_last_dir_choose';
-        console.log('[Monoloth][Bridge] get_picker_last_dir id:', id, '-> config key:', key);
-        return invoke('get_config', { key: key })
-            .then(function (val) { console.log('[Monoloth][Bridge] get_picker_last_dir result:', val); return { success: true, path: val || '' }; })
-            .catch(function (err) { console.error('[Monoloth][Bridge] get_picker_last_dir error:', err); return { success: false, path: '' }; });
+        return callApi('get_config', { key: pickerDirKey(id) }, function (val) { return { path: val || '' }; });
     };
 
     api.set_picker_last_dir = function (id, dir) {
-        var key = id === 'bg' ? 'fp_last_dir_bg_image' : 'fp_last_dir_choose';
-        console.log('[Monoloth][Bridge] set_picker_last_dir id:', id, '-> config key:', key, 'dir:', dir);
-        return invoke('set_config', { key: key, value: dir })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { console.error('[Monoloth][Bridge] set_picker_last_dir error:', err); return { success: false, error: String(err) }; });
+        return callApi('set_config', { key: pickerDirKey(id), value: dir });
     };
 
     api.get_startup_config = function () {
-        return invoke('get_all_config', {})
-            .then(function (all) {
-                return {
-                    command: all.startup_command || 'opencode',
-                    type: all.startup_command_type || 'preset'
-                };
-            })
-            .catch(function () { return { command: 'opencode', type: 'preset' }; });
+        return invoke('get_all_config', {}).then(function (all) {
+            return {
+                command: all.startup_command || 'opencode',
+                type: all.startup_command_type || 'preset'
+            };
+        }).catch(function () {
+            return { command: 'opencode', type: 'preset' };
+        });
     };
 
     api.set_startup_config = function (command, type) {
@@ -322,77 +211,57 @@
     };
 
     api.get_secondary_commands = function () {
-        return invoke('get_config', { key: 'secondary_commands' })
-            .then(function (val) { return { success: true, commands: val || [] }; })
-            .catch(function (err) { return { success: false, commands: [], error: String(err) }; });
+        return callApi('get_config', { key: 'secondary_commands' }, function (val) { return { commands: val || [] }; });
     };
 
     api.set_secondary_commands = function (cmds) {
-        return invoke('set_config', { key: 'secondary_commands', value: cmds })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('set_config', { key: 'secondary_commands', value: cmds });
     };
 
     api.get_background_config = function () {
-        console.log('[Monoloth][Image] get_background_config called');
-        return invoke('get_all_config', {})
-            .then(function (all) {
-                console.log('[Monoloth][Image] get_all_config result, bg_type:', all.bg_type, 'bg_image:', all.bg_image);
-                var config = {
-                    type: all.bg_type || 'none',
-                    image: all.bg_image || '',
-                    imageUrl: '',
-                    dataUrl: '',
-                    color: all.bg_color || '#0a0a0a',
-                    gradient: all.bg_gradient || '',
-                    transparency: all.bg_transparency != null ? all.bg_transparency : 75,
-                    bgLayer: all.bg_layer || 'behind',
-                    themeMode: all.theme_mode || 'dark',
-                    ctaButtonStyle: all.cta_button_style || 'blur'
-                };
-                if (config.type === 'image' && config.image) {
-                    console.log('[Monoloth][Image] Reading image as data URL for path:', config.image);
-                    return invoke('read_image_as_data_url', { imagePath: config.image })
-                        .then(function (dataUrl) {
-                            console.log('[Monoloth][Image] read_image_as_data_url success, length:', dataUrl ? dataUrl.length : 0);
-                            config.dataUrl = dataUrl;
-                            config.imageUrl = dataUrl;
-                            return config;
-                        })
-                        .catch(function (err) {
-                            console.error('[Monoloth][Image] read_image_as_data_url failed:', err);
-                            return config;
-                        });
-                }
-                console.log('[Monoloth][Image] No image to load (type:', config.type, 'image:', config.image, ')');
-                return config;
-            })
-            .catch(function (err) {
-                console.error('[Monoloth][Image] get_all_config failed:', err);
-                return {
-                    type: 'none', image: '', imageUrl: '', dataUrl: '',
-                    color: '#0a0a0a', gradient: '', transparency: 75,
-                    bgLayer: 'behind', themeMode: 'dark', ctaButtonStyle: 'blur'
-                };
-            });
+        return invoke('get_all_config', {}).then(function (all) {
+            var config = {
+                type: all.bg_type || 'none',
+                image: all.bg_image || '',
+                imageUrl: '',
+                dataUrl: '',
+                color: all.bg_color || '#0a0a0a',
+                gradient: all.bg_gradient || '',
+                transparency: all.bg_transparency != null ? all.bg_transparency : 75,
+                bgLayer: all.bg_layer || 'behind',
+                themeMode: all.theme_mode || 'dark',
+                ctaButtonStyle: all.cta_button_style || 'blur'
+            };
+            if (config.type === 'image' && config.image) {
+                return invoke('read_image_as_data_url', { imagePath: config.image })
+                    .then(function (dataUrl) {
+                        config.dataUrl = dataUrl;
+                        config.imageUrl = dataUrl;
+                        return config;
+                    })
+                    .catch(function () { return config; });
+            }
+            return config;
+        }).catch(function () {
+            return {
+                type: 'none', image: '', imageUrl: '', dataUrl: '',
+                color: '#0a0a0a', gradient: '', transparency: 75,
+                bgLayer: 'behind', themeMode: 'dark', ctaButtonStyle: 'blur'
+            };
+        });
     };
 
     api.set_background_config = function (bg_type, image_path, color, gradient, transparency, theme_mode, cta_button_style, bg_layer) {
-        console.log('[Monoloth][Image] set_background_config called with type:', bg_type, 'image:', image_path);
         var promises = [];
         if (bg_type !== undefined) promises.push(invoke('set_config', { key: 'bg_type', value: bg_type }));
         if (image_path !== undefined) {
             var imgPath = image_path || '';
-            console.log('[Monoloth][Image] Saving bg_image config:', imgPath);
             promises.push(invoke('set_config', { key: 'bg_image', value: imgPath }));
             if (bg_type === 'image' && imgPath) {
                 promises.push(
                     invoke('read_image_as_data_url', { imagePath: imgPath })
-                        .then(function (dataUrl) {
-                            console.log('[Monoloth][Image] Pre-loaded data URL, length:', dataUrl ? dataUrl.length : 0);
-                            window._bgDataUrl = dataUrl;
-                        })
-                        .catch(function (err) { console.error('[Monoloth][Image] Pre-load data URL failed:', err); })
+                        .then(function (dataUrl) { window._bgDataUrl = dataUrl; })
+                        .catch(function () {})
                 );
             }
         }
@@ -403,186 +272,160 @@
         if (cta_button_style !== undefined) promises.push(invoke('set_config', { key: 'cta_button_style', value: cta_button_style }));
         if (bg_layer !== undefined) promises.push(invoke('set_config', { key: 'bg_layer', value: bg_layer }));
         return Promise.all(promises)
-            .then(function () { console.log('[Monoloth][Image] set_background_config all promises resolved'); return { success: true }; })
-            .catch(function (err) { console.error('[Monoloth][Image] set_background_config error:', err); return { success: false, error: String(err) }; });
+            .then(function () { return { success: true }; })
+            .catch(function (err) { return { success: false, error: String(err) }; });
     };
 
     api.clear_background_image = function () {
-        return invoke('set_config', { key: 'bg_image', value: '' })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('set_config', { key: 'bg_image', value: '' });
     };
 
     api.get_recent_directories = function () {
-        return invoke('get_config', { key: 'recent_directories' })
-            .then(function (val) { return Array.isArray(val) ? val : []; })
-            .catch(function () { return []; });
+        return callApiValue('get_config', { key: 'recent_directories' }, [])
+            .then(function (val) { return Array.isArray(val) ? val : []; });
     };
 
     api.set_recent_directories = function (dirs) {
-        return invoke('set_config', { key: 'recent_directories', value: dirs })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('set_config', { key: 'recent_directories', value: dirs });
     };
 
     api.analyze_image_brightness = function (imagePath) {
-        return invoke('analyze_image_brightness', { imagePath: imagePath })
-            .then(function (val) { return { success: true, brightness: val }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('analyze_image_brightness', { imagePath: imagePath }, function (val) {
+            return { brightness: val };
+        });
     };
 
     api.get_current_version = function () {
-        return invoke('get_current_version', {})
-            .then(function (version) { return version; })
-            .catch(function () { return '0.1.0'; });
+        return callApiValue('get_current_version', {}, '0.1.0');
     };
 
     api.check_for_updates = function () {
-        return invoke('check_for_updates', {})
-            .then(function (result) {
-                return {
-                    success: true,
-                    has_update: result.hasUpdate || false,
-                    latest_version: result.latest || '0.1.0',
-                    url: result.url || ''
-                };
-            })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return invoke('check_for_updates', {}).then(function (result) {
+            return {
+                success: true,
+                has_update: result.hasUpdate || false,
+                latest_version: result.latest || '0.1.0',
+                url: result.url || ''
+            };
+        }).catch(function (err) { return { success: false, error: String(err) }; });
     };
 
     // --- Profiles ---
     api.get_profiles = function () {
-        return invoke('get_profiles', {})
-            .then(function (res) { return { success: true, profiles: res.profiles, active: res.active }; })
-            .catch(function (err) { return { success: false, profiles: [], active: 'Default', error: String(err) }; });
+        return invoke('get_profiles', {}).then(function (res) {
+            return { success: true, profiles: res.profiles, active: res.active };
+        }).catch(function (err) {
+            return { success: false, profiles: [], active: 'Default', error: String(err) };
+        });
     };
 
     api.create_profile = function (name) {
-        return invoke('create_profile', { name: name })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('create_profile', { name: name });
     };
 
     api.delete_profile = function (name) {
-        return invoke('delete_profile', { name: name })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('delete_profile', { name: name });
     };
 
     api.switch_profile = function (name) {
-        return invoke('switch_profile', { name: name })
-            .then(function () { return { success: true, active: name }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('switch_profile', { name: name }, function () { return { active: name }; });
     };
 
     api.rename_profile = function (oldName, newName) {
-        return invoke('rename_profile', { old: oldName, new: newName })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('rename_profile', { old: oldName, new: newName });
     };
 
     api.get_profile_config = function () {
-        return invoke('get_profile_config', {})
-            .then(function (config) { return { success: true, config: config }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('get_profile_config', {}, function (config) { return { config: config }; });
     };
 
     api.set_profile_setting = function (key, value) {
-        return invoke('set_profile_setting', { key: key, value: value })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('set_profile_setting', { key: key, value: value });
     };
 
-    // --- Generic Config Getter ---
-    api.get_config = function(key) {
-        return invoke('get_config', { key: key })
-            .catch(function(err) { return null; });
-    };
-
-    api.set_config = function(key, value) {
-        return invoke('set_config', { key: key, value: value })
-            .catch(function(err) { return null; });
-    };
-
-    // --- Window Control Commands ---
-    api.toggle_custom_titlebar = function(enable) {
-        return invoke('toggle_custom_titlebar', { enable: enable })
-            .then(function() { return { success: true }; })
-            .catch(function(err) { return { success: false, error: String(err) }; });
-    };
-    api.minimize_window = function() {
-        return invoke('minimize_window', {})
-            .then(function() { return { success: true }; })
-            .catch(function(err) { return { success: false, error: String(err) }; });
-    };
-    api.toggle_maximize_window = function() {
-        return invoke('toggle_maximize_window', {})
-            .then(function(m) { return { success: true, maximized: m }; })
-            .catch(function(err) { return { success: false, maximized: false, error: String(err) }; });
-    };
-    api.close_window = function() {
-        return invoke('close_window', {})
-            .then(function() { return { success: true }; })
-            .catch(function(err) { return { success: false, error: String(err) }; });
-    };
-    api.is_window_maximized = function() {
-        return invoke('is_window_maximized', {})
-            .then(function(m) { return { success: true, maximized: m }; })
-            .catch(function(err) { return { success: false, maximized: false, error: String(err) }; });
-    };
-
-    // --- History ---
-    api.get_history_data = function() {
-        return invoke('get_history_data', {})
-            .then(function(data) {
-                return { success: true, data: data };
-            })
-            .catch(function(err) { return { success: false, error: String(err) }; });
-    };
-
-    api.set_history_enabled = function(enabled) {
-        return invoke('set_history_enabled', { enabled: enabled })
-            .then(function() { return { success: true }; })
-            .catch(function(err) { return { success: false, error: String(err) }; });
-    };
-
-    api.set_history_retention = function(retention) {
-        return invoke('set_history_retention', { retention: retention })
-            .then(function() { return { success: true }; })
-            .catch(function(err) { return { success: false, error: String(err) }; });
-    };
-
-    api.clear_history = function() {
-        return invoke('clear_history', {})
-            .then(function() { return { success: true }; })
-            .catch(function(err) { return { success: false, error: String(err) }; });
-    };
-
+    // --- PTY Output Events ---
     function setupPtyListener() {
         listen('pty-output', function (event) {
-            var payload = event.payload || {};
-            var sessionId = payload.sessionId;
-            if (!sessionId) {
-                console.warn('[MonolothBridge] pty-output event missing sessionId, dropping');
-                return;
-            }
+            var payload = event.payload;
+            var sessionId = payload.sessionId || 'main';
             var generation = payload.generation || 0;
             if (payload.eof) {
                 if (window.writeToTerm) window.writeToTerm('\r\n\x1b[90m[Process exited]\x1b[0m\r\n', true, sessionId, generation);
                 return;
             }
             if (window.writeToTerm) {
-                window.writeToTerm(payload.data || '', false, sessionId, generation);
+                window.writeToTerm(payload.data, false, sessionId, generation);
             }
         }).catch(function (e) {
             console.error('Failed to set up PTY listener:', e);
         });
     }
 
-    window.addEventListener('DOMContentLoaded', function () {
-        setupPtyListener();
-    });
+    // --- Generic Config Getter ---
+    api.get_config = function (key) {
+        return callApiValue('get_config', { key: key }, null);
+    };
+
+    api.set_config = function (key, value) {
+        return callApiValue('set_config', { key: key, value: value }, null);
+    };
+
+    // --- Window Control Commands ---
+    function windowCommand(cmd, transform) {
+        return invoke(cmd, {}).then(function (result) {
+            var response = { success: true };
+            if (transform) Object.assign(response, transform(result));
+            return response;
+        }).catch(function (err) {
+            var response = { success: false, error: String(err) };
+            if (transform) Object.assign(response, transform(null));
+            return response;
+        });
+    }
+
+    api.toggle_custom_titlebar = function (enable) {
+        return callApi('toggle_custom_titlebar', { enable: enable });
+    };
+    api.minimize_window = function () { return callApi('minimize_window', {}); };
+    api.toggle_maximize_window = function () {
+        return windowCommand('toggle_maximize_window', function (m) { return { maximized: !!m }; });
+    };
+    api.close_window = function () { return callApi('close_window', {}); };
+    api.is_window_maximized = function () {
+        return windowCommand('is_window_maximized', function (m) { return { maximized: !!m }; });
+    };
+
+    // --- History ---
+    api.get_history_data = function () {
+        return invoke('get_history_data', {}).then(function (data) {
+            return { success: true, data: data };
+        }).catch(function (err) { return { success: false, error: String(err) }; });
+    };
+
+    api.set_history_enabled = function (enabled) {
+        return callApi('set_history_enabled', { enabled: enabled });
+    };
+
+    api.set_history_retention = function (retention) {
+        return callApi('set_history_retention', { retention: retention });
+    };
+
+    api.clear_history = function () {
+        return callApi('clear_history', {});
+    };
 
     window.monolithApi = api;
     console.log('[MonolothBridge] window.monolithApi set, methods:', Object.keys(api).length);
+
+    if (window.__TAURI__) {
+        setupPtyListener();
+    } else {
+        var checkTauri = setInterval(function () {
+            if (window.__TAURI__) {
+                clearInterval(checkTauri);
+                setupPtyListener();
+            }
+        }, 50);
+        setTimeout(function () { clearInterval(checkTauri); }, 10000);
+    }
 })();

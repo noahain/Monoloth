@@ -188,9 +188,7 @@ function createHarness(backgroundConfig) {
         resize_terminal: () => Promise.resolve(),
         send_input: () => Promise.resolve(),
         terminate_terminal: () => Promise.resolve(),
-        is_window_maximized: () => Promise.resolve({ maximized: false }),
-        getTabsConfig: () => Promise.resolve({ enabled: true, position: 'top', activeTabId: null, tabs: [] }),
-        setTabsConfig: () => Promise.resolve()
+        is_window_maximized: () => Promise.resolve({ maximized: false })
     }, {
         get(target, prop) {
             if (prop in target) return target[prop];
@@ -202,32 +200,7 @@ function createHarness(backgroundConfig) {
         monolithApi,
         addEventListener() {},
         removeEventListener() {},
-        __TAURI__: null,
-        TabManager: {
-            init: async () => {},
-            getActiveXterm: () => null,
-            getActiveTabId: () => null,
-            getActiveView: () => 'primary',
-            getActiveRuntime: () => null,
-            isMainActive: () => false,
-            resolveSessionId: (id, v) => v === 'primary' ? id : null,
-            setupTerminalHandlers: () => {},
-            createTab: async () => ({}),
-            createLandingTab: async () => ({}),
-            transitionTabToTerminal: async () => {},
-            revertTabToLanding: async () => {},
-            closeTab: async () => {},
-            setActiveTab: async () => {},
-            switchTab: async () => {},
-            switchView: async () => {},
-            pinTab: async () => {},
-            setTabColor: async () => {},
-            reorderTabs: async () => {},
-            changeProfile: async () => {},
-            refreshActiveTab: async () => {},
-            refitActive: async () => {},
-            showGlobalLanding: () => {}
-        }
+        __TAURI__: null
     };
     window.window = window;
 
@@ -287,6 +260,9 @@ function createHarness(backgroundConfig) {
     };
     context.globalThis = context;
     vm.createContext(context);
+
+    const domUtilsSource = fs.readFileSync('frontend/lib/dom-utils.js', 'utf8');
+    vm.runInContext(domUtilsSource, context, { filename: 'frontend/lib/dom-utils.js' });
 
     const source = fs.readFileSync('frontend/app.js', 'utf8');
     vm.runInContext(source, context, { filename: 'frontend/app.js' });

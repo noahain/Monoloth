@@ -41,7 +41,12 @@ fn defaults() -> Map<String, Value> {
     m.insert("bg_layer".into(), Value::String("behind".into()));
     m.insert("shortcuts".into(), serde_json::to_value(serde_json::json!({
         "command_palette": "Ctrl+P",
-        "settings": "Ctrl+,"
+        "settings": "Ctrl+,",
+        "toggle_sidebar": "Ctrl+B",
+        "cmd_panel": "Ctrl+J",
+        "clear_terminal": "Ctrl+K",
+        "switch_profile": "Ctrl+Shift+P",
+        "back_to_launcher": "Ctrl+Shift+W"
     })).unwrap());
     m.insert("theme_mode".into(), Value::String("dark".into()));
     m.insert("cta_button_style".into(), Value::String("blur".into()));
@@ -65,8 +70,7 @@ fn global_keys() -> Vec<&'static str> {
         "active_profile", "last_directory", "window_width", "window_height",
         "window_maximized", "fp_last_dir_bg_image", "fp_last_dir_choose",
         "use_custom_titlebar", "window_x", "window_y",
-        "cmdPanelHeight", "panelShell",
-        "tabs_state", "sidebar_config",
+        "cmdPanelHeight", "panelShell", "confirm_dialog_prefs",
     ]
 }
 
@@ -172,19 +176,6 @@ impl AppConfig {
         }
     }
 
-    pub fn get_for_profile(&self, profile_name: &str, key: &str) -> Value {
-        if profile_name == "Default" {
-            let inner = self.inner.lock();
-            return inner.global.get(key).cloned().unwrap_or(Value::Null);
-        }
-        let path = profile_path(profile_name);
-        if !path.exists() {
-            return Value::Null;
-        }
-        let map = load_json(&path);
-        map.get(key).cloned().unwrap_or(Value::Null)
-    }
-
     pub fn set(&self, key: &str, value: Value) {
         let mut inner = self.inner.lock();
         if is_global_key(key) || inner.active_profile == "Default" {
@@ -285,6 +276,20 @@ impl AppConfig {
         }
         Ok(())
     }
+
+    pub fn set_window_position(&self, x: i32, y: i32) {
+        self.set("window_x", Value::Number(x.into()));
+        self.set("window_y", Value::Number(y.into()));
+    }
+
+    pub fn set_window_size(&self, width: u32, height: u32) {
+        self.set("window_width", Value::Number(width.into()));
+        self.set("window_height", Value::Number(height.into()));
+    }
+
+    pub fn set_window_maximized(&self, max: bool) {
+        self.set("window_maximized", Value::Bool(max));
+    }
 }
 
 #[cfg(test)]
@@ -374,48 +379,6 @@ mod tests {
         assert_eq!(config.get("active_profile").as_str().unwrap(), "OldName");
         assert!(config.rename_profile("OldName", "NewName").is_ok());
         assert_eq!(config.get("active_profile").as_str().unwrap(), "NewName");
-        cleanup_test_env(&test_dir);
-    }
-
-    #[test]
-    fn test_tabs_state_is_global() {
-        let (test_dir, _lock) = setup_test_env();
-        let config = AppConfig::new();
-        config.create_profile("OtherProfile");
-        config.switch_profile("OtherProfile");
-        config.set("tabs_state", Value::String("test-value".into()));
-        let global = load_json(&config_path());
-        assert_eq!(global.get("tabs_state").and_then(|v| v.as_str()), Some("test-value"));
-        cleanup_test_env(&test_dir);
-    }
-
-    #[test]
-    fn test_sidebar_config_is_global() {
-        let (test_dir, _lock) = setup_test_env();
-        let config = AppConfig::new();
-        config.create_profile("OtherProfile");
-        config.switch_profile("OtherProfile");
-        config.set("sidebar_config", Value::String("test-value".into()));
-        let global = load_json(&config_path());
-        assert_eq!(global.get("sidebar_config").and_then(|v| v.as_str()), Some("test-value"));
-        cleanup_test_env(&test_dir);
-    }
-
-    #[test]
-    fn test_get_for_profile() {
-        let (test_dir, _lock) = setup_test_env();
-        let config = AppConfig::new();
-        config.create_profile("Work");
-        config.switch_profile("Work");
-        config.set("startup_command", Value::String("claude".into()));
-        let active = config.get_active_profile();
-        assert_eq!(active, "Work");
-        let from_work = config.get_for_profile("Work", "startup_command");
-        assert_eq!(from_work.as_str(), Some("claude"));
-        let from_default = config.get_for_profile("Default", "startup_command");
-        assert_eq!(from_default.as_str(), Some("opencode"));
-        let from_missing = config.get_for_profile("Nonexistent", "startup_command");
-        assert_eq!(from_missing, Value::Null);
         cleanup_test_env(&test_dir);
     }
 }

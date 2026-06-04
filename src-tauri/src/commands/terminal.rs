@@ -1,0 +1,267 @@
+use crate::config::AppConfig;
+use crate::history::HistoryManager;
+use crate::pty::PtyManager;
+use serde_json::Value;
+use std::io::Read;
+use std::path::PathBuf;
+use std::process::Command;
+use tauri::State;
+
+use super::{expand_env_vars, shell_command};
+
+#[tauri::command]
+pub fn start_terminal(
+    pty: State<PtyManager>,
+    config: State<AppConfig>,
+    history: State<HistoryManager>,
+    session_id: String,
+    directory: String,
+    record_history: Option<bool>,
+    shell: Option<String>,
+    cols: u16,
+    rows: u16,
+) -> Result<u64, String> {
+    let record = record_history.unwrap_or(true);
+    let is_panel = session_id == "panel";
+    let directory = expand_env_vars(&directory);
+
+    if is_panel {
+        let shell_exe = match shell.as_deref().unwrap_or("cmd") {
+            "powershell" | "pwsh" => "powershell",
+            _ => "cmd",
+        };
+        let (cmd, args) = resolve_command(shell_exe)?;
+        let args_str: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        let gen = pty.spawn(&session_id, &cmd, &args_str, &directory, cols, rows)?;
+
+        let active_profile = config.get_active_profile();
+        if record {
+            history.session_start(&active_profile, &format!("[Panel] {}", shell_exe), &directory);
+        }
+        return Ok(gen);
+    }
+
+    let startup_cmd = config.get("startup_command").as_str().unwrap_or("opencode").to_string();
+    let cmd_type = config.get("startup_command_type").as_str().unwrap_or("preset").to_string();
+    let active_profile = config.get_active_profile();
+
+    let (cmd, args): (String, Vec<String>) = if cmd_type == "custom" {
+        resolve_custom_command(&startup_cmd)?
+    } else {
+        resolve_command(&startup_cmd)?
+    };
+
+    if record {
+        let display_command = if cmd_type == "custom" { &startup_cmd } else { &startup_cmd };
+        history.session_start(&active_profile, display_command, &directory);
+    }
+
+    if session_id == "main" {
+        let secondary = config.get("secondary_commands");
+        if let Value::Array(cmds) = &secondary {
+            for cmd_val in cmds {
+                if let Some(cmd_obj) = cmd_val.as_object() {
+                    if let Some(enabled) = cmd_obj.get("enabled").and_then(|v| v.as_bool()) {
+                        if enabled {
+                            if let Some(cmd_str) = cmd_obj.get("command").and_then(|v| v.as_str()) {
+                                match cmd_obj.get("mode").and_then(|v| v.as_str()) {
+                                    Some("before") => {
+                                        let _ = run_before_command(cmd_str, &directory);
+                                    }
+                                    Some("parallel") => {
+                                        let _ = run_parallel_command(cmd_str.to_string(), directory.clone());
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let args_str: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    let gen = pty.spawn(&session_id, &cmd, &args_str, &directory, cols, rows)?;
+
+    Ok(gen)
+}
+
+#[tauri::command]
+pub fn send_input(pty: State<PtyManager>, session_id: String, data: String) -> Result<(), String> {
+    pty.write_input(&session_id, &data)
+}
+
+#[tauri::command]
+pub fn resize_terminal(pty: State<PtyManager>, session_id: String, cols: u16, rows: u16) -> Result<(), String> {
+    pty.resize(&session_id, cols, rows)
+}
+
+#[tauri::command]
+pub fn terminate_terminal(pty: State<PtyManager>, history: State<HistoryManager>, session_id: Option<String>) {
+    let sid = session_id.unwrap_or_else(|| "main".to_string());
+    if sid == "main" {
+        history.session_end();
+        // Also terminate the panel session if active, to prevent stale
+        // pty-output events from interfering with a new session.
+        pty.terminate("panel");
+    }
+    pty.terminate(&sid);
+}
+
+#[tauri::command]
+pub fn run_parallel_command(cmd: String, cwd: String) -> Result<bool, String> {
+    let mut command = shell_command(&cmd);
+    command.current_dir(&cwd);
+    if cfg!(windows) {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NEW_CONSOLE: u32 = 0x00000010;
+        command.creation_flags(CREATE_NEW_CONSOLE);
+    }
+    command
+        .spawn()
+        .map_err(|e| format!("Failed to spawn: {}", e))?;
+    Ok(true)
+}
+
+fn resolve_command(preset: &str) -> Result<(String, Vec<String>), String> {
+    match preset {
+        "opencode" => {
+            let path = find_opencode()?;
+            if cfg!(windows) && path.ends_with(".cmd") {
+                Ok(("cmd".into(), vec!["/C".into(), path]))
+            } else {
+                Ok((path, vec![]))
+            }
+        }
+        other => {
+            // On Windows, wrap preset commands in cmd /C since they may be .cmd files
+            if cfg!(windows) {
+                Ok(("cmd".into(), vec!["/C".into(), other.to_string()]))
+            } else {
+                Ok((other.to_string(), vec![]))
+            }
+        }
+    }
+}
+
+fn resolve_custom_command(cmd_line: &str) -> Result<(String, Vec<String>), String> {
+    let parts = shlex::split(cmd_line).ok_or_else(|| "Failed to parse command line".to_string())?;
+    if parts.is_empty() {
+        return Err("Empty command".into());
+    }
+    let exe = &parts[0];
+
+    if cfg!(windows) && (exe.ends_with(".cmd") || exe.ends_with(".bat")) {
+        let args: Vec<String> = std::iter::once("/C".to_string())
+            .chain(std::iter::once(exe.to_string()))
+            .chain(parts[1..].iter().cloned())
+            .collect();
+        return Ok(("cmd".into(), args));
+    }
+
+    Ok((exe.to_string(), parts[1..].to_vec()))
+}
+
+fn find_opencode() -> Result<String, String> {
+    if let Ok(output) = Command::new("where").arg("opencode").output() {
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout);
+            if let Some(first) = path.lines().next() {
+                let trimmed = first.trim().to_string();
+                return Ok(trimmed);
+            }
+        }
+    }
+
+    let npm_paths = [
+        "C:\\Program Files\\nodejs\\opencode.cmd",
+        "C:\\Program Files\\nodejs\\opencode.exe",
+    ];
+    for p in &npm_paths {
+        if PathBuf::from(p).exists() {
+            return Ok(p.to_string());
+        }
+    }
+
+    if let Ok(output) = Command::new("cmd")
+        .args(["/C", "npm", "prefix", "-g"])
+        .output()
+    {
+        if output.status.success() {
+            let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let cmd_path = format!("{}\\opencode.cmd", prefix);
+            if PathBuf::from(&cmd_path).exists() {
+                return Ok(cmd_path);
+            }
+            let exe_path = format!("{}\\opencode.exe", prefix);
+            if PathBuf::from(&exe_path).exists() {
+                return Ok(exe_path);
+            }
+        }
+    }
+
+    if let Ok(output) = Command::new("cmd").args(["/C", "yarn", "global", "bin"]).output() {
+        if output.status.success() {
+            let bin_dir = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let cmd_path = format!("{}\\opencode.cmd", bin_dir);
+            if PathBuf::from(&cmd_path).exists() {
+                return Ok(cmd_path);
+            }
+        }
+    }
+
+    Ok("opencode".into())
+}
+
+fn run_before_command(cmd: &str, cwd: &str) -> Result<String, String> {
+    let mut child = shell_command(cmd)
+        .current_dir(cwd)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn: {}", e))?;
+
+    // Take stdout/stderr before the polling loop to prevent pipe buffer deadlock.
+    // If the child writes more than the OS pipe buffer (4-64KB) and we don't
+    // read, the child blocks on write and try_wait() never returns Some.
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+    let out_thread = std::thread::spawn(move || {
+        let mut buf = String::new();
+        if let Some(mut out) = stdout {
+            let _ = out.read_to_string(&mut buf);
+        }
+        buf
+    });
+    let err_thread = std::thread::spawn(move || {
+        let mut buf = String::new();
+        if let Some(mut err) = stderr {
+            let _ = err.read_to_string(&mut buf);
+        }
+        buf
+    });
+
+    let timeout = std::time::Duration::from_secs(30);
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let stdout = out_thread.join().unwrap_or_default();
+                let stderr = err_thread.join().unwrap_or_default();
+                if !status.success() {
+                    return Err(format!("Command exited with code: {:?}", status.code()));
+                }
+                return Ok(format!("{}{}", stdout, stderr));
+            }
+            Ok(None) => {
+                if start.elapsed() > timeout {
+                    let _ = child.kill();
+                    return Err("Before command timed out after 30s".into());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Err(e) => return Err(format!("Failed to wait: {}", e)),
+        }
+    }
+}
