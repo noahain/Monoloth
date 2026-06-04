@@ -3,7 +3,7 @@ mod config;
 mod history;
 mod pty;
 
-use config::AppConfig;
+use config::{AppConfig, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, WINDOW_MINIMIZED_SENTINEL};
 use history::HistoryManager;
 use pty::PtyManager;
 use tauri::Manager;
@@ -68,7 +68,7 @@ pub fn run() {
             window.on_window_event(move |event| {
                 match event {
                     tauri::WindowEvent::Resized(size) => {
-                        if size.width >= 200 && size.height >= 150 {
+                        if size.width >= MIN_WINDOW_WIDTH as u32 && size.height >= MIN_WINDOW_HEIGHT as u32 {
                             let is_minimized = window_clone.is_minimized().unwrap_or(false);
                             if is_minimized {
                                 return;
@@ -96,7 +96,7 @@ pub fn run() {
                         if window_clone.is_minimized().unwrap_or(false) {
                             return;
                         }
-                        if pos.x <= -32000 || pos.y <= -32000 {
+                        if pos.x <= WINDOW_MINIMIZED_SENTINEL as i32 || pos.y <= WINDOW_MINIMIZED_SENTINEL as i32 {
                             return;
                         }
                         if !window_clone.is_maximized().unwrap_or(false) {

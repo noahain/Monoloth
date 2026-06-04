@@ -5,6 +5,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use parking_lot::Mutex;
 
+pub const MIN_WINDOW_WIDTH: i64 = 200;
+pub const MIN_WINDOW_HEIGHT: i64 = 150;
+pub const MAX_WINDOW_DIMENSION: i64 = 10000;
+pub const MIN_WINDOW_POSITION: i64 = -10000;
+pub const MAX_WINDOW_POSITION: i64 = 100000;
+pub const WINDOW_MINIMIZED_SENTINEL: i64 = -32000;
+
 fn appdata_dir() -> PathBuf {
     std::env::var("APPDATA")
         .map(|s| PathBuf::from(s).join("Monoloth"))
@@ -67,22 +74,22 @@ fn defaults() -> Map<String, Value> {
 
 fn sanitize_window_state(map: &mut Map<String, Value>) {
     if let Some(w) = map.get("window_width").and_then(|v| v.as_i64()) {
-        if w < 200 || w > 10000 {
+        if w < MIN_WINDOW_WIDTH || w > MAX_WINDOW_DIMENSION {
             map.remove("window_width");
         }
     }
     if let Some(h) = map.get("window_height").and_then(|v| v.as_i64()) {
-        if h < 150 || h > 10000 {
+        if h < MIN_WINDOW_HEIGHT || h > MAX_WINDOW_DIMENSION {
             map.remove("window_height");
         }
     }
     if let Some(x) = map.get("window_x").and_then(|v| v.as_i64()) {
-        if x < -10000 || x > 100000 {
+        if x < MIN_WINDOW_POSITION || x > MAX_WINDOW_POSITION {
             map.remove("window_x");
         }
     }
     if let Some(y) = map.get("window_y").and_then(|v| v.as_i64()) {
-        if y < -10000 || y > 100000 {
+        if y < MIN_WINDOW_POSITION || y > MAX_WINDOW_POSITION {
             map.remove("window_y");
         }
     }
