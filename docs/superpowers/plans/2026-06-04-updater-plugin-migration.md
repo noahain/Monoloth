@@ -32,10 +32,10 @@
 - `frontend/tauri-bridge.js` — remove obsolete bridge methods
 - `frontend/style.css` — add `.update-toast` and `.update-pill` styles
 
-**Deleted (1) + reference cleanup (2 files):**
-- `src-tauri/src/commands/updater.rs` — whole file
-- `src-tauri/src/commands/mod.rs` — remove `mod updater;` and `pub use updater::*;`
-- `src-tauri/src/lib.rs` — remove old commands from `invoke_handler`
+**Renamed (1) — keep the `get_current_version` function, drop the rest:**
+- `src-tauri/src/commands/updater.rs` → `src-tauri/src/commands/version.rs` — delete `check_for_updates` and `compare_versions` (lines 8-54). Keep `get_current_version` (lines 1-6, plus the `use serde_json::Value;` import is no longer needed and should also be deleted).
+- `src-tauri/src/commands/mod.rs` — replace `mod updater;` with `mod version;` and `pub use updater::*;` with `pub use version::*;`.
+- `src-tauri/src/lib.rs` — remove **only** `commands::check_for_updates` from `invoke_handler`. **Keep `commands::get_current_version`** — `app.js:536-543`'s `loadUpdaterInfo()` calls `window.monolithApi.get_current_version()` to populate the settings-footer version display. The "what version am I running" concern is orthogonal to the "is there an update" concern. Don't conflate them.
 
 ---
 
@@ -416,14 +416,9 @@ The full setup block becomes:
             )?;
 ```
 
-- [ ] **Step 4.3: Remove the obsolete commands from `invoke_handler`**
+- [ ] **Step 4.3: Remove **only** `commands::check_for_updates` from `invoke_handler`**
 
-In the `tauri::generate_handler![...]` macro (lines 128-167), remove these two lines:
-
-```rust
-            commands::get_current_version,
-            commands::check_for_updates,
-```
+In the `tauri::generate_handler![...]` macro (lines 128-167), remove **only** the `check_for_updates` line. **Keep `commands::get_current_version`** — it's still needed by `app.js:loadUpdaterInfo()` (line 536) to populate the version display in the settings footer.
 
 Current handler (excerpt):
 ```rust
@@ -442,7 +437,7 @@ Current handler (excerpt):
             commands::send_input,
             commands::resize_terminal,
             commands::terminate_terminal,
-            commands::get_current_version,    // REMOVE
+            commands::get_current_version,    // KEEP
             commands::check_for_updates,      // REMOVE
             commands::analyze_image_brightness,
             ...
@@ -465,6 +460,7 @@ After removal:
             commands::send_input,
             commands::resize_terminal,
             commands::terminate_terminal,
+            commands::get_current_version,    // still here
             commands::analyze_image_brightness,
             ...
 ```
@@ -494,52 +490,36 @@ git commit -m "refactor(lib): register updater+process plugins, remove old updat
 - Delete: `src-tauri/src/commands/updater.rs`
 - Modify: `src-tauri/src/commands/mod.rs`
 
-- [ ] **Step 5.1: Delete the file**
+- [ ] **Step 5.1: Rename `updater.rs` to `version.rs` and strip it down**
 
-Run:
+The current file has 54 lines. We keep only `get_current_version` (lines 1-6); we delete `check_for_updates` (lines 8-31) and `compare_versions` (lines 33-54). The unused `use serde_json::Value;` import (line 1) also goes.
+
+First, create the new file with just the kept function:
+
+Create `src-tauri/src/commands/version.rs` with the following content:
+
+```rust
+#[tauri::command]
+pub fn get_current_version() -> String {
+    env!("CARGO_PKG_VERSION").into()
+}
+```
+
+Then delete the old file:
+
 ```bash
 cd F:\Coding Projects\Monolith
 rm src-tauri/src/commands/updater.rs
 ```
 
-(Equivalent on Windows PowerShell: `Remove-Item -LiteralPath 'src-tauri\src\commands\updater.rs'`.)
+(Windows PowerShell: `Remove-Item -LiteralPath 'src-tauri\src\commands\updater.rs'`)
 
-- [ ] **Step 5.2: Remove the module declaration and re-export from `mod.rs`**
+- [ ] **Step 5.2: Update the module declaration in `mod.rs`**
 
 In `src-tauri/src/commands/mod.rs`:
 
-Current line 11: `mod updater;`
-Current line 21: `pub use updater::*;`
-
-Delete both lines entirely. The file becomes:
-
-```rust
-use std::path::PathBuf;
-use std::process::Command;
-
-mod config;
-mod fs;
-mod history;
-mod image;
-mod profile;
-mod shell;
-mod terminal;
-mod window;
-
-pub use config::*;
-pub use fs::*;
-pub use history::*;
-pub use image::*;
-pub use profile::*;
-pub use shell::*;
-pub use terminal::*;
-pub use window::*;
-
-pub(super) fn expand_env_vars(path: &str) -> String {
-    // ... (unchanged)
-}
-// ... rest unchanged
-```
+Current line 11: `mod updater;` → change to: `mod version;`
+Current line 21: `pub use updater::*;` → change to: `pub use version::*;`
 
 - [ ] **Step 5.3: Verify Rust still compiles cleanly**
 
@@ -548,7 +528,7 @@ Run from `src-tauri/`:
 cd F:\Coding Projects\Monolith\src-tauri
 cargo check
 ```
-Expected: clean compile, no errors, no warnings about missing `commands::updater`.
+Expected: clean compile, no errors, no warnings about missing `commands::updater` or unused `serde_json`.
 
 Run the tests:
 ```bash
@@ -560,9 +540,10 @@ Expected: 6 tests pass (the existing config.rs tests). The pre-existing test cou
 
 ```bash
 cd F:\Coding Projects\Monolith
-git add src-tauri/src/commands/mod.rs
+git add src-tauri/src/commands/version.rs
 git add -u src-tauri/src/commands/updater.rs
-git commit -m "refactor(commands): delete hand-rolled updater module, plugin replaces it"
+git add src-tauri/src/commands/mod.rs
+git commit -m "refactor(commands): rename updater.rs to version.rs, keep only get_current_version"
 ```
 
 ---
@@ -1426,28 +1407,84 @@ git commit -m "style: add .update-toast and .update-pill with theme + custom-bg 
 
 - [ ] **Step 11.1: Find the current script tag block**
 
-Locate the `<script>` tags in `frontend/index.html`. They currently load (in order): `dom-utils.js`, `tauri-bridge.js`, `app.js`, `sidebar.js`, `tooltip.js`, plus xterm-related scripts.
-
-The new order should be: `dom-utils.js` → `tauri-bridge.js` → `plugin-updater.js` → `plugin-process.js` → `updater-toast.js` → `app.js` → `sidebar.js` → `tooltip.js`.
-
-- [ ] **Step 11.2: Add the new script tags and bump `?v=N`**
-
-Find each existing script tag in `index.html` and:
-
-1. Bump the `?v=N` value on `dom-utils.js`, `tauri-bridge.js`, `app.js`, `sidebar.js`, `tooltip.js` to the next version (check current values first).
-2. Add the three new script tags in the correct order, each with `?v=1`.
-
-Example (illustrative — actual tags may differ):
+The current `<script>` tags in `frontend/index.html` (lines 684-694) are:
 
 ```html
-<script src="lib/dom-utils.js?v=2"></script>
-<script src="tauri-bridge.js?v=21"></script>
+<script src="lib/xterm.js?v=12"></script>
+<script src="lib/xterm-addon-fit.js?v=14"></script>
+<script src="lib/xterm-addon-webgl.js?v=13"></script>
+<script src="tauri-bridge.js?v=20"></script>
+
+<script src="lib/dom-utils.js?v=1"></script>
+<script src="tooltip.js?v=6"></script>
+
+<script src="app.js?v=70"></script>
+
+<script src="sidebar.js?v=26"></script>
+```
+
+**The actual order is `tauri-bridge.js` BEFORE `dom-utils.js`** — `monolithApi` is set up by the bridge, but `app.js` / `sidebar.js` use both `monolithApi` and `MonolothUI` (set by `dom-utils.js`). The blank lines in `index.html` visually group them but the load order is bridge → dom-utils → tooltip → app → sidebar.
+
+The new order must preserve this:
+
+```html
+<script src="lib/xterm.js?v=N"></script>
+<script src="lib/xterm-addon-fit.js?v=N"></script>
+<script src="lib/xterm-addon-webgl.js?v=N"></script>
+<script src="tauri-bridge.js?v=N"></script>
+
+<script src="lib/dom-utils.js?v=N"></script>
 <script src="lib/plugin-updater.js?v=1"></script>
 <script src="lib/plugin-process.js?v=1"></script>
 <script src="lib/updater-toast.js?v=1"></script>
-<script src="app.js?v=64"></script>
+<script src="tooltip.js?v=N"></script>
+
+<script src="app.js?v=N"></script>
+
+<script src="sidebar.js?v=N"></script>
+```
+
+Why this order:
+- xterm: unchanged
+- `tauri-bridge.js`: first (sets `window.monolithApi`)
+- `dom-utils.js`: before any code that uses `MonolothUI`
+- `plugin-updater.js` + `plugin-process.js`: before any code that uses these globals
+- `updater-toast.js`: after the plugin JS (it consumes the globals), before `app.js` (which calls `MonolothUpdater.init()`)
+- `tooltip.js`: uses `MonolothUI` indirectly — must come after `dom-utils.js`
+- `app.js`: after everything it depends on
+- `sidebar.js`: after `app.js` (the existing order — sidebar likely depends on app.js init)
+
+- [ ] **Step 11.2: Bump `?v=N` on existing files and add the three new tags**
+
+For each existing tag, increment `?v=N`:
+- `lib/xterm.js?v=12` → `?v=13` (or skip — only bump files that actually changed in this PR; but bump to be safe since WebView2 caches aggressively)
+- `lib/xterm-addon-fit.js?v=14` → `?v=15`
+- `lib/xterm-addon-webgl.js?v=13` → `?v=14`
+- `tauri-bridge.js?v=20` → `?v=21`
+- `lib/dom-utils.js?v=1` → `?v=2`
+- `tooltip.js?v=6` → `?v=7`
+- `app.js?v=70` → `?v=71`
+- `sidebar.js?v=26` → `?v=27`
+
+Add the three new tags in their correct positions (between `dom-utils.js` and `tooltip.js`, in the order: plugin-updater, plugin-process, updater-toast).
+
+The final block should be (with bumped values):
+
+```html
+<script src="lib/xterm.js?v=13"></script>
+<script src="lib/xterm-addon-fit.js?v=15"></script>
+<script src="lib/xterm-addon-webgl.js?v=14"></script>
+<script src="tauri-bridge.js?v=21"></script>
+
+<script src="lib/dom-utils.js?v=2"></script>
+<script src="lib/plugin-updater.js?v=1"></script>
+<script src="lib/plugin-process.js?v=1"></script>
+<script src="lib/updater-toast.js?v=1"></script>
+<script src="tooltip.js?v=7"></script>
+
+<script src="app.js?v=71"></script>
+
 <script src="sidebar.js?v=27"></script>
-<script src="tooltip.js?v=2"></script>
 ```
 
 - [ ] **Step 11.3: Verify index.html is still valid**
@@ -1474,15 +1511,11 @@ git commit -m "build(frontend): load vendored plugin JS + updater-toast module"
 **Files:**
 - Modify: `frontend/tauri-bridge.js`
 
-- [ ] **Step 12.1: Locate the two methods to remove**
+- [ ] **Step 12.1: Locate the method to remove**
 
-In `frontend/tauri-bridge.js`, the two methods to remove are at lines 298-311:
+In `frontend/tauri-bridge.js`, the method to remove is `api.check_for_updates` (lines 302-311). **Keep `api.get_current_version`** — it's still used by `app.js:loadUpdaterInfo()` (line 538) to populate the version display in the settings footer.
 
 ```js
-    api.get_current_version = function () {
-        return callApiValue('get_current_version', {}, '0.1.0');
-    };
-
     api.check_for_updates = function () {
         return invoke('check_for_updates', {}).then(function (result) {
             return {
@@ -1495,27 +1528,29 @@ In `frontend/tauri-bridge.js`, the two methods to remove are at lines 298-311:
     };
 ```
 
-- [ ] **Step 12.2: Delete the two methods**
+- [ ] **Step 12.2: Delete `api.check_for_updates` only**
 
-Delete the entire block of those two methods (and the blank line between them).
+Delete just that one method. Leave `api.get_current_version` in place (lines 298-300).
 
-- [ ] **Step 12.3: Verify no callers remain**
+- [ ] **Step 12.3: Verify no callers of `check_for_updates` remain**
 
-The old `app.js` may have references. Search the frontend for any remaining calls:
+Search the frontend for any remaining callers of the deleted method:
 
 ```bash
 cd F:\Coding Projects\Monolith
-grep -rn "get_current_version\|check_for_updates" frontend/
+grep -rn "check_for_updates" frontend/
 ```
 
-Expected: no matches (or only matches inside `node_modules` and the deleted file, which is gone). If `app.js` still references these, Task 13 will fix it; for now, just ensure the bridge itself is clean.
+Expected: no matches. `app.js` should not reference it — Task 13 rewires the footer button to `MonolothUpdater.checkFromFooter()` instead.
+
+`get_current_version` IS still expected to be present in both `tauri-bridge.js` and the Rust side (kept intentionally for `loadUpdaterInfo`).
 
 - [ ] **Step 12.4: Commit**
 
 ```bash
 cd F:\Coding Projects\Monolith
 git add frontend/tauri-bridge.js
-git commit -m "refactor(bridge): drop get_current_version + check_for_updates wrappers"
+git commit -m "refactor(bridge): drop check_for_updates wrapper, keep get_current_version"
 ```
 
 ---
@@ -1571,21 +1606,69 @@ Replace the entire `if (checkUpdateBtn) { ... }` block with:
     }
 ```
 
-- [ ] **Step 13.3: Find the app init function**
+- [ ] **Step 13.3: Find the bootstrap section**
 
-Locate the existing `init()` or main bootstrap function in `app.js`. The spec says the auto-check should be called from init.
-
-- [ ] **Step 13.4: Add the auto-check call to init**
-
-At the end of the existing `init()` function (or wherever the existing terminal init is called from), add:
+There is no single `init()` function in `app.js`. The bootstrap calls live at the bottom of the IIFE (after line 3903 — after the `window.MonolothApp` export). The current pattern (lines 3904-3915) is:
 
 ```js
+    // Initialize sidebar on first terminal show
+    if (typeof window.SidebarManager !== 'undefined') {
+        window.SidebarManager.init();
+    }
+
+    // Scan for [data-tooltip] elements after all DOM is ready
+    if (window.MonolothTooltip) {
+        window.MonolothTooltip.scan(document.body);
+    }
+
+    // Load confirm dialog "don't ask again" prefs
+    loadConfirmPrefs();
+
+})();
+```
+
+- [ ] **Step 13.4: Add the updater init call alongside the other bootstrap calls**
+
+Insert a new guarded call immediately after the `SidebarManager.init()` block and before the `MonolothTooltip.scan()` call (so the updater auto-check runs early in the bootstrap, not blocked by tooltip scanning):
+
+```js
+    // Initialize sidebar on first terminal show
+    if (typeof window.SidebarManager !== 'undefined') {
+        window.SidebarManager.init();
+    }
+
+    // Auto-check for updates (silent on failure, see MonolothUpdater.init)
     if (window.MonolothUpdater && typeof window.MonolothUpdater.init === 'function') {
         window.MonolothUpdater.init();
     }
+
+    // Scan for [data-tooltip] elements after all DOM is ready
+    if (window.MonolothTooltip) {
+        window.MonolothTooltip.scan(document.body);
+    }
 ```
 
-(Guard: only call if the module loaded successfully.)
+The exact final block (replacing lines 3904-3915):
+
+```js
+    // Initialize sidebar on first terminal show
+    if (typeof window.SidebarManager !== 'undefined') {
+        window.SidebarManager.init();
+    }
+
+    // Auto-check for updates (silent on failure, see MonolothUpdater.init)
+    if (window.MonolothUpdater && typeof window.MonolothUpdater.init === 'function') {
+        window.MonolothUpdater.init();
+    }
+
+    // Scan for [data-tooltip] elements after all DOM is ready
+    if (window.MonolothTooltip) {
+        window.MonolothTooltip.scan(document.body);
+    }
+
+    // Load confirm dialog "don't ask again" prefs
+    loadConfirmPrefs();
+```
 
 - [ ] **Step 13.5: Verify app.js is still valid**
 
@@ -1719,7 +1802,7 @@ jobs:
         shell: pwsh
 
       - name: Build, sign, and release
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -1731,6 +1814,8 @@ jobs:
           releaseDraft: false
           prerelease: false
 ```
+
+**Note on `@v0.6.2`:** Latest stable as of 2026-06-04. **Pin to a specific version, not `@v0` or `@latest`** — `@v0` is a mutable tag that points to the latest 0.x release, and breaking changes are possible in 0.x. To upgrade later, bump this string and test. (Major-version pinning is conventional for stable 1.x+ packages, but `tauri-action` is still pre-1.0.)
 
 - [ ] **Step 15.3: Verify the YAML is valid**
 
