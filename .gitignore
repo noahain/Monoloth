@@ -35,3 +35,7 @@ Thumbs.db
 
 # AGENTS.md is volatile / regenerated often; not source-controlled
 /AGENTS.md
+
+# Local-only directories (not source-controlled)
+/configs/
+/docs/
