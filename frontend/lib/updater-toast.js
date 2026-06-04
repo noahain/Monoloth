@@ -53,10 +53,253 @@
         armStallTimer();
     }
 
+    function ensureContainer() {
+        var c = document.getElementById('monolith-updater-container');
+        if (!c) {
+            c = document.createElement('div');
+            c.id = 'monolith-updater-container';
+            document.body.appendChild(c);
+        }
+        return c;
+    }
+
+    function buildToastHtml(update) {
+        return ''
+            + '<div class="update-toast" data-version="' + (update.version || '') + '">'
+            +   '<div class="update-toast-header">'
+            +     '<span class="update-toast-title">Update available</span>'
+            +     '<button class="update-toast-close" aria-label="Dismiss">&times;</button>'
+            +   '</div>'
+            +   '<div class="update-toast-body">'
+            +     '<p>Version <strong>v' + (update.version || '?') + '</strong> is ready to install.</p>'
+            +     '<div class="update-toast-actions">'
+            +       '<button class="update-toast-update btn-primary">Update</button>'
+            +     '</div>'
+            +     '<div class="update-toast-progress" hidden>'
+            +       '<div class="update-toast-progress-bar"><div class="update-toast-progress-fill"></div></div>'
+            +       '<span class="update-toast-progress-text">Downloading&hellip;</span>'
+            +     '</div>'
+            +     '<div class="update-toast-error" hidden></div>'
+            +   '</div>'
+            + '</div>';
+    }
+
+    function buildPillHtml(update) {
+        return ''
+            + '<div class="update-pill" data-version="' + (update.version || '') + '">'
+            +   '<span class="update-pill-label">Updating v' + (update.version || '?') + '&hellip;</span>'
+            +   '<button class="update-pill-restart btn-primary" hidden>Restart</button>'
+            +   '<button class="update-pill-open" aria-label="Open">&hellip;</button>'
+            +   '<button class="update-pill-close" aria-label="Dismiss">&times;</button>'
+            + '</div>';
+    }
+
+    function setProgress(el, done, total) {
+        var pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+        var fill = el.querySelector('.update-toast-progress-fill');
+        var text = el.querySelector('.update-toast-progress-text');
+        if (fill) fill.style.width = pct + '%';
+        if (text) text.textContent = 'Downloading… ' + pct + '%';
+    }
+
+    function showErrorInToast(el, errorClass) {
+        var errorEl = el.querySelector('.update-toast-error');
+        var progressEl = el.querySelector('.update-toast-progress');
+        var actionsEl = el.querySelector('.update-toast-actions');
+        if (progressEl) progressEl.hidden = true;
+        if (actionsEl) actionsEl.hidden = true;
+        if (!errorEl) return;
+        var copy = {
+            SIGNATURE:  { title: 'Update verification failed', body: 'The downloaded file may have been tampered with. Please report this at github.com/noahain/Monoloth/issues. Do not install.' },
+            RATE_LIMIT: { title: 'GitHub rate limit hit',       body: 'Try again in about an hour.' },
+            NOT_FOUND:  { title: 'Release not found',            body: 'The repo may have moved or this version is no longer available.' },
+            NETWORK:    { title: "Couldn't reach GitHub",        body: 'Check your connection and retry.' },
+            PERMISSION: { title: "Couldn't install update",      body: 'Try closing other Monoloth instances, or run as administrator.' },
+            IN_USE:     { title: 'Update file in use',           body: 'Close all running Monoloth instances and click Retry.' },
+            UNKNOWN:    { title: 'Update failed',                body: 'See console for details. Click Retry to try again.' }
+        }[errorClass] || { title: 'Update failed', body: 'Click Retry to try again.' };
+        errorEl.innerHTML = ''
+            + '<p class="update-toast-error-title"><strong>' + copy.title + '</strong></p>'
+            + '<p>' + copy.body + '</p>'
+            + '<div class="update-toast-actions">'
+            +   '<button class="update-toast-retry btn-primary">Retry</button>'
+            +   '<button class="update-toast-close">Dismiss</button>'
+            + '</div>';
+        errorEl.hidden = false;
+    }
+
+    function removeMounted() {
+        clearStallTimer();
+        if (state.abortController) {
+            try { state.abortController.abort(); } catch (_) {}
+            state.abortController = null;
+        }
+        if (state.mounted && state.mounted.parentNode) {
+            state.mounted.parentNode.removeChild(state.mounted);
+        }
+        state.mounted = null;
+    }
+
+    function mountToast(update) {
+        if (state.mounted && state.mounted.classList.contains('update-toast')
+            && state.mounted.getAttribute('data-version') === update.version) {
+            return state.mounted;
+        }
+        removeMounted();
+        var c = ensureContainer();
+        c.insertAdjacentHTML('beforeend', buildToastHtml(update));
+        var el = c.querySelector('.update-toast');
+        state.mounted = el;
+        state.current = 'AVAILABLE';
+        state.update = update;
+        wireToastEvents(el);
+        return el;
+    }
+
+    function mountPill(update) {
+        if (state.mounted && state.mounted.classList.contains('update-pill')
+            && state.mounted.getAttribute('data-version') === update.version) {
+            return state.mounted;
+        }
+        removeMounted();
+        var c = ensureContainer();
+        c.insertAdjacentHTML('beforeend', buildPillHtml(update));
+        var el = c.querySelector('.update-pill');
+        state.mounted = el;
+        state.current = 'MINI_PILL';
+        state.update = update;
+        wirePillEvents(el);
+        return el;
+    }
+
+    function wireToastEvents(el) {
+        var closeBtn = el.querySelector('.update-toast-close');
+        var updateBtn = el.querySelector('.update-toast-update');
+        var retryBtn = el.querySelector('.update-toast-retry');
+        if (closeBtn) closeBtn.addEventListener('click', removeMounted);
+        if (updateBtn) updateBtn.addEventListener('click', function () { startDownload(); });
+        if (retryBtn) retryBtn.addEventListener('click', function () { startDownload(); });
+    }
+
+    function wirePillEvents(el) {
+        var closeBtn = el.querySelector('.update-pill-close');
+        var openBtn = el.querySelector('.update-pill-open');
+        var restartBtn = el.querySelector('.update-pill-restart');
+        if (closeBtn) closeBtn.addEventListener('click', removeMounted);
+        if (openBtn) openBtn.addEventListener('click', function () { mountToast(state.update); });
+        if (restartBtn) restartBtn.addEventListener('click', function () { relaunch(); });
+    }
+
+    function setState(newState, data) {
+        state.current = newState;
+        if (!state.mounted) return;
+        if (newState === 'DOWNLOADING' || newState === 'MINI_PILL') {
+            state.downloaded = (data && data.done) || state.downloaded;
+            state.total = (data && data.total) || state.total;
+            if (state.mounted.classList.contains('update-toast')) {
+                var progress = state.mounted.querySelector('.update-toast-progress');
+                var actions = state.mounted.querySelector('.update-toast-actions');
+                if (progress) progress.hidden = false;
+                if (actions) actions.hidden = true;
+                setProgress(state.mounted, state.downloaded, state.total);
+            } else if (state.mounted.classList.contains('update-pill')) {
+                var label = state.mounted.querySelector('.update-pill-label');
+                if (label) label.textContent = 'Downloading v' + (state.update.version || '?') + '… ' + Math.round((state.downloaded / Math.max(1, state.total)) * 100) + '%';
+            }
+        } else if (newState === 'READY') {
+            clearStallTimer();
+            if (state.mounted.classList.contains('update-toast')) {
+                var progress = state.mounted.querySelector('.update-toast-progress');
+                var actions = state.mounted.querySelector('.update-toast-actions');
+                if (progress) progress.hidden = true;
+                if (actions) {
+                    actions.innerHTML = '<button class="update-toast-restart btn-primary">Restart now</button>';
+                    actions.hidden = false;
+                    var restartBtn = state.mounted.querySelector('.update-toast-restart');
+                    if (restartBtn) restartBtn.addEventListener('click', function () { relaunch(); });
+                }
+            } else if (state.mounted.classList.contains('update-pill')) {
+                var pillLabel = state.mounted.querySelector('.update-pill-label');
+                var pillRestart = state.mounted.querySelector('.update-pill-restart');
+                if (pillLabel) pillLabel.textContent = 'v' + (state.update.version || '?') + ' ready';
+                if (pillRestart) pillRestart.hidden = false;
+            }
+        } else if (newState === 'ERROR') {
+            clearStallTimer();
+            showErrorInToast(state.mounted, (data && data.errorClass) || 'UNKNOWN');
+        }
+    }
+
+    function relaunch() {
+        if (PROCESS && typeof PROCESS.relaunch === 'function') {
+            PROCESS.relaunch();
+        } else if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {
+            window.__TAURI__.core.invoke('plugin:process|restart');
+        } else {
+            console.error('Cannot relaunch: tauri-plugin-process not available');
+        }
+    }
+
+    function startDownload() {
+        if (!state.update) return;
+        state.abortController = new AbortController();
+        state.downloaded = 0;
+        state.total = 0;
+        setState('DOWNLOADING', { done: 0, total: 0 });
+        touchProgress();
+        state.update.downloadAndInstall(function (event) {
+            if (event.event === 'Started') {
+                setState('DOWNLOADING', { done: 0, total: event.data.contentLength || 0 });
+                touchProgress();
+            } else if (event.event === 'Progress') {
+                setState('DOWNLOADING', { done: state.downloaded + (event.data.chunkLength || 0), total: state.total });
+                touchProgress();
+            } else if (event.event === 'Finished') {
+                setState('READY');
+            }
+        });
+    }
+
     window.MonolothUpdater = {
         _state: state,
         _classifyError: classifyError,
         _touchProgress: touchProgress,
-        _clearStallTimer: clearStallTimer
+        _clearStallTimer: clearStallTimer,
+        mountToast: mountToast,
+        mountPill: mountPill,
+        removeMounted: removeMounted,
+        setState: setState,
+        startDownload: startDownload,
+        relaunch: relaunch,
+        handleStall: function () {
+            clearStallTimer();
+            if (state.mounted) {
+                var copy = { title: 'Download seems stuck', body: 'Click Cancel to stop, or Retry to try again.' };
+                if (state.mounted.classList.contains('update-toast')) {
+                    var errorEl = state.mounted.querySelector('.update-toast-error');
+                    var progressEl = state.mounted.querySelector('.update-toast-progress');
+                    var actionsEl = state.mounted.querySelector('.update-toast-actions');
+                    if (progressEl) progressEl.hidden = true;
+                    if (actionsEl) actionsEl.hidden = true;
+                    if (errorEl) {
+                        errorEl.innerHTML = ''
+                            + '<p class="update-toast-error-title"><strong>' + copy.title + '</strong></p>'
+                            + '<p>' + copy.body + '</p>'
+                            + '<div class="update-toast-actions">'
+                            +   '<button class="update-toast-retry btn-primary">Retry</button>'
+                            +   '<button class="update-toast-cancel">Cancel</button>'
+                            + '</div>';
+                        errorEl.hidden = false;
+                        var retryBtn = state.mounted.querySelector('.update-toast-retry');
+                        var cancelBtn = state.mounted.querySelector('.update-toast-cancel');
+                        if (retryBtn) retryBtn.addEventListener('click', function () { startDownload(); });
+                        if (cancelBtn) cancelBtn.addEventListener('click', function () {
+                            if (state.abortController) { try { state.abortController.abort(); } catch (_) {} }
+                            removeMounted();
+                        });
+                    }
+                }
+            }
+        }
     };
 })();
