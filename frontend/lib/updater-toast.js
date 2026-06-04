@@ -260,6 +260,52 @@
         });
     }
 
+    function init() {
+        try {
+            UPDATER.check().then(function (update) {
+                if (update && update.available) {
+                    mountToast(update);
+                }
+            }).catch(function (e) {
+                console.warn('Auto-update check failed:', e && e.message);
+            });
+        } catch (e) {
+            console.warn('Auto-update check threw:', e && e.message);
+        }
+    }
+
+    function checkFromFooter() {
+        var btn = document.getElementById('check-update-btn');
+        var status = document.getElementById('updater-status');
+        if (btn) btn.disabled = true;
+        if (status && window.MonolothUI && window.MonolothUI.showStatus) {
+            window.MonolothUI.showStatus('updater-status', 'Checking…', false);
+        } else if (status) {
+            status.textContent = 'Checking…';
+        }
+        UPDATER.check().then(function (update) {
+            if (btn) btn.disabled = false;
+            if (update && update.available) {
+                mountToast(update);
+                if (status && window.MonolothUI && window.MonolothUI.showStatus) {
+                    window.MonolothUI.showStatus('updater-status', 'Update available: v' + (update.version || '?'), false);
+                }
+            } else {
+                if (status && window.MonolothUI && window.MonolothUI.showStatus) {
+                    window.MonolothUI.showStatus('updater-status', 'You are on the latest version.', false);
+                }
+            }
+        }).catch(function (e) {
+            if (btn) btn.disabled = false;
+            var msg = (e && e.message) || String(e);
+            if (status && window.MonolothUI && window.MonolothUI.showStatus) {
+                window.MonolothUI.showStatus('updater-status', msg, true);
+            } else if (status) {
+                status.textContent = msg;
+            }
+        });
+    }
+
     window.MonolothUpdater = {
         _state: state,
         _classifyError: classifyError,
@@ -271,6 +317,8 @@
         setState: setState,
         startDownload: startDownload,
         relaunch: relaunch,
+        init: init,
+        checkFromFooter: checkFromFooter,
         handleStall: function () {
             clearStallTimer();
             if (state.mounted) {
