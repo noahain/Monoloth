@@ -48,7 +48,7 @@
     "updater": {
       "pubkey": "REPLACE_ME",
       "endpoints": [
-        "https://github.com/noahain/Monolith/releases/latest/download/latest.json"
+        "https://github.com/noahain/Monoloth/releases/latest/download/latest.json"
       ]
     }
   }
