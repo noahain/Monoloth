@@ -1,6 +1,12 @@
 <div align="center">
   <img src="assets/icon.png" width="144" height="144" alt="Monoloth" />
-  <h1>Monoloth</h1>
+<div id="toc">
+  <ul style="list-style: none">
+    <summary>
+      <h1>Monoloth</h1>
+    </summary>
+  </ul>
+</div>
 
   <p><strong>Agent-agnostic desktop shell for CLI coding tools</strong></p>
 
@@ -13,9 +19,12 @@
   </p>
 </div>
 
+ㅤ
 [![Monoloth Main Window](assets/screenshots/main.png)](https://github.com/noahain/Monoloth)
 
+ㅤ
 ---
+ㅤ
 
 Monoloth wraps CLI coding agents (like OpenCode and Claude Code) in a native Windows desktop shell. Choose a project directory to start a session with integrated terminal emulation and session history tracking.
 
@@ -65,17 +74,26 @@ The system serves frontend assets directly from the `frontend/` directory, requi
 
 ### Visual Gallery
 
-| Command Palette (`command-palette.png`) | Settings Panel (`settings.png`) |
-| --------------------------------------- | ------------------------------- |
-| <img src="assets/screenshots/command-palette.png" width="400" alt="Command palette overlay" /> | <img src="assets/screenshots/settings.png" width="400" alt="Startup configuration tab" /> |
-| **Background Settings (`backgrounds.png`)** | **Session History (`history.png`)** |
-| <img src="assets/screenshots/backgrounds.png" width="400" alt="Appearance settings tab" /> | <img src="assets/screenshots/history.png" width="400" alt="Session logs tab" /> |
+<div style="display: flex; justify-content: space-between; width: 100%; gap: 20px; margin-bottom: 24px;">
+  <img src="assets/screenshots/command-palette.png" alt="Command palette overlay" style="width: 48%; height: auto; border: none; filter: drop-shadow(0px 8px 16px rgba(0,0,0,0.25));" />
+  <img src="assets/screenshots/settings.png" alt="Startup configuration tab" style="width: 48%; height: auto; border: none; filter: drop-shadow(0px 8px 16px rgba(0,0,0,0.25));" />
+</div>
+
+<div style="display: flex; justify-content: space-between; width: 100%; gap: 20px;">
+  <img src="assets/screenshots/backgrounds.png" alt="Appearance settings tab" style="width: 48%; height: auto; border: none; filter: drop-shadow(0px 8px 16px rgba(0,0,0,0.25));" />
+  <img src="assets/screenshots/history.png" alt="Session logs tab" style="width: 48%; height: auto; border: none; filter: drop-shadow(0px 8px 16px rgba(0,0,0,0.25));" />
+</div>
+
 
 ### Customization Presets
 
-| Solid Dark (`preset-minimal.png`) | Glass Gradient (`preset-vibrant.png`) |
-| ---------------------------------- | ------------------------------------- |
-| <img src="assets/screenshots/preset-minimal.png" width="400" alt="Solid dark preset" /> | <img src="assets/screenshots/preset-vibrant.png" width="400" alt="Vibrant glass preset" /> |
+<div style="display: flex; justify-content: space-between; width: 100%; gap: 20px;">
+  <img src="assets/screenshots/preset-minimal.png" alt="Solid dark preset" style="width: 48%; height: auto; border: none; filter: drop-shadow(0px 8px 16px rgba(0,0,0,0.25));" />
+  <img src="assets/screenshots/preset-vibrant.png" alt="Vibrant glass preset" style="width: 48%; height: auto; border: none; filter: drop-shadow(0px 8px 16px rgba(0,0,0,0.25));" />
+</div>
+
+
+
 
 ### Prerequisites
 
@@ -157,8 +175,5 @@ The application stores settings at `%APPDATA%/Monoloth/config.json` and saves us
 
 Rust 1.77.2 • Tauri 2.11.1 • portable-pty • xterm.js • WebGL • Vanilla JS • HTML5 • CSS3
 
----
-
 ### License
-
 MIT
