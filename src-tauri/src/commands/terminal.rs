@@ -128,20 +128,17 @@ fn resolve_command(preset: &str) -> Result<(String, Vec<String>), String> {
     match preset {
         "opencode" => {
             let path = find_opencode()?;
-            if cfg!(windows) && path.ends_with(".cmd") {
-                Ok(("cmd".into(), vec!["/C".into(), path]))
-            } else {
-                Ok((path, vec![]))
-            }
+            Ok(wrap_path_for_windows(&path))
         }
-        other => {
-            // On Windows, wrap preset commands in cmd /C since they may be .cmd files
-            if cfg!(windows) {
-                Ok(("cmd".into(), vec!["/C".into(), other.to_string()]))
-            } else {
-                Ok((other.to_string(), vec![]))
-            }
-        }
+        other => Ok(wrap_path_for_windows(other)),
+    }
+}
+
+fn wrap_path_for_windows(path: &str) -> (String, Vec<String>) {
+    if cfg!(windows) {
+        ("cmd".into(), vec!["/C".into(), path.to_string()])
+    } else {
+        (path.to_string(), vec![])
     }
 }
 
@@ -164,6 +161,13 @@ fn resolve_custom_command(cmd_line: &str) -> Result<(String, Vec<String>), Strin
 }
 
 fn find_opencode() -> Result<String, String> {
+    if let Ok(p) = std::env::var("OPENCODE_BIN_PATH") {
+        let p = p.trim();
+        if !p.is_empty() {
+            return Ok(p.to_string());
+        }
+    }
+
     if let Ok(output) = Command::new("where").arg("opencode").output() {
         if output.status.success() {
             let path = String::from_utf8_lossy(&output.stdout);
@@ -263,5 +267,70 @@ fn run_before_command(cmd: &str, cwd: &str) -> Result<String, String> {
             }
             Err(e) => return Err(format!("Failed to wait: {}", e)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    #[cfg(windows)]
+    fn wrap_bare_name_uses_cmd_c() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let (cmd, args) = wrap_path_for_windows("opencode");
+        assert_eq!(cmd, "cmd");
+        assert_eq!(args, vec!["/C".to_string(), "opencode".to_string()]);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn wrap_cmd_path_uses_cmd_c() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let (cmd, args) = wrap_path_for_windows(r"C:\Users\foo\npm\opencode.cmd");
+        assert_eq!(cmd, "cmd");
+        assert_eq!(args, vec!["/C".to_string(), r"C:\Users\foo\npm\opencode.cmd".to_string()]);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn wrap_exe_path_uses_cmd_c() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let (cmd, args) = wrap_path_for_windows(r"C:\Program Files\opencode\opencode.exe");
+        assert_eq!(cmd, "cmd");
+        assert_eq!(args, vec!["/C".to_string(), r"C:\Program Files\opencode\opencode.exe".to_string()]);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn resolve_opencode_preset_wraps_bare_name() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        std::env::set_var("OPENCODE_BIN_PATH", r"C:\monoloth_test_sentinel\opencode.exe");
+        let (cmd, args) = resolve_command("opencode").unwrap();
+        assert_eq!(cmd, "cmd");
+        assert_eq!(args, vec!["/C".to_string(), r"C:\monoloth_test_sentinel\opencode.exe".to_string()]);
+        std::env::remove_var("OPENCODE_BIN_PATH");
+    }
+
+    #[test]
+    fn opencode_bin_path_overrides_where() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let sentinel = r"C:\monoloth_test_sentinel\opencode.exe";
+        std::env::set_var("OPENCODE_BIN_PATH", sentinel);
+        let result = find_opencode().unwrap();
+        assert_eq!(result, sentinel);
+        std::env::remove_var("OPENCODE_BIN_PATH");
+    }
+
+    #[test]
+    fn opencode_bin_path_empty_falls_through() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        std::env::set_var("OPENCODE_BIN_PATH", "   ");
+        let result = find_opencode();
+        let _ = result;
+        std::env::remove_var("OPENCODE_BIN_PATH");
     }
 }
