@@ -24,7 +24,7 @@
                         channel.onmessage = onEventCallback;
                     }
                     return core.invoke('plugin:updater|download_and_install', {
-                        update: { rid: metadata.rid },
+                        rid: metadata.rid,
                         onEvent: channel
                     });
                 }

@@ -257,20 +257,45 @@
             } else if (event.event === 'Finished') {
                 setState('READY');
             }
+        }).catch(function (e) {
+            console.warn('Update download failed:', e && e.message);
+            if (state.mounted && state.mounted.classList.contains('update-toast')) {
+                setState('ERROR', { errorClass: classifyError(e) });
+            }
         });
     }
 
     function init() {
+        tryCheck(1);
+    }
+
+    function tryCheck(retriesLeft) {
+        var timeoutId = setTimeout(function () {
+            console.warn('Auto-update check timed out');
+            if (retriesLeft > 0) {
+                setTimeout(function () { tryCheck(retriesLeft - 1); }, 5000);
+            }
+        }, 10000);
+
         try {
             UPDATER.check().then(function (update) {
+                clearTimeout(timeoutId);
                 if (update && update.available) {
                     mountToast(update);
                 }
             }).catch(function (e) {
+                clearTimeout(timeoutId);
                 console.warn('Auto-update check failed:', e && e.message);
+                if (retriesLeft > 0) {
+                    setTimeout(function () { tryCheck(retriesLeft - 1); }, 5000);
+                }
             });
         } catch (e) {
+            clearTimeout(timeoutId);
             console.warn('Auto-update check threw:', e && e.message);
+            if (retriesLeft > 0) {
+                setTimeout(function () { tryCheck(retriesLeft - 1); }, 5000);
+            }
         }
     }
 
