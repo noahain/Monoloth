@@ -4142,7 +4142,7 @@ body.adaptive-light.cta-blur .command-palette-modal {
 body.light-mode.cta-blur .command-palette-modal,
 body.adaptive-light.cta-blur .command-palette-modal {
     background: rgba(245, 245, 245, 0.94);
-    border-color: rgba(0, 0, 0, 0.08);
+    border-color: var(--modal-border);
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
@@ -4865,7 +4865,7 @@ body.cta-outline .ps-item {
 
 /* --- .command-palette-modal variants --- */
 body.cta-glass .command-palette-modal {
-    background: rgba(255, 255, 255, 0.14);
+    background: var(--modal-bg-glass);
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
     border: 1px solid rgba(255, 255, 255, 0.14);
@@ -4876,8 +4876,8 @@ body.cta-glass .command-palette-modal {
 }
 body.light-mode.cta-glass .command-palette-modal,
 body.adaptive-light.cta-glass .command-palette-modal {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(0, 0, 0, 0.08);
+    background: var(--modal-bg-glass);
+    border-color: var(--modal-border);
     box-shadow:
         0 16px 48px rgba(0, 0, 0, 0.12),
         0 0 0 1px rgba(0, 0, 0, 0.04),
@@ -4919,18 +4919,67 @@ body.cta-solid .command-palette-input {
 }
 body.light-mode.cta-solid .command-palette-input,
 body.adaptive-light.cta-solid .command-palette-input {
-    border-color: rgba(0, 0, 0, 0.08);
+    border-color: var(--modal-border);
 }
 body.cta-outline .command-palette-input {
     border-color: var(--border-muted);
 }
 body.light-mode.cta-glass .command-palette-input,
 body.adaptive-light.cta-glass .command-palette-input {
-    border-color: rgba(0, 0, 0, 0.08);
+    border-color: var(--modal-border);
 }
 body.light-mode.cta-outline .command-palette-input,
 body.adaptive-light.cta-outline .command-palette-input {
     border-color: var(--border-muted);
+}
+
+/* Command palette separator + shortcut chip on cta-glass.
+   Base values are tuned for opaque modals; on the translucent glass
+   surface they collapse. Bump to a brighter translucent + more
+   readable text so the separator and chip stay perceptible. */
+body.cta-glass .command-palette-separator {
+    background: rgba(255, 255, 255, 0.1);
+}
+body.light-mode.cta-glass .command-palette-separator,
+body.adaptive-light.cta-glass .command-palette-separator {
+    background: rgba(0, 0, 0, 0.12);
+}
+body.cta-glass .command-palette-hint {
+    border-top-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+    opacity: 1;
+}
+body.light-mode.cta-glass .command-palette-hint,
+body.adaptive-light.cta-glass .command-palette-hint {
+    border-top-color: rgba(0, 0, 0, 0.12);
+    color: var(--text-secondary);
+    opacity: 1;
+}
+body.cta-glass .command-palette-hint kbd {
+    background: rgba(255, 255, 255, 0.18);
+    border-color: var(--modal-border-strong);
+    color: var(--text-secondary);
+}
+body.light-mode.cta-glass .command-palette-hint kbd,
+body.adaptive-light.cta-glass .command-palette-hint kbd {
+    background: rgba(0, 0, 0, 0.12);
+    border-color: var(--modal-border);
+    color: var(--text-secondary);
+}
+body.cta-glass .command-palette-shortcut {
+    background: rgba(255, 255, 255, 0.18);
+    color: var(--text-secondary);
+}
+body.light-mode.cta-glass .command-palette-shortcut,
+body.adaptive-light.cta-glass .command-palette-shortcut {
+    background: rgba(0, 0, 0, 0.12);
+    color: var(--text-secondary);
+}
+body.outline-on-light.cta-outline .command-palette-modal {
+    border-color: var(--outline-on-light-border);
+}
+body.outline-on-light.cta-outline .command-palette-input {
+    border-color: rgba(0, 0, 0, 0.18);
 }
 
 /* --- .id-modal variants --- */
