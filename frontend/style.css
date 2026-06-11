@@ -24,6 +24,24 @@
 
 :root {
     color-scheme: dark;
+
+    /* Modal surface tokens (used by settings, file picker, profile switcher,
+       command palette, inline dialog, tooltip). Dark-mode defaults. */
+    --modal-text: rgba(255, 255, 255, 0.9);
+    --modal-text-muted: rgba(255, 255, 255, 0.6);
+    --modal-text-dim: rgba(255, 255, 255, 0.4);
+    --modal-text-disabled: rgba(255, 255, 255, 0.25);
+    --modal-close-idle: rgba(255, 255, 255, 0.25);
+    --modal-close-hover: rgba(255, 255, 255, 0.9);
+    --modal-border: rgba(255, 255, 255, 0.06);
+    --modal-border-strong: rgba(255, 255, 255, 0.12);
+    --modal-border-active: rgba(255, 255, 255, 0.2);
+    --modal-hover-bg: rgba(255, 255, 255, 0.06);
+    --modal-active-bg: rgba(255, 255, 255, 0.1);
+    --modal-card-bg: rgba(255, 255, 255, 0.07);
+    --modal-bg-glass: rgba(255, 255, 255, 0.14);
+    --outline-on-light-border: var(--border-muted);
+
     --bg-primary: #0a0a0a;
     --bg-secondary: #111111;
     --bg-tertiary: #1a1a1a;
@@ -60,6 +78,22 @@
 body.light-mode,
 body.adaptive-light {
     color-scheme: light;
+
+    --modal-text: rgba(0, 0, 0, 0.9);
+    --modal-text-muted: rgba(0, 0, 0, 0.6);
+    --modal-text-dim: rgba(0, 0, 0, 0.4);
+    --modal-text-disabled: rgba(0, 0, 0, 0.25);
+    --modal-close-idle: rgba(0, 0, 0, 0.3);
+    --modal-close-hover: rgba(0, 0, 0, 0.9);
+    --modal-border: rgba(0, 0, 0, 0.08);
+    --modal-border-strong: rgba(0, 0, 0, 0.18);
+    --modal-border-active: rgba(0, 0, 0, 0.25);
+    --modal-hover-bg: rgba(0, 0, 0, 0.04);
+    --modal-active-bg: rgba(0, 0, 0, 0.08);
+    --modal-card-bg: rgba(0, 0, 0, 0.04);
+    --modal-bg-glass: rgba(0, 0, 0, 0.08);
+    --outline-on-light-border: rgba(0, 0, 0, 0.35);
+
     --bg-primary: #f5f5f5;
     --bg-secondary: #e8e8e8;
     --bg-tertiary: #d8d8d8;
@@ -7269,4 +7303,23 @@ body.adaptive-light .update-pill-open:hover {
 .update-toast[hidden],
 .update-pill[hidden] {
     display: none !important;
+}
+
+@media (prefers-contrast: more) {
+    :root {
+        --modal-text: rgba(255, 255, 255, 1);
+        --modal-text-muted: rgba(255, 255, 255, 0.85);
+        --modal-text-dim: rgba(255, 255, 255, 0.7);
+        --modal-border: rgba(255, 255, 255, 0.25);
+        --modal-border-strong: rgba(255, 255, 255, 0.4);
+        --modal-border-active: rgba(255, 255, 255, 0.55);
+    }
+    body.light-mode, body.adaptive-light {
+        --modal-text: rgba(0, 0, 0, 1);
+        --modal-text-muted: rgba(0, 0, 0, 0.85);
+        --modal-text-dim: rgba(0, 0, 0, 0.7);
+        --modal-border: rgba(0, 0, 0, 0.3);
+        --modal-border-strong: rgba(0, 0, 0, 0.5);
+        --modal-border-active: rgba(0, 0, 0, 0.65);
+    }
 }
