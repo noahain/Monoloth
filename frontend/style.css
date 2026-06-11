@@ -1108,8 +1108,7 @@ body.adaptive-light .btn-secondary:hover {
 }
 
 /* Button rows */
-.config-actions,
-.update-actions {
+.config-actions {
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
@@ -5075,13 +5074,6 @@ body.cta-blur .fp-close:hover,
     color: rgba(255, 255, 255, 0.85);
 }
 
-.update-actions {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    align-items: center;
-}
-
 /* Modal consistency */
 .settings-header, .fp-header, .ps-header, .id-header { padding: 0.75rem 1rem; }
 .settings-header h2, .fp-title, .ps-title, .id-title { font-size: 0.85rem; letter-spacing: 2px; }
@@ -7408,13 +7400,12 @@ input[type="range"]:active::-webkit-slider-thumb,
 .tab-panel.active .settings-card:nth-child(6) { animation: fadeInUp 0.2s ease 200ms both; }
 .tab-panel.active .settings-card:nth-child(7) { animation: fadeInUp 0.2s ease 240ms both; }
 .tab-panel.active .settings-card:nth-child(8) { animation: fadeInUp 0.2s ease 280ms both; }
-}
 
 /* Update notification toast + pill */
 #monolith-updater-container {
     position: fixed;
-    bottom: 24px;
-    right: 24px;
+    bottom: 1.5rem;
+    right: 1.5rem;
     z-index: 10000;
     pointer-events: none;
 }
@@ -7422,146 +7413,321 @@ input[type="range"]:active::-webkit-slider-thumb,
 .update-toast,
 .update-pill {
     pointer-events: auto;
-    background: var(--bg-color, #0a0a0a);
-    color: var(--text-color, #f0f0f0);
-    border: 1px solid var(--border-color, #2a2a2a);
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+    border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 8px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(12px) saturate(140%);
-    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     animation: update-fade-in 240ms ease-out;
+    transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
+/* CTA Blur (default) */
+body.cta-blur .update-toast,
+body.cta-blur .update-pill {
+    background: rgba(20, 20, 20, 0.88);
+    backdrop-filter: blur(12px);
+    border-color: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* CTA Glass */
+body.cta-glass .update-toast,
+body.cta-glass .update-pill {
+    background: rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(20px);
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* CTA Solid */
+body.cta-solid .update-toast,
+body.cta-solid .update-pill {
+    background: var(--bg-secondary);
+    backdrop-filter: none;
+    border-color: var(--border-dark);
+    box-shadow: none;
+}
+
+/* CTA Outline */
+body.cta-outline .update-toast,
+body.cta-outline .update-pill {
+    background: transparent;
+    backdrop-filter: none;
+    border-color: var(--border-muted);
+    box-shadow: none;
+}
+
+/* Light mode overrides */
+body.light-mode .update-toast,
+body.light-mode .update-pill,
+body.adaptive-light .update-toast,
+body.adaptive-light .update-pill {
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+body.light-mode.cta-blur .update-toast,
+body.light-mode.cta-blur .update-pill {
+    background: rgba(245, 245, 245, 0.88);
+    border-color: rgba(0, 0, 0, 0.08);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+body.light-mode.cta-glass .update-toast,
+body.light-mode.cta-glass .update-pill {
+    background: rgba(255, 255, 255, 0.6);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Toast */
 .update-toast {
-    width: 360px;
-    padding: 16px;
-    margin-top: 8px;
+    width: 22.5rem;
+    padding: 1rem;
+    margin-top: 0.5rem;
 }
 
 .update-toast-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 8px;
+    margin-bottom: 0.5rem;
 }
 
 .update-toast-title {
-    font-weight: 600;
-    font-size: 14px;
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    font-weight: 400;
 }
 
 .update-toast-close,
 .update-pill-close {
     background: none;
     border: none;
-    color: var(--text-color, #f0f0f0);
+    color: rgba(255, 255, 255, 0.25);
     cursor: pointer;
-    font-size: 18px;
+    font-size: 1.4rem;
+    font-family: var(--font-display);
     line-height: 1;
-    padding: 4px 8px;
-    opacity: 0.6;
+    padding: 0.2rem 0.4rem;
+    transition: color 0.15s ease;
+}
+
+body.light-mode .update-toast-close,
+body.light-mode .update-pill-close,
+body.adaptive-light .update-toast-close,
+body.adaptive-light .update-pill-close {
+    color: rgba(0, 0, 0, 0.3);
 }
 
 .update-toast-close:hover,
 .update-pill-close:hover {
-    opacity: 1;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+body.light-mode .update-toast-close:hover,
+body.light-mode .update-pill-close:hover,
+body.adaptive-light .update-toast-close:hover,
+body.adaptive-light .update-pill-close:hover {
+    color: rgba(0, 0, 0, 0.9);
 }
 
 .update-toast-body p {
-    margin: 0 0 12px 0;
-    font-size: 13px;
-    line-height: 1.4;
+    margin: 0 0 0.75rem 0;
+    font-size: 0.7rem;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+body.light-mode .update-toast-body p,
+body.adaptive-light .update-toast-body p {
+    color: rgba(0, 0, 0, 0.5);
+}
+
+.update-toast-body p strong {
+    color: var(--text-primary);
+    font-weight: 400;
 }
 
 .update-toast-actions {
     display: flex;
-    gap: 8px;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
 }
 
+/* Primary action buttons (Update, Retry, Restart) */
 .update-toast-update,
 .update-toast-retry,
 .update-toast-restart,
 .update-pill-restart {
-    background: var(--accent, #4a9eff);
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    padding: 8px 16px;
-    font-size: 13px;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    padding: 0.4rem 1rem;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
     cursor: pointer;
-    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
+}
+
+body.light-mode .update-toast-update,
+body.light-mode .update-toast-retry,
+body.light-mode .update-toast-restart,
+body.light-mode .update-pill-restart,
+body.adaptive-light .update-toast-update,
+body.adaptive-light .update-toast-retry,
+body.adaptive-light .update-toast-restart,
+body.adaptive-light .update-pill-restart {
+    border-color: rgba(0, 0, 0, 0.12);
+    color: rgba(0, 0, 0, 0.7);
 }
 
 .update-toast-update:hover,
 .update-toast-retry:hover,
 .update-toast-restart:hover,
 .update-pill-restart:hover {
-    opacity: 0.9;
+    border-color: rgba(255, 255, 255, 0.25);
+    color: rgba(255, 255, 255, 0.95);
+    background: rgba(255, 255, 255, 0.06);
 }
 
+body.light-mode .update-toast-update:hover,
+body.light-mode .update-toast-retry:hover,
+body.light-mode .update-toast-restart:hover,
+body.light-mode .update-pill-restart:hover,
+body.adaptive-light .update-toast-update:hover,
+body.adaptive-light .update-toast-retry:hover,
+body.adaptive-light .update-toast-restart:hover,
+body.adaptive-light .update-pill-restart:hover {
+    border-color: rgba(0, 0, 0, 0.3);
+    color: rgba(0, 0, 0, 0.95);
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.update-toast-update:active,
+.update-toast-retry:active,
+.update-toast-restart:active,
+.update-pill-restart:active {
+    border-color: rgba(255, 255, 255, 0.4);
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Secondary action buttons (Cancel, Dismiss) */
 .update-toast-cancel {
-    background: none;
-    border: 1px solid var(--border-color, #2a2a2a);
-    color: var(--text-color, #f0f0f0);
-    border-radius: 4px;
-    padding: 8px 16px;
-    font-size: 13px;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    padding: 0.4rem 1rem;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: transparent;
+    color: rgba(255, 255, 255, 0.35);
     cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
+}
+
+body.light-mode .update-toast-cancel,
+body.adaptive-light .update-toast-cancel {
+    border-color: rgba(0, 0, 0, 0.08);
+    color: rgba(0, 0, 0, 0.4);
 }
 
 .update-toast-cancel:hover {
-    background: var(--bg-hover, #1a1a1a);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.05);
 }
 
+body.light-mode .update-toast-cancel:hover,
+body.adaptive-light .update-toast-cancel:hover {
+    border-color: rgba(0, 0, 0, 0.2);
+    color: rgba(0, 0, 0, 0.85);
+    background: rgba(0, 0, 0, 0.04);
+}
+
+/* Progress bar */
 .update-toast-progress {
-    margin-top: 8px;
+    margin-top: 0.5rem;
 }
 
 .update-toast-progress-bar {
-    height: 4px;
-    background: var(--bg-hover, #1a1a1a);
+    height: 3px;
+    background: rgba(255, 255, 255, 0.08);
     border-radius: 2px;
     overflow: hidden;
 }
 
+body.light-mode .update-toast-progress-bar,
+body.adaptive-light .update-toast-progress-bar {
+    background: rgba(0, 0, 0, 0.08);
+}
+
 .update-toast-progress-fill {
     height: 100%;
-    background: var(--accent, #4a9eff);
+    background: var(--accent-green);
     width: 0%;
     transition: width 200ms ease-out;
 }
 
 .update-toast-progress-text {
     display: block;
-    margin-top: 4px;
-    font-size: 11px;
-    opacity: 0.7;
+    margin-top: 0.25rem;
+    font-size: 0.6rem;
+    color: rgba(255, 255, 255, 0.35);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
+body.light-mode .update-toast-progress-text,
+body.adaptive-light .update-toast-progress-text {
+    color: rgba(0, 0, 0, 0.4);
+}
+
+/* Error state */
 .update-toast-error {
-    background: rgba(220, 50, 50, 0.1);
-    border: 1px solid rgba(220, 50, 50, 0.3);
-    border-radius: 4px;
-    padding: 12px;
-    margin-top: 8px;
+    background: var(--accent-red-bg, rgba(58, 32, 32, 0.6));
+    border: 1px solid rgba(224, 108, 117, 0.25);
+    border-radius: 6px;
+    padding: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+body.light-mode .update-toast-error,
+body.adaptive-light .update-toast-error {
+    background: rgba(224, 108, 117, 0.06);
+    border-color: rgba(224, 108, 117, 0.3);
 }
 
 .update-toast-error p {
-    margin: 0 0 8px 0;
-    font-size: 13px;
+    margin: 0 0 0.5rem 0;
+    font-size: 0.7rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
 }
 
 .update-toast-error-title {
-    color: #ff6b6b;
+    color: var(--accent-red);
 }
 
+/* Mini pill */
 .update-pill {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
-    margin-top: 8px;
-    font-size: 12px;
+    gap: 0.75rem;
+    padding: 0.6rem 0.85rem;
+    margin-top: 0.5rem;
+    font-size: 0.7rem;
 }
 
 .update-pill-label {
@@ -7570,16 +7736,45 @@ input[type="range"]:active::-webkit-slider-thumb,
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+body.light-mode .update-pill-label,
+body.adaptive-light .update-pill-label {
+    color: rgba(0, 0, 0, 0.5);
 }
 
 .update-pill-open {
-    background: none;
-    border: 1px solid var(--border-color, #2a2a2a);
-    color: var(--text-color, #f0f0f0);
-    border-radius: 4px;
-    padding: 4px 10px;
-    font-size: 12px;
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: transparent;
+    color: rgba(255, 255, 255, 0.35);
     cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
+}
+
+body.light-mode .update-pill-open,
+body.adaptive-light .update-pill-open {
+    border-color: rgba(0, 0, 0, 0.08);
+    color: rgba(0, 0, 0, 0.4);
+}
+
+.update-pill-open:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+body.light-mode .update-pill-open:hover,
+body.adaptive-light .update-pill-open:hover {
+    border-color: rgba(0, 0, 0, 0.2);
+    color: rgba(0, 0, 0, 0.85);
+    background: rgba(0, 0, 0, 0.04);
 }
 
 @keyframes update-fade-in {
@@ -7590,17 +7785,4 @@ input[type="range"]:active::-webkit-slider-thumb,
 .update-toast[hidden],
 .update-pill[hidden] {
     display: none !important;
-}
-
-/* Light theme overrides */
-body[data-theme="light"] .update-toast,
-body[data-theme="light"] .update-pill {
-    background: #f5f5f5;
-    color: #1a1a1a;
-    border-color: #d0d0d0;
-}
-
-body[data-theme="light"] .update-toast-error {
-    background: rgba(220, 50, 50, 0.08);
-    border-color: rgba(220, 50, 50, 0.4);
 }

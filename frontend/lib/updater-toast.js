@@ -1,12 +1,8 @@
 (function () {
     'use strict';
 
-    if (!window.__TAURI_PLUGIN_UPDATER__ || !window.__TAURI_PLUGIN_PROCESS__) {
-        return;
-    }
-
-    var UPDATER = window.__TAURI_PLUGIN_UPDATER__;
-    var PROCESS = window.__TAURI_PLUGIN_PROCESS__;
+    function getUpdater() { return window.__TAURI_PLUGIN_UPDATER__ || null; }
+    function getProcess() { return window.__TAURI_PLUGIN_PROCESS__ || null; }
 
     var STALL_TIMEOUT_MS = 2 * 60 * 1000;
 
@@ -231,8 +227,9 @@
     }
 
     function relaunch() {
-        if (PROCESS && typeof PROCESS.relaunch === 'function') {
-            PROCESS.relaunch();
+        var process = getProcess();
+        if (process && typeof process.relaunch === 'function') {
+            process.relaunch();
         } else if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {
             window.__TAURI__.core.invoke('plugin:process|restart');
         } else {
@@ -278,7 +275,12 @@
         }, 10000);
 
         try {
-            UPDATER.check().then(function (update) {
+            var updater = getUpdater();
+            if (!updater) {
+                clearTimeout(timeoutId);
+                return;
+            }
+            updater.check().then(function (update) {
                 clearTimeout(timeoutId);
                 if (update && update.available) {
                     mountToast(update);
@@ -308,7 +310,13 @@
         } else if (status) {
             status.textContent = 'Checking…';
         }
-        UPDATER.check().then(function (update) {
+        var updater = getUpdater();
+        if (!updater) {
+            if (btn) btn.disabled = false;
+            if (status) status.textContent = 'Updater not available';
+            return;
+        }
+        updater.check().then(function (update) {
             if (btn) btn.disabled = false;
             if (update && update.available) {
                 mountToast(update);

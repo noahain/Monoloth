@@ -1,19 +1,23 @@
-// IIFE wrapper replacing the broken ESM vendored process plugin.
-// Monoloth's frontend has no build step, so we use window.__TAURI__.core directly.
+// IIFE wrapper for process IPC.
+// Lazily resolves window.__TAURI__ so it works regardless of script load timing.
 (function () {
     'use strict';
 
-    if (!window.__TAURI__ || !window.__TAURI__.core || !window.__TAURI__.core.invoke) {
-        return;
+    function getCore() {
+        return window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke
+            ? window.__TAURI__.core
+            : null;
     }
 
-    var core = window.__TAURI__.core;
-
     function exit(code) {
+        var core = getCore();
+        if (!core) return Promise.reject(new Error('Tauri not available'));
         return core.invoke('plugin:process|exit', { code: code || 0 });
     }
 
     function relaunch() {
+        var core = getCore();
+        if (!core) return Promise.reject(new Error('Tauri not available'));
         return core.invoke('plugin:process|restart');
     }
 

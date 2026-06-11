@@ -114,7 +114,7 @@ test('downloadAndInstall sends rid at the top level (Tauri 2 contract)', async (
     void receivedEvent;
 });
 
-test('plugin-updater IIFE exits early when Tauri is not available', () => {
+test('plugin-updater IIFE always exposes __TAURI_PLUGIN_UPDATER__ (lazy init)', () => {
     const window = { __TAURI__: null };
     window.window = window;
     const context = { console, window, Promise };
@@ -122,5 +122,32 @@ test('plugin-updater IIFE exits early when Tauri is not available', () => {
     vm.createContext(context);
     const source = fs.readFileSync('frontend/lib/plugin-updater.js', 'utf8');
     vm.runInContext(source, context, { filename: 'frontend/lib/plugin-updater.js' });
-    assert.strictEqual(context.window.__TAURI_PLUGIN_UPDATER__, undefined);
+    assert.ok(context.window.__TAURI_PLUGIN_UPDATER__, 'plugin global should always be set');
+    assert.strictEqual(typeof context.window.__TAURI_PLUGIN_UPDATER__.check, 'function');
+});
+
+test('check() rejects when Tauri is not available (lazy guard)', async () => {
+    const window = { __TAURI__: null };
+    window.window = window;
+    const context = { console, window, Promise };
+    context.globalThis = context;
+    vm.createContext(context);
+    const source = fs.readFileSync('frontend/lib/plugin-updater.js', 'utf8');
+    vm.runInContext(source, context, { filename: 'frontend/lib/plugin-updater.js' });
+    await assert.rejects(
+        () => context.window.__TAURI_PLUGIN_UPDATER__.check(),
+        { message: 'Tauri not available' }
+    );
+});
+
+test('downloadAndInstall works when Channel is not available (fallback)', async () => {
+    const h = createUpdaterHarness();
+    delete h.context.window.__TAURI__.core.Channel;
+    const update = await h.context.window.__TAURI_PLUGIN_UPDATER__.check();
+    await update.downloadAndInstall(function (event) {
+        assert.strictEqual(event.event, 'Finished', 'should receive a synthetic Finished event');
+    });
+    const dlCall = h.getInvokeCalls().find((c) => c.cmd === 'plugin:updater|download_and_install');
+    assert.ok(dlCall, 'download_and_install should have been invoked');
+    assert.strictEqual(dlCall.args.onEvent, undefined, 'no onEvent when Channel is unavailable');
 });
