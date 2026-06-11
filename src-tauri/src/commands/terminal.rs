@@ -149,7 +149,12 @@ fn resolve_custom_command(cmd_line: &str) -> Result<(String, Vec<String>), Strin
     }
     let exe = &parts[0];
 
-    if cfg!(windows) && (exe.ends_with(".cmd") || exe.ends_with(".bat")) {
+    if cfg!(windows) {
+        // On Windows, wrap the full custom command in cmd /C to delegate
+        // PATHEXT resolution to Windows. portable-pty's search_path prefers
+        // extensionless files, which breaks npm-installed extensionless scripts
+        // (e.g. claude, codex) that coexist with their .cmd counterparts and
+        // would fail with CreateProcessW error 193.
         let args: Vec<String> = std::iter::once("/C".to_string())
             .chain(std::iter::once(exe.to_string()))
             .chain(parts[1..].iter().cloned())
@@ -332,5 +337,121 @@ mod tests {
         let result = find_opencode();
         let _ = result;
         std::env::remove_var("OPENCODE_BIN_PATH");
+    }
+
+    // resolve_custom_command tests — mirror the v2.0.1 fix for resolve_command:
+    // on Windows, the full command (exe + args) must be wrapped in cmd /C so that
+    // Windows' PATHEXT resolution handles extensionless npm scripts (e.g. claude,
+    // codex) instead of portable-pty's search_path picking the extensionless file
+    // and failing with CreateProcessW error 193.
+
+    #[test]
+    #[cfg(windows)]
+    fn resolve_custom_bare_name_wraps_in_cmd_c() {
+        let (cmd, args) = resolve_custom_command("claude").unwrap();
+        assert_eq!(cmd, "cmd");
+        assert_eq!(args, vec!["/C".to_string(), "claude".to_string()]);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn resolve_custom_cmd_path_wraps_in_cmd_c() {
+        // Use forward slashes to side-step the unrelated shlex POSIX escape
+        // behavior on backslashes. cmd /C accepts forward slashes on Windows.
+        let (cmd, args) = resolve_custom_command("C:/Users/foo/npm/claude.cmd").unwrap();
+        assert_eq!(cmd, "cmd");
+        assert_eq!(args, vec!["/C".to_string(), "C:/Users/foo/npm/claude.cmd".to_string()]);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn resolve_custom_exe_path_wraps_in_cmd_c() {
+        // Quote the path so shlex keeps it as one token.
+        let (cmd, args) = resolve_custom_command(r#""C:/Program Files/claude/claude.exe""#).unwrap();
+        assert_eq!(cmd, "cmd");
+        assert_eq!(
+            args,
+            vec!["/C".to_string(), "C:/Program Files/claude/claude.exe".to_string()]
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn resolve_custom_bat_path_wraps_in_cmd_c() {
+        let (cmd, args) = resolve_custom_command("C:/tools/start.bat").unwrap();
+        assert_eq!(cmd, "cmd");
+        assert_eq!(args, vec!["/C".to_string(), "C:/tools/start.bat".to_string()]);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn resolve_custom_with_args_preserves_args() {
+        let (cmd, args) = resolve_custom_command("claude --model sonnet --verbose").unwrap();
+        assert_eq!(cmd, "cmd");
+        assert_eq!(
+            args,
+            vec![
+                "/C".to_string(),
+                "claude".to_string(),
+                "--model".to_string(),
+                "sonnet".to_string(),
+                "--verbose".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn resolve_custom_with_quoted_arg_preserves_parsed_parts() {
+        // shlex::split should strip the quotes and the underlying value is what
+        // we wrap. The point of the test is to ensure quoted args don't break
+        // the cmd /C wrapping.
+        let (cmd, args) = resolve_custom_command(r#"claude --prompt "hello world""#).unwrap();
+        assert_eq!(cmd, "cmd");
+        assert_eq!(
+            args,
+            vec![
+                "/C".to_string(),
+                "claude".to_string(),
+                "--prompt".to_string(),
+                "hello world".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn resolve_custom_path_with_space_wraps_in_cmd_c() {
+        // Quote the path so shlex's POSIX splitter keeps it as one token.
+        let (cmd, args) = resolve_custom_command(r#""C:/Program Files/My Tool/run.exe" --flag"#).unwrap();
+        assert_eq!(cmd, "cmd");
+        assert_eq!(
+            args,
+            vec![
+                "/C".to_string(),
+                "C:/Program Files/My Tool/run.exe".to_string(),
+                "--flag".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn resolve_custom_no_wrap_on_non_windows() {
+        let (cmd, args) = resolve_custom_command("claude --version").unwrap();
+        assert_eq!(cmd, "claude");
+        assert_eq!(args, vec!["--version".to_string()]);
+    }
+
+    #[test]
+    fn resolve_custom_empty_returns_err() {
+        let result = resolve_custom_command("");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn resolve_custom_only_whitespace_returns_err() {
+        let result = resolve_custom_command("   ");
+        assert!(result.is_err());
     }
 }
