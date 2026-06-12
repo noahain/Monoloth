@@ -199,6 +199,7 @@ pub fn run() {
 
                         history_for_close.session_end();
                         history_for_close.session_end_by_id("panel");
+                        history_for_close.session_end_all_panel_tabs();
                         pty_clone.terminate_all();
                     }
                     _ => {}
