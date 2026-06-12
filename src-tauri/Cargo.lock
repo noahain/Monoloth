@@ -2679,7 +2679,7 @@ dependencies = [
 
 [[package]]
 name = "monoloth"
-version = "2.0.5"
+version = "2.0.6"
 dependencies = [
  "dirs 5.0.1",
  "image",
