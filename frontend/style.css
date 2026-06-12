@@ -7963,6 +7963,7 @@ body.light-mode.cta-glass .update-pill {
 .cmd-panel-tab-bar {
     display: flex;
     align-items: center;
+    gap: 4px;
     padding: 2px 4px;
     border-bottom: 1px solid var(--border-dark);
     background: rgba(255, 255, 255, 0.04);
@@ -7974,6 +7975,14 @@ body.adaptive-light .cmd-panel-tab-bar {
     background: rgba(0, 0, 0, 0.04);
 }
 
+.cmd-panel-tabs-group {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    align-items: center;
+    gap: 2px;
+}
+
 .cmd-panel-tabs {
     display: flex;
     flex: 1;
@@ -7982,6 +7991,7 @@ body.adaptive-light .cmd-panel-tab-bar {
     scroll-snap-type: x mandatory;
     scrollbar-width: none;
     gap: 2px;
+    min-width: 0;
 }
 
 .cmd-panel-tabs::-webkit-scrollbar {
@@ -7998,24 +8008,25 @@ body.adaptive-light .cmd-panel-tab-bar {
     flex-shrink: 0;
     cursor: pointer;
     border-radius: 4px 4px 0 0;
+    border: 1px solid transparent;
     border-bottom: 2px solid transparent;
     scroll-snap-align: start;
-    transition: background 0.15s;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
     position: relative;
+    background: transparent;
+    color: var(--modal-text-dim);
 }
 
 .cmd-panel-tab:hover {
-    background: rgba(255, 255, 255, 0.06);
-}
-
-body.light-mode .cmd-panel-tab:hover,
-body.adaptive-light .cmd-panel-tab:hover {
-    background: rgba(0, 0, 0, 0.06);
+    background: var(--modal-hover-bg);
+    color: var(--modal-text);
 }
 
 .cmd-panel-tab.active {
-    background: var(--bg-secondary);
-    border-bottom-color: var(--tab-active-border);
+    background: var(--modal-active-bg);
+    border-color: var(--modal-border-active);
+    border-bottom-color: var(--modal-border-active);
+    color: var(--modal-text);
 }
 
 .cmd-panel-tab-name {
@@ -8043,7 +8054,7 @@ body.adaptive-light .cmd-panel-tab:hover {
     font-size: 0.9rem;
     line-height: 1;
     opacity: 0;
-    transition: opacity 0.15s;
+    transition: opacity 0.15s, color 0.15s;
 }
 
 .cmd-panel-tab:hover .cmd-panel-tab-close,
@@ -8054,28 +8065,23 @@ body.adaptive-light .cmd-panel-tab:hover {
 
 .cmd-panel-new-tab {
     background: none;
-    border: none;
-    border-left: 1px solid var(--border-muted);
-    color: var(--text-secondary);
+    border: 1px solid transparent;
+    color: var(--modal-text-dim);
     cursor: pointer;
-    padding: 4px 10px;
-    margin-left: 4px;
+    padding: 4px 8px;
     font-size: 1rem;
     line-height: 1;
-    border-radius: 0;
-    transition: background 0.15s, color 0.15s;
+    border-radius: 4px;
+    flex-shrink: 0;
+    transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
     opacity: 0.85;
 }
 
 .cmd-panel-new-tab:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: var(--text-primary);
+    background: var(--modal-hover-bg);
+    border-color: var(--modal-border-strong);
+    color: var(--modal-text);
     opacity: 1;
-}
-
-body.light-mode .cmd-panel-new-tab:hover,
-body.adaptive-light .cmd-panel-new-tab:hover {
-    background: rgba(0, 0, 0, 0.08);
 }
 
 .cmd-panel-tab-container {

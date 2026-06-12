@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=122">
+    <link rel="stylesheet" href="style.css?v=123">
     <link rel="stylesheet" href="lib/xterm.css?v=12">
     <style>
         .landing-brand, .landing-card, .landing-status-bar {
@@ -543,12 +543,14 @@
         <div id="cmd-panel" class="cmd-panel">
             <div class="cmd-panel-resize-handle" id="cmd-panel-resize-handle"></div>
 
-            <!-- Tab Bar -->
-            <div class="cmd-panel-tab-bar" id="cmd-panel-tab-bar">
-                <div class="cmd-panel-tabs" id="cmd-panel-tabs"></div>
-                <button class="cmd-panel-new-tab" id="cmd-panel-new-tab" data-tooltip="New Tab (Ctrl+T)">+</button>
-                <button class="cmd-panel-close" id="cmd-panel-close" data-tooltip="Close Panel">&times;</button>
-            </div>
+    <!-- Tab Bar -->
+    <div class="cmd-panel-tab-bar" id="cmd-panel-tab-bar">
+        <div class="cmd-panel-tabs-group">
+            <div class="cmd-panel-tabs" id="cmd-panel-tabs"></div>
+            <button class="cmd-panel-new-tab" id="cmd-panel-new-tab" data-tooltip="New Tab (Ctrl+T)">+</button>
+        </div>
+        <button class="cmd-panel-close" id="cmd-panel-close" data-tooltip="Close Panel">&times;</button>
+    </div>
 
             <!-- Terminal container holds all tab containers -->
             <div id="cmd-panel-terminal" class="cmd-panel-terminal"></div>
