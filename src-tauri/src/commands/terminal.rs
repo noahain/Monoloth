@@ -22,7 +22,7 @@ pub fn start_terminal(
     rows: u16,
 ) -> Result<u64, String> {
     let record = record_history.unwrap_or(true);
-    let is_panel = session_id == "panel";
+    let is_panel = session_id == "panel" || session_id.starts_with("panel-tab-");
     let directory = expand_env_vars(&directory);
 
     if is_panel {
