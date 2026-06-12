@@ -11,7 +11,7 @@
   <p><strong>Agent-agnostic desktop shell for CLI coding tools</strong></p>
 
   <p>
-    <img src="https://img.shields.io/badge/version-2.0.6-blue" alt="version" />
+    <img src="https://img.shields.io/badge/version-2.0.7-blue" alt="version" />
     <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
     <img src="https://img.shields.io/badge/platform-Windows-lightgrey" alt="platform" />
     <img src="https://img.shields.io/badge/rust-1.77.2-orange" alt="rust" />
