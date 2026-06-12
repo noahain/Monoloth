@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
   <img src="assets/icon.png" width="144" height="144" alt="Monoloth" />
 <div id="toc">
   <ul style="list-style: none">
@@ -19,12 +19,12 @@
   </p>
 </div>
 
-ㅤ
+ã…¤
 [![Monoloth Main Window](assets/screenshots/main.png)](https://github.com/noahain/Monoloth)
 
-ㅤ
+ã…¤
 ---
-ㅤ
+ã…¤
 
 Monoloth wraps CLI coding agents (like OpenCode and Claude Code) in a native Windows desktop shell. Choose a project directory to start a session with integrated terminal emulation and session history tracking.
 
@@ -108,44 +108,44 @@ The system serves frontend assets directly from the `frontend/` directory, requi
 
 ```
 Monoloth/
-├── src-tauri/                  # Rust backend configuration
-│   ├── src/
-│   │   ├── main.rs             # Execution entry point
-│   │   ├── lib.rs              # Tauri setup and window events
-│   │   ├── commands/           # Tauri IPC commands
-│   │   │   ├── config.rs       # Profile and background configurations
-│   │   │   ├── fs.rs           # File operations and previews
-│   │   │   ├── history.rs      # Session history queries
-│   │   │   ├── image.rs        # Image reading and analysis
-│   │   │   ├── profile.rs      # Profile operations
-│   │   │   ├── shell.rs        # External execution handling
-│   │   │   ├── terminal.rs     # Terminal session management
-│   │   │   └── window.rs       # Window controls
-│   │   ├── config.rs           # Profile serialization and sanitization
-│   │   ├── history.rs          # History tracking
-│   │   └── pty.rs              # Terminal manager interface
-│   ├── Cargo.toml
-│   └── tauri.conf.json
-├── frontend/
-│   ├── index.html              # HTML structure
-│   ├── app.js                  # Main application controller
-│   ├── sidebar.js              # Sidebar logic
-│   ├── tauri-bridge.js         # IPC layer
-│   ├── dom-utils.js            # User interface utilities
-│   ├── tooltip.js              # Custom tooltips
-│   ├── style.css               # Application stylesheet
-│   └── lib/
-│       ├── xterm.js            # Terminal rendering library
-│       ├── xterm-addon-fit.js  # Terminal fit plugin
-│       ├── xterm-addon-webgl.js# Terminal WebGL acceleration
-│       ├── plugin-updater.js   # Updater wrapper
-│       ├── plugin-process.js   # Process wrapper
-│       └── updater-toast.js    # Update notifications
-├── assets/
-│   ├── icon.png
-│   ├── icon.ico
-│   └── screenshots/
-└── .github/workflows/release.yml
+â”œâ”€â”€ src-tauri/                  # Rust backend configuration
+â”‚   â”œâ”€â”€ src/
+â”‚   â”‚   â”œâ”€â”€ main.rs             # Execution entry point
+â”‚   â”‚   â”œâ”€â”€ lib.rs              # Tauri setup and window events
+â”‚   â”‚   â”œâ”€â”€ commands/           # Tauri IPC commands
+â”‚   â”‚   â”‚   â”œâ”€â”€ config.rs       # Profile and background configurations
+â”‚   â”‚   â”‚   â”œâ”€â”€ fs.rs           # File operations and previews
+â”‚   â”‚   â”‚   â”œâ”€â”€ history.rs      # Session history queries
+â”‚   â”‚   â”‚   â”œâ”€â”€ image.rs        # Image reading and analysis
+â”‚   â”‚   â”‚   â”œâ”€â”€ profile.rs      # Profile operations
+â”‚   â”‚   â”‚   â”œâ”€â”€ shell.rs        # External execution handling
+â”‚   â”‚   â”‚   â”œâ”€â”€ terminal.rs     # Terminal session management
+â”‚   â”‚   â”‚   â””â”€â”€ window.rs       # Window controls
+â”‚   â”‚   â”œâ”€â”€ config.rs           # Profile serialization and sanitization
+â”‚   â”‚   â”œâ”€â”€ history.rs          # History tracking
+â”‚   â”‚   â””â”€â”€ pty.rs              # Terminal manager interface
+â”‚   â”œâ”€â”€ Cargo.toml
+â”‚   â””â”€â”€ tauri.conf.json
+â”œâ”€â”€ frontend/
+â”‚   â”œâ”€â”€ index.html              # HTML structure
+â”‚   â”œâ”€â”€ app.js                  # Main application controller
+â”‚   â”œâ”€â”€ sidebar.js              # Sidebar logic
+â”‚   â”œâ”€â”€ tauri-bridge.js         # IPC layer
+â”‚   â”œâ”€â”€ dom-utils.js            # User interface utilities
+â”‚   â”œâ”€â”€ tooltip.js              # Custom tooltips
+â”‚   â”œâ”€â”€ style.css               # Application stylesheet
+â”‚   â””â”€â”€ lib/
+â”‚       â”œâ”€â”€ xterm.js            # Terminal rendering library
+â”‚       â”œâ”€â”€ xterm-addon-fit.js  # Terminal fit plugin
+â”‚       â”œâ”€â”€ xterm-addon-webgl.js# Terminal WebGL acceleration
+â”‚       â”œâ”€â”€ plugin-updater.js   # Updater wrapper
+â”‚       â”œâ”€â”€ plugin-process.js   # Process wrapper
+â”‚       â””â”€â”€ updater-toast.js    # Update notifications
+â”œâ”€â”€ assets/
+â”‚   â”œâ”€â”€ icon.png
+â”‚   â”œâ”€â”€ icon.ico
+â”‚   â””â”€â”€ screenshots/
+â””â”€â”€ .github/workflows/release.yml
 ```
 </details>
 
@@ -173,7 +173,7 @@ The application stores settings at `%APPDATA%/Monoloth/config.json` and saves us
 
 ### Tech Stack
 
-Rust 1.77.2 • Tauri 2.11.1 • portable-pty • xterm.js • WebGL • Vanilla JS • HTML5 • CSS3
+Rust 1.77.2 â€¢ Tauri 2.11.1 â€¢ portable-pty â€¢ xterm.js â€¢ WebGL â€¢ Vanilla JS â€¢ HTML5 â€¢ CSS3
 
 ### License
 MIT
