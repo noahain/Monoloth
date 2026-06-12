@@ -716,33 +716,37 @@
             '<div class="cmd-panel-context-menu-divider"></div>' +
             '<div class="cmd-panel-context-menu-item" data-action="rename">Rename Tab</div>';
 
+        var dismissListeners = [];
+
+        function cleanup() {
+            menu.remove();
+            dismissListeners.forEach(function (l) {
+                document.removeEventListener(l.event, l.handler);
+            });
+            dismissListeners = [];
+        }
+
         menu.addEventListener('click', function (e) {
             var action = e.target.getAttribute('data-action');
             if (action === 'new') createTab();
             if (action === 'close') closeTab(tabId);
             if (action === 'rename') startRenameTab(tabId);
-            menu.remove();
+            cleanup();
         });
 
         document.body.appendChild(menu);
 
         setTimeout(function () {
             var dismiss = function (e) {
-                if (!menu.contains(e.target)) {
-                    menu.remove();
-                    document.removeEventListener('click', dismiss);
-                    document.removeEventListener('keydown', keyDismiss);
-                }
+                if (!menu.contains(e.target)) cleanup();
             };
             var keyDismiss = function (e) {
-                if (e.key === 'Escape') {
-                    menu.remove();
-                    document.removeEventListener('click', dismiss);
-                    document.removeEventListener('keydown', keyDismiss);
-                }
+                if (e.key === 'Escape') cleanup();
             };
             document.addEventListener('click', dismiss);
             document.addEventListener('keydown', keyDismiss);
+            dismissListeners.push({ event: 'click', handler: dismiss });
+            dismissListeners.push({ event: 'keydown', handler: keyDismiss });
         }, 0);
     }
 
