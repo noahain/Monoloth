@@ -46,3 +46,6 @@ PRODUCT.md
 DESIGN.md
 CLAUDE.md
 .impeccable/
+
+# Git worktrees (isolated implementation workspaces)
+.worktrees/
