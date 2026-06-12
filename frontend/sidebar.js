@@ -2,7 +2,6 @@
     'use strict';
 
     var UI = window.MonolothUI;
-    var escapeHtml = UI.escapeHtml;
     var forceReflow = UI.forceReflow;
     var silent = UI.silent;
     var openModal = UI.openModal;
@@ -605,16 +604,6 @@
 
     function getTab(id) {
         return _panelTabs.get(id) || null;
-    }
-
-    function getTabByIndex(n) {
-        var tabs = getAllTabs();
-        return tabs[n] || null;
-    }
-
-    function getTabIndex(id) {
-        var tabs = getAllTabs();
-        return tabs.findIndex(function (t) { return t.id === id; });
     }
 
     function updateDirtyDot(tab) {
@@ -1332,7 +1321,6 @@
             document.body.classList.remove('sidebar-visible-left', 'sidebar-visible-right');
         },
         isPanelOpen: function () { return _cmdPanelOpen; },
-        consumePanelClosing: function () { if (_panelClosing) { _panelClosing = false; return true; } return false; },
 
         createTab: createTab,
         activateTab: activateTab,
@@ -1340,6 +1328,7 @@
         getAllTabs: getAllTabs,
         getTab: getTab,
         getActiveTab: getActiveTab,
+        hideTabExitBanner: hideTabExitBanner,
         getTabCount: getTabCount,
         getActiveTabId: function () { return _activeTabId; },
         initTabXterm: initTabXterm,

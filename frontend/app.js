@@ -3953,10 +3953,12 @@
                 tab.firstPromptReceived = false;
                 tab.generation = null;
                 delete _sessionGeneration[sessionId];
+                if (typeof _skipNextEof !== 'undefined' && _skipNextEof[sessionId] !== undefined) {
+                    delete _skipNextEof[sessionId];
+                }
                 var terminalDiv = tab.container.querySelector('.cmd-panel-tab-terminal');
                 if (terminalDiv) terminalDiv.innerHTML = '';
-                var banner = tab.container.querySelector('.cmd-panel-tab-exit-banner');
-                if (banner) banner.style.display = 'none';
+                window.SidebarManager.hideTabExitBanner(tab);
                 if (window.SidebarManager.getActiveTabId() === tabId) {
                     window.SidebarManager.initTabXterm(tab);
                 }
