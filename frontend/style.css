@@ -8003,7 +8003,7 @@ body.light-mode.cta-glass .update-pill {
 }
 
 .cmd-panel-tab.active {
-    background: var(--modal-bg);
+    background: var(--bg-secondary);
     border-bottom-color: var(--tab-active-border);
 }
 
