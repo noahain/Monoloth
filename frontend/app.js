@@ -3963,11 +3963,11 @@
                 if (_panelRunning) {
                     _skipNextEof['panel'] = true;
                     window.monolithApi.terminate_terminal('panel')
-                        .finally(function () { _skipNextEof['panel'] = false; _panelRunning = false; if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.createTab === 'function') { window.SidebarManager.showCmdPanel(); window.SidebarManager.createTab('Tab 1', true, _currentLaunchDir); } });
+                        .finally(function () { _skipNextEof['panel'] = false; _panelRunning = false; if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.createTab === 'function') { window.SidebarManager.showCmdPanel(); window.SidebarManager.createTab(null, true, _currentLaunchDir); } });
                 } else {
                     if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.createTab === 'function') {
                         window.SidebarManager.showCmdPanel();
-                        window.SidebarManager.createTab('Tab 1', true, _currentLaunchDir);
+                        window.SidebarManager.createTab(null, true, _currentLaunchDir);
                     }
                 }
             }

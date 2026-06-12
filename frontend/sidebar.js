@@ -372,7 +372,7 @@
     }
 
     function createTab(name, activate, dir) {
-        name = name || ('Tab ' + _nextTabId);
+        name = name || _panelShell || 'cmd';
         activate = activate !== false;
         dir = dir || (getCurrentDir() || '%USERPROFILE%');
 
@@ -1414,7 +1414,7 @@
             _panelRestoreNeeded = false;
             showCmdPanel();
             if (_panelTabs.size === 0) {
-                createTab('Tab 1', true, getCurrentDir() || '%USERPROFILE%');
+                createTab(null, true, getCurrentDir() || '%USERPROFILE%');
             } else {
                 activateTab(_activeTabId || getAllTabs()[0].id);
             }

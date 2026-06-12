@@ -7965,8 +7965,13 @@ body.light-mode.cta-glass .update-pill {
     align-items: center;
     padding: 2px 4px;
     border-bottom: 1px solid var(--border-dark);
-    background: rgba(0, 0, 0, 0.15);
+    background: rgba(255, 255, 255, 0.04);
     min-height: 32px;
+}
+
+body.light-mode .cmd-panel-tab-bar,
+body.adaptive-light .cmd-panel-tab-bar {
+    background: rgba(0, 0, 0, 0.04);
 }
 
 .cmd-panel-tabs {
@@ -7988,7 +7993,7 @@ body.light-mode.cta-glass .update-pill {
     align-items: center;
     gap: 4px;
     padding: 4px 8px;
-    min-width: 80px;
+    min-width: 60px;
     max-width: 140px;
     flex-shrink: 0;
     cursor: pointer;
@@ -8000,7 +8005,12 @@ body.light-mode.cta-glass .update-pill {
 }
 
 .cmd-panel-tab:hover {
-    background: var(--modal-hover-bg);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+body.light-mode .cmd-panel-tab:hover,
+body.adaptive-light .cmd-panel-tab:hover {
+    background: rgba(0, 0, 0, 0.06);
 }
 
 .cmd-panel-tab.active {
@@ -8045,18 +8055,27 @@ body.light-mode.cta-glass .update-pill {
 .cmd-panel-new-tab {
     background: none;
     border: none;
-    color: var(--text-muted);
+    border-left: 1px solid var(--border-muted);
+    color: var(--text-secondary);
     cursor: pointer;
-    padding: 4px 8px;
-    font-size: 1.1rem;
+    padding: 4px 10px;
+    margin-left: 4px;
+    font-size: 1rem;
     line-height: 1;
-    border-radius: 4px;
-    transition: background 0.15s;
+    border-radius: 0;
+    transition: background 0.15s, color 0.15s;
+    opacity: 0.85;
 }
 
 .cmd-panel-new-tab:hover {
-    background: var(--modal-hover-bg);
+    background: rgba(255, 255, 255, 0.08);
     color: var(--text-primary);
+    opacity: 1;
+}
+
+body.light-mode .cmd-panel-new-tab:hover,
+body.adaptive-light .cmd-panel-new-tab:hover {
+    background: rgba(0, 0, 0, 0.08);
 }
 
 .cmd-panel-tab-container {
@@ -8137,10 +8156,40 @@ body.adaptive-light {
     --tab-dirty-dot: #cc0000;
 }
 
-body.cta-blur .cmd-panel-tab-bar { background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); }
-body.cta-glass .cmd-panel-tab-bar { background: var(--modal-hover-bg); backdrop-filter: blur(24px); }
-body.cta-solid .cmd-panel-tab-bar { background: var(--bg-tertiary); }
-body.cta-outline .cmd-panel-tab-bar { background: transparent; border-bottom-color: var(--border-muted); }
+/* CTA Theme Variants for Tab Bar (matches #cmd-panel CTA style for visual consistency) */
+body.cta-blur .cmd-panel-tab-bar {
+    background: rgba(0, 0, 0, 0.4);
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+body.light-mode.cta-blur .cmd-panel-tab-bar,
+body.adaptive-light.cta-blur .cmd-panel-tab-bar {
+    background: rgba(0, 0, 0, 0.2);
+    border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+body.cta-glass .cmd-panel-tab-bar {
+    background: rgba(255, 255, 255, 0.06);
+    border-bottom-color: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+}
+body.light-mode.cta-glass .cmd-panel-tab-bar,
+body.adaptive-light.cta-glass .cmd-panel-tab-bar {
+    background: rgba(255, 255, 255, 0.4);
+    border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+body.cta-solid .cmd-panel-tab-bar {
+    background: var(--bg-secondary);
+    border-bottom-color: var(--border-dark);
+}
+
+body.cta-outline .cmd-panel-tab-bar {
+    background: transparent;
+    border-bottom-color: var(--border-muted);
+}
 
 /* CMD Panel Tab Context Menu */
 .cmd-panel-context-menu {
