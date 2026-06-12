@@ -639,8 +639,8 @@
 
     function hideTabExitBanner(tab) {
         if (!tab.exitBanner) return;
-        if (typeof togglePanelExitBanner === 'function') {
-            togglePanelExitBanner(tab.exitBanner, false);
+        if (window.MonolothUI && typeof window.MonolothUI.togglePanelExitBanner === 'function') {
+            window.MonolothUI.togglePanelExitBanner(tab.exitBanner, false);
         } else {
             tab.exitBanner.style.display = 'none';
         }

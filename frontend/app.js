@@ -2099,9 +2099,6 @@
                 var tabId = sessionId.replace('panel-', '');
                 if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.writeToTab) {
                     window.SidebarManager.writeToTab(tabId, data, eof);
-                    if (eof && _skipNextEof[sessionId]) {
-                        _skipNextEof[sessionId] = false;
-                    }
                 }
             } else if (sessionId === 'panel') {
                 if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.getTab) {
