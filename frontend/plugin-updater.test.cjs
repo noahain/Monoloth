@@ -30,7 +30,7 @@ function createUpdaterHarness() {
         if (cmd === 'plugin:updater|check') {
             return Promise.resolve(fakeMetadata);
         }
-        if (cmd === 'plugin:updater|download_and_install') {
+        if (cmd === 'start_update_download') {
             return Promise.resolve();
         }
         return Promise.reject(new Error('Unexpected invoke: ' + cmd));
@@ -97,20 +97,18 @@ test('check() returns null when the backend reports no update', async () => {
     assert.strictEqual(update, null);
 });
 
-test('downloadAndInstall sends rid at the top level (Tauri 2 contract)', async () => {
+test('downloadAndInstall sends start_update_download with onEvent Channel', async () => {
     const h = createUpdaterHarness();
     const update = await h.context.window.__TAURI_PLUGIN_UPDATER__.check();
     let receivedEvent = null;
     await update.downloadAndInstall(function (event) { receivedEvent = event; });
 
-    const dlCall = h.getInvokeCalls().find((c) => c.cmd === 'plugin:updater|download_and_install');
-    assert.ok(dlCall, 'download_and_install should have been invoked');
+    const dlCall = h.getInvokeCalls().find((c) => c.cmd === 'start_update_download');
+    assert.ok(dlCall, 'start_update_download should have been invoked');
     const args = dlCall.args;
     assert.ok(args, 'args should be passed');
-    assert.strictEqual(args.rid, 42, 'rid must be a top-level integer, not nested in an object');
-    assert.strictEqual(args.update, undefined, 'no "update" wrapper object should be sent');
     assert.ok(args.onEvent, 'onEvent channel should be passed');
-    assert.strictEqual(typeof args.onEvent.send, 'function', 'onEvent must be a Channel instance');
+    assert.ok(args.onEvent instanceof h.context.window.__TAURI__.core.Channel, 'onEvent must be a Channel instance');
     void receivedEvent;
 });
 
@@ -140,14 +138,12 @@ test('check() rejects when Tauri is not available (lazy guard)', async () => {
     );
 });
 
-test('downloadAndInstall works when Channel is not available (fallback)', async () => {
+test('downloadAndInstall throws when Channel is not available', async () => {
     const h = createUpdaterHarness();
     delete h.context.window.__TAURI__.core.Channel;
     const update = await h.context.window.__TAURI_PLUGIN_UPDATER__.check();
-    await update.downloadAndInstall(function (event) {
-        assert.strictEqual(event.event, 'Finished', 'should receive a synthetic Finished event');
-    });
-    const dlCall = h.getInvokeCalls().find((c) => c.cmd === 'plugin:updater|download_and_install');
-    assert.ok(dlCall, 'download_and_install should have been invoked');
-    assert.strictEqual(dlCall.args.onEvent, undefined, 'no onEvent when Channel is unavailable');
+    assert.throws(
+        () => update.downloadAndInstall(function (event) {}),
+        /Channel is not a constructor/
+    );
 });

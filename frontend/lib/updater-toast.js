@@ -14,7 +14,8 @@
         lastProgressAt: 0,
         stallTimer: null,
         abortController: null,
-        mounted: null
+        mounted: null,
+        cancelled: false
     };
 
     function classifyError(e) {
@@ -70,6 +71,7 @@
             +     '<p>Version <strong>v' + escAttr(update.version || '?') + '</strong> is ready to install.</p>'
             +     '<div class="update-toast-actions">'
             +       '<button class="update-toast-update btn-primary">Update</button>'
+            +       '<button class="update-toast-cancel" hidden>Cancel</button>'
             +     '</div>'
             +     '<div class="update-toast-progress" hidden>'
             +       '<div class="update-toast-progress-bar"><div class="update-toast-progress-fill"></div></div>'
@@ -99,16 +101,29 @@
             .replace(/'/g, '&#39;');
     }
 
+    function formatBytes(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / 1048576).toFixed(1) + ' MB';
+    }
+
     function setProgress(el, done, total) {
         var fill = el.querySelector('.update-toast-progress-fill');
         var text = el.querySelector('.update-toast-progress-text');
         if (total > 0) {
             var pct = Math.min(100, Math.round((done / total) * 100));
+            if (pct === 0 && done > 0) pct = 1;
             if (fill) { fill.style.width = pct + '%'; fill.classList.remove('indeterminate'); }
             if (text) text.textContent = 'Downloading… ' + pct + '%';
         } else {
-            if (fill) { fill.style.width = '100%'; fill.classList.add('indeterminate'); }
-            if (text) text.textContent = 'Downloading…';
+            if (fill) { fill.style.width = ''; fill.classList.add('indeterminate'); }
+            if (text) {
+                if (done > 0) {
+                    text.textContent = 'Downloading… ' + formatBytes(done);
+                } else {
+                    text.textContent = 'Downloading…';
+                }
+            }
         }
     }
 
@@ -155,6 +170,32 @@
         state.mounted = null;
     }
 
+    function cancelDownload() {
+        clearStallTimer();
+        if (state.abortController) {
+            try { state.abortController.abort(); } catch (_) {}
+            state.abortController = null;
+        }
+        state.downloaded = 0;
+        state.total = 0;
+        state.cancelled = true;
+        state.current = 'AVAILABLE';
+
+        if (state.mounted && state.mounted.classList.contains('update-toast')) {
+            var progress = state.mounted.querySelector('.update-toast-progress');
+            if (progress) progress.hidden = true;
+            var actions = state.mounted.querySelector('.update-toast-actions');
+            if (actions) {
+                actions.hidden = false;
+                var updateBtn = actions.querySelector('.update-toast-update');
+                var cancelBtn = actions.querySelector('.update-toast-cancel');
+                if (updateBtn) updateBtn.hidden = false;
+                if (cancelBtn) cancelBtn.hidden = true;
+            }
+            setProgress(state.mounted, 0, 0);
+        }
+    }
+
     function mountToast(update) {
         if (state.mounted && state.mounted.classList.contains('update-toast')
             && state.mounted.getAttribute('data-version') === update.version) {
@@ -190,9 +231,11 @@
     function wireToastEvents(el) {
         var closeBtn = el.querySelector('.update-toast-close');
         var updateBtn = el.querySelector('.update-toast-update');
+        var cancelBtn = el.querySelector('.update-toast-cancel');
         var retryBtn = el.querySelector('.update-toast-retry');
         if (closeBtn) closeBtn.addEventListener('click', removeMounted);
         if (updateBtn) updateBtn.addEventListener('click', function () { startDownload(); });
+        if (cancelBtn) cancelBtn.addEventListener('click', function () { cancelDownload(); });
         if (retryBtn) retryBtn.addEventListener('click', function () { startDownload(); });
     }
 
@@ -209,15 +252,21 @@
         state.current = newState;
         if (!state.mounted) return;
         if (newState === 'DOWNLOADING' || newState === 'MINI_PILL') {
-            state.downloaded = (data && data.done) || state.downloaded;
-            state.total = (data && data.total) || state.total;
-            if (state.mounted.classList.contains('update-toast')) {
-                var progress = state.mounted.querySelector('.update-toast-progress');
-                var actions = state.mounted.querySelector('.update-toast-actions');
-                if (progress) progress.hidden = false;
-                if (actions) actions.hidden = true;
-                setProgress(state.mounted, state.downloaded, state.total);
-            } else if (state.mounted.classList.contains('update-pill')) {
+            if (data && data.done != null) state.downloaded = data.done;
+            if (data && data.total != null) state.total = data.total;
+        if (state.mounted.classList.contains('update-toast')) {
+            var progress = state.mounted.querySelector('.update-toast-progress');
+            if (progress) progress.hidden = false;
+            var actions = state.mounted.querySelector('.update-toast-actions');
+            if (actions) {
+                actions.hidden = false;
+                var updateBtn = actions.querySelector('.update-toast-update');
+                var cancelBtn = actions.querySelector('.update-toast-cancel');
+                if (updateBtn) updateBtn.hidden = true;
+                if (cancelBtn) cancelBtn.hidden = false;
+            }
+            setProgress(state.mounted, state.downloaded, state.total);
+        } else if (state.mounted.classList.contains('update-pill')) {
                 var label = state.mounted.querySelector('.update-pill-label');
                 if (label) label.textContent = 'Downloading v' + (state.update.version || '?') + '… ' + Math.round((state.downloaded / Math.max(1, state.total)) * 100) + '%';
             }
@@ -258,22 +307,25 @@
 
     function startDownload() {
         if (!state.update) return;
+        state.cancelled = false;
         state.abortController = new AbortController();
         state.downloaded = 0;
         state.total = 0;
         setState('DOWNLOADING', { done: 0, total: 0 });
         touchProgress();
         state.update.downloadAndInstall(function (event) {
-            if (event.event === 'Started') {
+            if (state.cancelled) return;
+            if (event.event === 'started') {
                 setState('DOWNLOADING', { done: 0, total: event.data.contentLength || 0 });
                 touchProgress();
-            } else if (event.event === 'Progress') {
+            } else if (event.event === 'progress') {
                 setState('DOWNLOADING', { done: state.downloaded + (event.data.chunkLength || 0), total: state.total });
                 touchProgress();
-            } else if (event.event === 'Finished') {
+            } else if (event.event === 'finished') {
                 setState('READY');
             }
-        }).catch(function (e) {
+        }, { signal: state.abortController.signal }).catch(function (e) {
+            if (state.cancelled) return;
             console.warn('Update download failed:', e && e.message);
             if (state.mounted && state.mounted.classList.contains('update-toast')) {
                 setState('ERROR', { errorClass: classifyError(e) });

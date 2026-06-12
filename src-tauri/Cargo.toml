@@ -32,6 +32,7 @@ dirs = "5"
 image = "0.25"
 parking_lot = "0.12"
 shlex = "1"
+tokio = { version = "1", features = ["sync", "macros", "rt"] }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["fileapi"] }

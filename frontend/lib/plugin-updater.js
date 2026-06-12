@@ -20,20 +20,32 @@
                 currentVersion: metadata.currentVersion,
                 notes: metadata.body != null ? String(metadata.body) : null,
                 pubdate: metadata.date != null ? String(metadata.date) : null,
-                downloadAndInstall: function (onEventCallback) {
-                    var channel = null;
-                    if (typeof core.Channel === 'function') {
-                        channel = new core.Channel();
-                        if (typeof onEventCallback === 'function') {
-                            channel.onmessage = onEventCallback;
-                        }
+                downloadAndInstall: function (onEventCallback, options) {
+                    var signal = options && options.signal;
+                    if (signal && signal.aborted) {
+                        return Promise.reject(new Error('Aborted before start'));
                     }
-                    var args = { rid: metadata.rid };
-                    if (channel) args.onEvent = channel;
-                    return core.invoke('plugin:updater|download_and_install', args).then(function () {
-                        if (!channel && typeof onEventCallback === 'function') {
-                            onEventCallback({ event: 'Finished', data: {} });
+                    var channel = new core.Channel();
+                    channel.onmessage = function (event) {
+                        if (typeof onEventCallback === 'function') {
+                            onEventCallback(event);
                         }
+                    };
+                    var onAbort = function () {
+                        core.invoke('cancel_update_download').catch(function () {});
+                    };
+                    if (signal) {
+                        signal.addEventListener('abort', onAbort, { once: true });
+                    }
+                    function cleanup() {
+                        if (signal) signal.removeEventListener('abort', onAbort);
+                    }
+                    var promise = core.invoke('start_update_download', { onEvent: channel });
+                    return promise.then(function () {
+                        cleanup();
+                    }, function (e) {
+                        cleanup();
+                        throw e;
                     });
                 }
             };
