@@ -416,6 +416,11 @@
             startRenameTab(tabId);
         });
 
+        tabItem.addEventListener('contextmenu', function (e) {
+            e.preventDefault();
+            showTabContextMenu(tabId, e.clientX, e.clientY);
+        });
+
         var tab = {
             id: tabId,
             name: name,
@@ -694,6 +699,51 @@
                 finish();
             }
         });
+    }
+
+    function showTabContextMenu(tabId, x, y) {
+        var existing = document.querySelector('.cmd-panel-context-menu');
+        if (existing) existing.remove();
+
+        var menu = document.createElement('div');
+        menu.className = 'cmd-panel-context-menu';
+        menu.style.left = x + 'px';
+        menu.style.top = y + 'px';
+
+        menu.innerHTML =
+            '<div class="cmd-panel-context-menu-item" data-action="new">New Tab</div>' +
+            '<div class="cmd-panel-context-menu-item" data-action="close">Close Tab</div>' +
+            '<div class="cmd-panel-context-menu-divider"></div>' +
+            '<div class="cmd-panel-context-menu-item" data-action="rename">Rename Tab</div>';
+
+        menu.addEventListener('click', function (e) {
+            var action = e.target.getAttribute('data-action');
+            if (action === 'new') createTab();
+            if (action === 'close') closeTab(tabId);
+            if (action === 'rename') startRenameTab(tabId);
+            menu.remove();
+        });
+
+        document.body.appendChild(menu);
+
+        setTimeout(function () {
+            var dismiss = function (e) {
+                if (!menu.contains(e.target)) {
+                    menu.remove();
+                    document.removeEventListener('click', dismiss);
+                    document.removeEventListener('keydown', keyDismiss);
+                }
+            };
+            var keyDismiss = function (e) {
+                if (e.key === 'Escape') {
+                    menu.remove();
+                    document.removeEventListener('click', dismiss);
+                    document.removeEventListener('keydown', keyDismiss);
+                }
+            };
+            document.addEventListener('click', dismiss);
+            document.addEventListener('keydown', keyDismiss);
+        }, 0);
     }
 
     function showCmdPanel() {

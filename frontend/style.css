@@ -8140,3 +8140,33 @@ body.cta-blur .cmd-panel-tab-bar { background: rgba(255,255,255,0.05); backdrop-
 body.cta-glass .cmd-panel-tab-bar { background: var(--modal-hover-bg); backdrop-filter: blur(24px); }
 body.cta-solid .cmd-panel-tab-bar { background: var(--bg-tertiary); }
 body.cta-outline .cmd-panel-tab-bar { background: transparent; border-bottom-color: var(--border-muted); }
+
+/* CMD Panel Tab Context Menu */
+.cmd-panel-context-menu {
+    position: fixed;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    padding: 4px 0;
+    z-index: 100;
+    min-width: 140px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.cmd-panel-context-menu-item {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.cmd-panel-context-menu-item:hover {
+    background: var(--modal-hover-bg);
+}
+
+.cmd-panel-context-menu-divider {
+    height: 1px;
+    background: var(--border-dark);
+    margin: 4px 0;
+}
