@@ -21,18 +21,21 @@ pub fn get_profiles(config: State<AppConfig>) -> Value {
 }
 
 #[tauri::command]
-pub fn create_profile(config: State<AppConfig>, name: String) {
-    config.create_profile(&name);
+pub fn create_profile(config: State<AppConfig>, name: String) -> Result<bool, String> {
+    config.create_profile(&name)?;
+    Ok(true)
 }
 
 #[tauri::command]
-pub fn delete_profile(config: State<AppConfig>, name: String) {
-    config.delete_profile(&name);
+pub fn delete_profile(config: State<AppConfig>, name: String) -> Result<bool, String> {
+    config.delete_profile(&name)?;
+    Ok(true)
 }
 
 #[tauri::command]
-pub fn switch_profile(config: State<AppConfig>, name: String) {
-    config.switch_profile(&name);
+pub fn switch_profile(config: State<AppConfig>, name: String) -> Result<bool, String> {
+    config.switch_profile(&name)?;
+    Ok(true)
 }
 
 #[tauri::command]

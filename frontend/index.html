@@ -6,8 +6,8 @@
     <title>Monoloth</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=block" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=119">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=120">
     <link rel="stylesheet" href="lib/xterm.css?v=12">
     <style>
         .landing-brand, .landing-card, .landing-status-bar {
@@ -20,7 +20,7 @@
         }
     </style>
 </head>
-<body class="cta-blur" data-current-view="landing">
+<body class="cta-blur custom-titlebar-active" data-current-view="landing">
     <!-- Custom Titlebar -->
     <div id="custom-titlebar" class="custom-titlebar">
       <div class="titlebar-section titlebar-left">
@@ -96,6 +96,8 @@
             </div>
 
             <div class="landing-status-bar" id="landing-status-bar">
+                <span id="landing-status-text">Ready</span>
+                <span class="landing-status-sep">·</span>
                 <span class="landing-kbd-text" id="landing-shortcut-commands"><kbd>Ctrl</kbd>+<kbd>P</kbd> Commands</span>
                 <span class="landing-status-sep">·</span>
                 <span class="landing-kbd-text" id="landing-shortcut-settings"><kbd>Ctrl</kbd>+<kbd>,</kbd> Settings</span>
@@ -670,30 +672,36 @@
     </div>
 
     <script>
-        // Prevent font flash: show landing text only after fonts load
         (function() {
-            function showFonts() {
-                document.body.classList.add('fonts-loaded');
+            window.__monolithReady = { fonts: false, config: false };
+            window.__monolithReveal = function () {
+                if (window.__monolithReady.fonts && window.__monolithReady.config) {
+                    document.body.classList.add('fonts-loaded');
+                }
+            };
+            function fontsReady() {
+                window.__monolithReady.fonts = true;
+                window.__monolithReveal();
             }
             if (document.fonts && document.fonts.ready) {
-                document.fonts.ready.then(showFonts);
+                document.fonts.ready.then(fontsReady);
             }
-            setTimeout(showFonts, 1500);
+            setTimeout(fontsReady, 1500);
         })();
     </script>
     <script src="lib/xterm.js?v=14"></script>
     <script src="lib/xterm-addon-fit.js?v=16"></script>
     <script src="lib/xterm-addon-webgl.js?v=15"></script>
-    <script src="tauri-bridge.js?v=22"></script>
+    <script src="tauri-bridge.js?v=23"></script>
 
-    <script src="lib/dom-utils.js?v=3"></script>
+    <script src="lib/dom-utils.js?v=4"></script>
     <script src="lib/plugin-updater.js?v=4"></script>
     <script src="lib/plugin-process.js?v=3"></script>
-    <script src="lib/updater-toast.js?v=7"></script>
+    <script src="lib/updater-toast.js?v=8"></script>
     <script src="tooltip.js?v=8"></script>
 
-    <script src="app.js?v=72"></script>
+    <script src="app.js?v=73"></script>
 
-    <script src="sidebar.js?v=28"></script>
+    <script src="sidebar.js?v=29"></script>
 </body>
 </html>

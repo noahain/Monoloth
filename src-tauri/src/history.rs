@@ -1,5 +1,6 @@
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -41,7 +42,7 @@ pub struct HistoryManager {
 
 struct HistoryInner {
     data: HistoryData,
-    active_session: Option<ActiveSession>,
+    active_sessions: HashMap<String, ActiveSession>,
 }
 
 struct ActiveSession {
@@ -54,31 +55,26 @@ struct ActiveSession {
 impl HistoryManager {
     pub fn new() -> Self {
         let path = history_path();
-        let mut data = if path.exists() {
+        let data = if path.exists() {
             let loaded = load_json(&path);
-            if loaded.enabled {
-                // Purge on load to clean up expired entries
-                let mgr = Self {
-                    inner: Arc::new(Mutex::new(HistoryInner {
-                        data: loaded,
-                        active_session: None,
-                    })),
-                };
-                let mut inner = mgr.inner.lock();
-                mgr.purge_inner(&mut inner);
-                save_json(&history_path(), &inner.data);
-                inner.data.clone()
-            } else {
-                loaded
-            }
+            let mgr = Self {
+                inner: Arc::new(Mutex::new(HistoryInner {
+                    data: loaded,
+                    active_sessions: HashMap::new(),
+                })),
+            };
+            let mut inner = mgr.inner.lock();
+            mgr.purge_inner(&mut inner);
+            save_json(&history_path(), &inner.data);
+            inner.data.clone()
         } else {
             HistoryData::default()
         };
-        data.sessions = data.sessions.into_iter().collect();
+
         Self {
             inner: Arc::new(Mutex::new(HistoryInner {
                 data,
-                active_session: None,
+                active_sessions: HashMap::new(),
             })),
         }
     }
@@ -88,8 +84,39 @@ impl HistoryManager {
         if !inner.data.enabled {
             return;
         }
-        self.session_end_inner(&mut inner);
-        inner.active_session = Some(ActiveSession {
+        let session_id = "main".to_string();
+        if let Some(active) = inner.active_sessions.remove(&session_id) {
+            inner.data.sessions.push(SessionEntry {
+                profile: active.profile,
+                command: active.command,
+                start_time: active.start_time,
+                end_time: Some(iso_now()),
+                directory: active.directory,
+            });
+        }
+        inner.active_sessions.insert(session_id, ActiveSession {
+            profile: profile.to_string(),
+            command: command.to_string(),
+            directory: directory.to_string(),
+            start_time: iso_now(),
+        });
+    }
+
+    pub fn session_start_with_id(&self, session_id: &str, profile: &str, command: &str, directory: &str) {
+        let mut inner = self.inner.lock();
+        if !inner.data.enabled {
+            return;
+        }
+        if let Some(active) = inner.active_sessions.remove(session_id) {
+            inner.data.sessions.push(SessionEntry {
+                profile: active.profile,
+                command: active.command,
+                start_time: active.start_time,
+                end_time: Some(iso_now()),
+                directory: active.directory,
+            });
+        }
+        inner.active_sessions.insert(session_id.to_string(), ActiveSession {
             profile: profile.to_string(),
             command: command.to_string(),
             directory: directory.to_string(),
@@ -99,11 +126,8 @@ impl HistoryManager {
 
     pub fn session_end(&self) {
         let mut inner = self.inner.lock();
-        self.session_end_inner(&mut inner);
-    }
-
-    fn session_end_inner(&self, inner: &mut HistoryInner) {
-        if let Some(active) = inner.active_session.take() {
+        let session_id = "main";
+        if let Some(active) = inner.active_sessions.remove(session_id) {
             inner.data.sessions.push(SessionEntry {
                 profile: active.profile,
                 command: active.command,
@@ -111,7 +135,22 @@ impl HistoryManager {
                 end_time: Some(iso_now()),
                 directory: active.directory,
             });
-            self.purge_inner(inner);
+            self.purge_inner(&mut inner);
+            save_json(&history_path(), &inner.data);
+        }
+    }
+
+    pub fn session_end_by_id(&self, session_id: &str) {
+        let mut inner = self.inner.lock();
+        if let Some(active) = inner.active_sessions.remove(session_id) {
+            inner.data.sessions.push(SessionEntry {
+                profile: active.profile,
+                command: active.command,
+                start_time: active.start_time,
+                end_time: Some(iso_now()),
+                directory: active.directory,
+            });
+            self.purge_inner(&mut inner);
             save_json(&history_path(), &inner.data);
         }
     }
@@ -123,7 +162,6 @@ impl HistoryManager {
 
     pub fn get_data(&self) -> HistoryData {
         let inner = self.inner.lock();
-        // Purge before returning
         let mut data = inner.data.clone();
         apply_retention(&mut data.sessions, &data.retention);
         data
@@ -133,7 +171,7 @@ impl HistoryManager {
         let mut inner = self.inner.lock();
         inner.data.enabled = enabled;
         if !enabled {
-            inner.active_session = None;
+            inner.active_sessions.clear();
         }
         save_json(&history_path(), &inner.data);
     }
@@ -148,7 +186,7 @@ impl HistoryManager {
     pub fn clear_history(&self) {
         let mut inner = self.inner.lock();
         inner.data.sessions.clear();
-        inner.active_session = None;
+        inner.active_sessions.clear();
         save_json(&history_path(), &inner.data);
     }
 }
@@ -161,15 +199,23 @@ fn iso_now() -> String {
 fn epoch_seconds() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 fn retention_days(retention: &str) -> Option<i64> {
     match retention {
         "7d" => Some(7),
         "30d" => Some(30),
-        _ => None,
+        "90d" => Some(90),
+        _ => {
+            // Try to parse "Nd" format
+            if retention.ends_with('d') {
+                retention[..retention.len() - 1].parse::<i64>().ok()
+            } else {
+                None
+            }
+        }
     }
 }
 
@@ -179,9 +225,13 @@ fn apply_retention(sessions: &mut Vec<SessionEntry>, retention: &str) {
     };
     let cutoff = epoch_seconds() - days * 86400;
     sessions.retain(|s| {
-        parse_iso_to_epoch(&s.start_time)
-            .map(|ts| ts >= cutoff)
-            .unwrap_or(true)
+        let ts = s.end_time.as_ref()
+            .and_then(|t| parse_iso_to_epoch(t).ok())
+            .or_else(|| parse_iso_to_epoch(&s.start_time).ok());
+        match ts {
+            Some(t) => t >= cutoff,
+            None => false,
+        }
     });
 }
 
@@ -236,6 +286,13 @@ fn parse_iso_to_epoch(s: &str) -> Result<i64, ()> {
     let min: i64 = s[14..16].parse().map_err(|_| ())?;
     let sec: i64 = s[17..19].parse().map_err(|_| ())?;
 
+    if month < 1 || month > 12 {
+        return Err(());
+    }
+    if hour > 23 || min > 59 || sec > 59 {
+        return Err(());
+    }
+
     let mut days = 0i64;
     for y in 1970..year {
         days += if is_leap(y) { 366 } else { 365 };
@@ -245,6 +302,9 @@ fn parse_iso_to_epoch(s: &str) -> Result<i64, ()> {
     } else {
         [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
     };
+    if day < 1 || day > dims[(month - 1) as usize] {
+        return Err(());
+    }
     for m in 0..(month - 1) as usize {
         days += dims[m];
     }
@@ -274,7 +334,8 @@ fn save_json(path: &Path, data: &HistoryData) {
     }
     match serde_json::to_string_pretty(data) {
         Ok(json) => {
-            let tmp_path = path.with_extension(".tmp");
+            let file_name = path.file_name().unwrap_or_default();
+            let tmp_path = path.with_file_name(format!("{}.tmp", file_name.to_string_lossy()));
             if let Err(e) = fs::write(&tmp_path, &json) {
                 eprintln!(
                     "[Monoloth] Failed to write history {}: {}",

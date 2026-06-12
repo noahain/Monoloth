@@ -122,8 +122,8 @@
     // --- File Preview ---
     api.get_file_preview = function (path) {
         return invoke('get_file_preview', { path: path }).then(function (result) {
-            if (typeof result === 'string') {
-                return { success: true, text: result };
+            if (result && result.Text) {
+                return { success: true, text: result.Text };
             }
             if (result && result.Image) {
                 return { success: true, dataUrl: result.Image };

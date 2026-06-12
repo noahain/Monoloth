@@ -110,20 +110,26 @@ pub fn run() {
                         }
                     }
                     tauri::WindowEvent::CloseRequested { .. } => {
-                        // Save final window state before closing, in case the
-                        // last resize/move was within the 500ms throttle window.
                         let is_max = window_clone.is_maximized().unwrap_or(false);
                         if !is_max {
-                            if let Ok(pos) = window_clone.outer_position() {
-                                cfg_for_events.set_window_position(pos.x, pos.y);
-                            }
-                            if let Ok(size) = window_clone.outer_size() {
-                                cfg_for_events.set_window_size(size.width, size.height);
+                            let is_minimized = window_clone.is_minimized().unwrap_or(false);
+                            if !is_minimized {
+                                if let Ok(pos) = window_clone.outer_position() {
+                                    if pos.x as i64 > WINDOW_MINIMIZED_SENTINEL && pos.y as i64 > WINDOW_MINIMIZED_SENTINEL {
+                                        cfg_for_events.set_window_position(pos.x, pos.y);
+                                    }
+                                }
+                                if let Ok(size) = window_clone.outer_size() {
+                                    if size.width >= MIN_WINDOW_WIDTH as u32 && size.height >= MIN_WINDOW_HEIGHT as u32 {
+                                        cfg_for_events.set_window_size(size.width, size.height);
+                                    }
+                                }
                             }
                         }
                         cfg_for_events.set_window_maximized(is_max);
 
                         history_for_close.session_end();
+                        history_for_close.session_end_by_id("panel");
                         pty_clone.terminate_all();
                     }
                     _ => {}

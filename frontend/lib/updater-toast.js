@@ -61,13 +61,13 @@
 
     function buildToastHtml(update) {
         return ''
-            + '<div class="update-toast" data-version="' + (update.version || '') + '">'
+            + '<div class="update-toast" data-version="' + escAttr(update.version || '') + '">'
             +   '<div class="update-toast-header">'
             +     '<span class="update-toast-title">Update available</span>'
             +     '<button class="update-toast-close" aria-label="Dismiss">&times;</button>'
             +   '</div>'
             +   '<div class="update-toast-body">'
-            +     '<p>Version <strong>v' + (update.version || '?') + '</strong> is ready to install.</p>'
+            +     '<p>Version <strong>v' + escAttr(update.version || '?') + '</strong> is ready to install.</p>'
             +     '<div class="update-toast-actions">'
             +       '<button class="update-toast-update btn-primary">Update</button>'
             +     '</div>'
@@ -82,20 +82,34 @@
 
     function buildPillHtml(update) {
         return ''
-            + '<div class="update-pill" data-version="' + (update.version || '') + '">'
-            +   '<span class="update-pill-label">Updating v' + (update.version || '?') + '&hellip;</span>'
+            + '<div class="update-pill" data-version="' + escAttr(update.version || '') + '">'
+            +   '<span class="update-pill-label">Updating v' + escAttr(update.version || '?') + '&hellip;</span>'
             +   '<button class="update-pill-restart btn-primary" hidden>Restart</button>'
             +   '<button class="update-pill-open" aria-label="Open">&hellip;</button>'
             +   '<button class="update-pill-close" aria-label="Dismiss">&times;</button>'
             + '</div>';
     }
 
+    function escAttr(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     function setProgress(el, done, total) {
-        var pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
         var fill = el.querySelector('.update-toast-progress-fill');
         var text = el.querySelector('.update-toast-progress-text');
-        if (fill) fill.style.width = pct + '%';
-        if (text) text.textContent = 'Downloading… ' + pct + '%';
+        if (total > 0) {
+            var pct = Math.min(100, Math.round((done / total) * 100));
+            if (fill) { fill.style.width = pct + '%'; fill.classList.remove('indeterminate'); }
+            if (text) text.textContent = 'Downloading… ' + pct + '%';
+        } else {
+            if (fill) { fill.style.width = '100%'; fill.classList.add('indeterminate'); }
+            if (text) text.textContent = 'Downloading…';
+        }
     }
 
     function showErrorInToast(el, errorClass) {
@@ -115,13 +129,18 @@
             UNKNOWN:    { title: 'Update failed',                body: 'See console for details. Click Retry to try again.' }
         }[errorClass] || { title: 'Update failed', body: 'Click Retry to try again.' };
         errorEl.innerHTML = ''
-            + '<p class="update-toast-error-title"><strong>' + copy.title + '</strong></p>'
-            + '<p>' + copy.body + '</p>'
+            + '<p class="update-toast-error-title"><strong>' + escAttr(copy.title) + '</strong></p>'
+            + '<p>' + escAttr(copy.body) + '</p>'
             + '<div class="update-toast-actions">'
             +   '<button class="update-toast-retry btn-primary">Retry</button>'
             +   '<button class="update-toast-close">Dismiss</button>'
             + '</div>';
         errorEl.hidden = false;
+
+        var retryBtn = errorEl.querySelector('.update-toast-retry');
+        var closeBtn = errorEl.querySelector('.update-toast-close');
+        if (retryBtn) retryBtn.addEventListener('click', function () { startDownload(); });
+        if (closeBtn) closeBtn.addEventListener('click', removeMounted);
     }
 
     function removeMounted() {
@@ -368,8 +387,8 @@
                     if (actionsEl) actionsEl.hidden = true;
                     if (errorEl) {
                         errorEl.innerHTML = ''
-                            + '<p class="update-toast-error-title"><strong>' + copy.title + '</strong></p>'
-                            + '<p>' + copy.body + '</p>'
+                            + '<p class="update-toast-error-title"><strong>' + escAttr(copy.title) + '</strong></p>'
+                            + '<p>' + escAttr(copy.body) + '</p>'
                             + '<div class="update-toast-actions">'
                             +   '<button class="update-toast-retry btn-primary">Retry</button>'
                             +   '<button class="update-toast-cancel">Cancel</button>'

@@ -1,0 +1,176 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-11T23:10:00Z",
+  "title": "Design System: Monolith",
+  "extensions": {
+    "colorMeta": {
+      "bg-primary": { "role": "neutral", "displayName": "Near Black", "canonical": "#0a0a0a", "tonalRamp": ["#000000", "#0a0a0a", "#141414", "#1e1e1e", "#282828", "#323232", "#3c3c3c", "#464646"] },
+      "bg-secondary": { "role": "neutral", "displayName": "Dark Surface", "canonical": "#111111", "tonalRamp": ["#050505", "#0e0e0e", "#181818", "#222222", "#2c2c2c", "#363636", "#404040", "#4a4a4a"] },
+      "bg-tertiary": { "role": "neutral", "displayName": "Charcoal", "canonical": "#1a1a1a", "tonalRamp": ["#0a0a0a", "#141414", "#1e1e1e", "#282828", "#323232", "#3c3c3c", "#464646", "#505050"] },
+      "text-primary": { "role": "neutral", "displayName": "Light Gray", "canonical": "#eeeeee", "tonalRamp": ["#2a2a2a", "#4a4a4a", "#6a6a6a", "#8a8a8a", "#aaaaaa", "#c4c4c4", "#dcdcdc", "#f5f5f5"] },
+      "text-secondary": { "role": "neutral", "displayName": "Silver", "canonical": "#c0c0c0", "tonalRamp": ["#1a1a1a", "#3a3a3a", "#5a5a5a", "#7a7a7a", "#9a9a9a", "#b0b0b0", "#d0d0d0", "#e8e8e8"] },
+      "text-muted": { "role": "neutral", "displayName": "Mid Gray", "canonical": "#808080", "tonalRamp": ["#0a0a0a", "#202020", "#3a3a3a", "#545454", "#6e6e6e", "#888888", "#a2a2a2", "#bcbcbc"] },
+      "text-dim": { "role": "neutral", "displayName": "Slate", "canonical": "#737373", "tonalRamp": ["#080808", "#1c1c1c", "#343434", "#4c4c4c", "#646464", "#7e7e7e", "#989898", "#b2b2b2"] },
+      "border-dark": { "role": "neutral", "displayName": "Deep Border", "canonical": "#1a1a1a", "tonalRamp": ["#0a0a0a", "#141414", "#1e1e1e", "#282828", "#323232", "#3c3c3c", "#464646", "#505050"] },
+      "border-muted": { "role": "neutral", "displayName": "Muted Border", "canonical": "#303030", "tonalRamp": ["#0e0e0e", "#1a1a1a", "#262626", "#323232", "#3e3e3e", "#4a4a4a", "#565656", "#626262"] },
+      "border-light": { "role": "neutral", "displayName": "Light Border", "canonical": "#4b4c5c", "tonalRamp": ["#1a1b28", "#262738", "#323448", "#3e4058", "#4b4c5c", "#5c5d6c", "#6d6e7c", "#7e7f8c"] },
+      "accent-primary": { "role": "primary", "displayName": "Warm Peach", "canonical": "#fab283", "tonalRamp": ["#3d1f0a", "#6b3714", "#985020", "#c46a2e", "#e0843e", "#fab283", "#fbcfa8", "#fde8d0"] },
+      "accent-blue": { "role": "tertiary", "displayName": "Sky Blue", "canonical": "#5c9cf5", "tonalRamp": ["#0a1e3d", "#14376b", "#205098", "#2e6ac4", "#3e84e0", "#5c9cf5", "#83b8f9", "#aad4fc"] },
+      "accent-secondary": { "role": "secondary", "displayName": "Soft Lavender", "canonical": "#9d7cd8", "tonalRamp": ["#1a0e3d", "#301a6b", "#482898", "#6038c4", "#7a4ee0", "#9d7cd8", "#b9a0e4", "#d5c4f0"] },
+      "accent-green": { "role": "tertiary", "displayName": "Mint Green", "canonical": "#7fd88f", "tonalRamp": ["#0a3d0e", "#146b1a", "#209828", "#2ec438", "#3ee04e", "#7fd88f", "#a0e8ad", "#c0f0c8"] },
+      "accent-red": { "role": "tertiary", "displayName": "Coral Red", "canonical": "#e06c75", "tonalRamp": ["#3d0a0e", "#6b141a", "#982028", "#c42e38", "#e03e4e", "#e06c75", "#e89098", "#f0b4b8"] },
+      "accent-warning": { "role": "tertiary", "displayName": "Amber", "canonical": "#f5a742", "tonalRamp": ["#3d220a", "#6b3c14", "#985620", "#c4702e", "#e08a3e", "#f5a742", "#f7bc6a", "#fad198"] },
+      "accent-info": { "role": "tertiary", "displayName": "Cyan", "canonical": "#56b6c2", "tonalRamp": ["#0a2e32", "#145058", "#207280", "#2e94a8", "#3eb6c0", "#56b6c2", "#80ccd6", "#a8e0e8"] },
+      "accent-red-bg": { "role": "neutral", "displayName": "Dark Red", "canonical": "#3a2020", "tonalRamp": ["#140a0a", "#1e1010", "#281616", "#321c1c", "#3c2222", "#462828", "#502e2e", "#5a3434"] },
+      "accent-red-dim": { "role": "neutral", "displayName": "Muted Red", "canonical": "#c05060", "tonalRamp": ["#2a0e12", "#441820", "#5e2430", "#783240", "#924250", "#ac5260", "#c06878", "#d48090"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Bebas Neue", "purpose": "Landing brand h1, modal titles, CTA buttons, profile names, settings h3, file picker OK/Cancel." },
+      "body": { "displayName": "JetBrains Mono", "purpose": "All body text, labels, form elements, tab buttons, tooltips, status messages, command palette, file listings, kbd." }
+    },
+    "shadows": [
+      { "name": "glass-ambient", "value": "0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03), inset 0 1px 0 rgba(255,255,255,0.04)", "purpose": "Settings modal in CTA blur mode. Grounds the frosted glass." },
+      { "name": "glass-hover", "value": "0 0 20px rgba(255,255,255,0.06)", "purpose": "File picker OK button hover. Subtle glow, not lift." },
+      { "name": "active-ring", "value": "0 0 0 1px rgba(255,255,255,0.15)", "purpose": "Gradient button active state. A ring, not a shadow." },
+      { "name": "glass-light-ambient", "value": "0 24px 80px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.8)", "purpose": "Settings modal in light mode CTA blur." }
+    ],
+    "motion": [
+      { "name": "ease-default", "value": "ease", "purpose": "Default for all transitions." },
+      { "name": "ease-spring", "value": "cubic-bezier(0.34,1.56,0.64,1)", "purpose": "Toggle knob spring overshoot. The tactile signature of the system." },
+      { "name": "duration-tooltip", "value": "0.1s", "purpose": "Tooltip show/hide." },
+      { "name": "duration-micro", "value": "0.15s", "purpose": "Sidebar items, titlebar buttons, file rows, card hover." },
+      { "name": "duration-standard", "value": "0.2s", "purpose": "Buttons, inputs, toggles, selectors, most interactive elements." },
+      { "name": "duration-glass", "value": "0.25s", "purpose": "Glass surface transitions (bg, border, box-shadow)." },
+      { "name": "duration-theme", "value": "0.3s", "purpose": "Theme transitions (bg-color, color, border-color, box-shadow)." },
+      { "name": "duration-theme-class", "value": "350ms", "purpose": "Theme-transitioning class duration." }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Understated by design. Earns attention through interaction, not color.",
+      "html": "<button class=\"ds-btn-primary\">LAUNCH SESSION</button>",
+      "css": ".ds-btn-primary { background: transparent; border: 1px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.7); padding: 0.4rem 1rem; font-size: 0.65rem; border-radius: 6px; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.2s ease; cursor: pointer; outline: none; } .ds-btn-primary:hover { border-color: rgba(255,255,255,0.25); color: rgba(255,255,255,0.95); background: rgba(255,255,255,0.06); } .ds-btn-primary:active { border-color: rgba(255,255,255,0.4); color: #fff; background: rgba(255,255,255,0.1); } .ds-btn-primary:focus-visible { outline: 2px solid #5c9cf5; outline-offset: 2px; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Extends secondary button. Red-tinted border and text for destructive actions.",
+      "html": "<button class=\"ds-btn-danger\">DELETE PROFILE</button>",
+      "css": ".ds-btn-danger { background: transparent; border: 1px solid rgba(224,108,117,0.25); color: #e06c75; padding: 0.4rem 1rem; font-size: 0.65rem; border-radius: 6px; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.2s ease; cursor: pointer; outline: none; } .ds-btn-danger:hover { border-color: #e06c75; color: #ff6b6b; background: rgba(224,108,117,0.08); } .ds-btn-danger:focus-visible { outline: 2px solid #5c9cf5; outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "Subtle fill with thin border. Focus shifts border opacity, no glow.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Enter value...\" />",
+      "css": ".ds-input { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.95); padding: 0.6rem 0.8rem; font-size: 0.75rem; border-radius: 6px; font-family: 'JetBrains Mono', monospace; width: 100%; outline: none; transition: all 0.2s ease; box-sizing: border-box; } .ds-input::placeholder { color: rgba(255,255,255,0.2); } .ds-input:focus { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.2); } .ds-input:focus-visible { outline: 2px solid #5c9cf5; outline-offset: 2px; }"
+    },
+    {
+      "name": "Settings Card",
+      "kind": "card",
+      "refersTo": "card-settings",
+      "description": "Subtle glass card with icon + text layout. Staggered entrance animation.",
+      "html": "<div class=\"ds-settings-card\"><div class=\"ds-settings-card-icon\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42\"/></svg></div><div class=\"ds-settings-card-body\"><h3>APPEARANCE</h3><p>Customize the visual theme, colors, and glass effects.</p></div></div>",
+      "css": ".ds-settings-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 12px; padding: 1.25rem; display: flex; gap: 1rem; align-items: flex-start; transition: border-color 0.15s ease; } .ds-settings-card:hover { border-color: rgba(255,255,255,0.08); } .ds-settings-card-icon { width: 36px; height: 36px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.4); flex-shrink: 0; } .ds-settings-card-body h3 { font-size: 0.95rem; color: rgba(255,255,255,0.95); letter-spacing: 2px; text-transform: uppercase; font-weight: 400; font-family: 'Bebas Neue', Impact, sans-serif; margin: 0 0 0.3rem 0; } .ds-settings-card-body p { color: rgba(255,255,255,0.35); font-size: 0.7rem; line-height: 1.6; margin: 0; font-family: 'JetBrains Mono', monospace; }"
+    },
+    {
+      "name": "Landing Card",
+      "kind": "card",
+      "refersTo": "card-landing",
+      "description": "Full-width card with CTA-style glass background. Border and shadow transition on hover.",
+      "html": "<div class=\"ds-landing-card\"><div class=\"ds-landing-card-content\"><span class=\"ds-landing-card-label\">RECENT PROJECT</span><span class=\"ds-landing-card-path\">C:\\Users\\dev\\project</span></div></div>",
+      "css": ".ds-landing-card { width: 100%; border-radius: 14px; border: 1px solid rgba(255,255,255,0.06); overflow: hidden; transition: border-color 0.3s ease, box-shadow 0.3s ease; background: rgba(20,20,20,0.6); backdrop-filter: blur(12px); padding: 1rem 1.25rem; box-sizing: border-box; cursor: pointer; } .ds-landing-card:hover { border-color: rgba(255,255,255,0.12); } .ds-landing-card-content { display: flex; flex-direction: column; gap: 0.25rem; } .ds-landing-card-label { font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 0.5px; } .ds-landing-card-path { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: rgba(255,255,255,0.7); }"
+    },
+    {
+      "name": "Toggle Switch",
+      "kind": "custom",
+      "refersTo": "toggle-switch",
+      "description": "Spring-eased toggle with mint green active state. The tactile signature of the system.",
+      "html": "<label class=\"ds-toggle\"><input type=\"checkbox\" checked /><span class=\"ds-toggle-track\"><span class=\"ds-toggle-knob\"></span></span></label>",
+      "css": ".ds-toggle { display: inline-flex; align-items: center; cursor: pointer; position: relative; } .ds-toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; } .ds-toggle-track { width: 28px; height: 16px; background: rgba(255,255,255,0.1); border-radius: 8px; position: relative; transition: background 0.2s ease; } .ds-toggle input:checked + .ds-toggle-track { background: rgba(127,216,143,0.4); } .ds-toggle-knob { width: 12px; height: 12px; background: rgba(255,255,255,0.6); border-radius: 50%; position: absolute; top: 2px; left: 2px; transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), background 0.2s ease; } .ds-toggle input:checked + .ds-toggle-track .ds-toggle-knob { transform: translateX(12px); background: #7fd88f; } .ds-toggle input:focus-visible + .ds-toggle-track { outline: 2px solid #5c9cf5; outline-offset: 2px; }"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "custom",
+      "refersTo": "segmented-control",
+      "description": "Theme/style selector group. Active state intensifies border and fill.",
+      "html": "<div class=\"ds-segmented\"><button class=\"ds-segment-btn ds-segment-active\">DARK</button><button class=\"ds-segment-btn\">LIGHT</button><button class=\"ds-segment-btn\">AUTO</button></div>",
+      "css": ".ds-segmented { display: inline-flex; gap: 0; } .ds-segment-btn { background: transparent; border: 1px solid rgba(255,255,255,0.06); color: rgba(255,255,255,0.35); padding: 0.35rem 0.85rem; font-size: 0.65rem; border-radius: 6px; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.2s ease; cursor: pointer; outline: none; margin-left: -1px; } .ds-segment-btn:first-child { margin-left: 0; border-radius: 6px 0 0 6px; } .ds-segment-btn:last-child { border-radius: 0 6px 6px 0; } .ds-segment-btn:hover { border-color: rgba(255,255,255,0.15); color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.05); z-index: 1; } .ds-segment-active { border-color: rgba(255,255,255,0.2); color: rgba(255,255,255,0.95); background: rgba(255,255,255,0.08); z-index: 1; } .ds-segment-btn:focus-visible { outline: 2px solid #5c9cf5; outline-offset: 2px; }"
+    },
+    {
+      "name": "Tooltip",
+      "kind": "custom",
+      "refersTo": "tooltip",
+      "description": "Dark glass tooltip with monospace text. Z-index at system max.",
+      "html": "<div class=\"ds-tooltip\" style=\"position:relative;display:inline-block;\"><span class=\"ds-tooltip-text\">Ctrl+P to open palette</span><span>Hover me</span></div>",
+      "css": ".ds-tooltip { position: relative; display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: rgba(255,255,255,0.7); } .ds-tooltip-text { visibility: hidden; opacity: 0; background: rgba(18,18,18,0.92); color: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.08); backdrop-filter: blur(12px); padding: 4px 10px; border-radius: 6px; position: absolute; bottom: 125%; left: 50%; transform: translateX(-50%) translateY(4px); white-space: nowrap; z-index: 2147483647; pointer-events: none; transition: opacity 0.1s ease, transform 0.1s ease; font-size: 0.65rem; } .ds-tooltip:hover .ds-tooltip-text { visibility: visible; opacity: 1; transform: translateX(-50%) translateY(0); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Engineered Studio",
+    "overview": "Monolith is a desktop shell for TUI coding agents. It wraps CLI tools like OpenCode and Claude Code in a native Windows application with terminal emulation, visual customization, and session tracking. The design serves developers who care about craft — people who notice when a border radius is off by 2px. The interface is atmospheric but never decorative: glassmorphism provides depth, monospace text provides rhythm, the warm peach accent provides warmth against the dark canvas.\n\nThis is not a toy, not a dashboard, not a landing page. It is a tool that disappears during deep work and delights during configuration. The glassmorphism is restrained (blur capped at 24px for performance), the animations are functional feedback (not delight theater), and every surface earns its place. The system explicitly rejects VS Code's utilitarian gray, SaaS landing-page cliches, neon/hacker aesthetics, gamified dashboards, and corporate enterprise sterility.\n\nDark mode is the default and the primary canvas. Light mode is a first-class citizen — same accent palette, same structure, inverted luminance. Auto mode analyzes wallpaper brightness to switch dynamically.",
+    "keyCharacteristics": [
+      "Dark-mode primary with first-class light mode support",
+      "Glassmorphism-first surfaces (frosted glass with subtle transparency and blur)",
+      "Monospace body text (JetBrains Mono), display headings (Bebas Neue)",
+      "Minimal chrome: thin borders, muted colors, no heavy shadows",
+      "Alphacolor convention: dark mode uses rgba(white, opacity), light mode uses rgba(black, opacity)",
+      "Accent colors are theme-agnostic — same palette in both modes",
+      "Uppercase text convention for UI labels and controls",
+      "Functional animations: spring-easing toggles, staggered card entrances, 200ms transitions"
+    ],
+    "rules": [
+      { "name": "The Alphacolor Rule", "body": "Dark mode uses rgba(white, opacity). Light mode uses rgba(black, opacity). Never mix the two in a single token. The inversion is mechanical, not aesthetic.", "section": "colors" },
+      { "name": "The Accent Scarcity Rule", "body": "The warm peach accent appears on less than 5% of any screen. It marks 'active' or 'selected' states — badges, focus rings, folder icons. If everything is accent, nothing is.", "section": "colors" },
+      { "name": "The Theme-Agnostic Accent Rule", "body": "Accent colors (--accent-*) are identical in dark and light modes. They are never overridden by theme switching.", "section": "colors" },
+      { "name": "The color-scheme Rule", "body": ":root sets color-scheme: dark. body.light-mode and body.adaptive-light set color-scheme: light. This affects native controls — Windows uses this for auto-darkening. Never omit it.", "section": "colors" },
+      { "name": "The Uppercase Convention", "body": "Most UI text is text-transform: uppercase. Exceptions: input text, descriptions, body copy, and anything the user types. The uppercase convention signals 'system chrome' while lowercase signals 'user content'.", "section": "typography" },
+      { "name": "The Mono-Everything Rule", "body": "JetBrains Mono is the default for everything: buttons, labels, inputs, tooltips, status messages, file listings. Bebas Neue is reserved for brand moments. Don't introduce a third font family.", "section": "typography" },
+      { "name": "The 65ch Body Rule", "body": "Body text (descriptions, config editor, status messages) should not exceed 65 characters per line. The monospace font's fixed width makes long lines harder to scan.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "Surfaces are flat at rest. Glassmorphism provides atmospheric depth (transparency + blur), not physical depth. Shadows appear only as ambient grounding on glass modals.", "section": "elevation" },
+      { "name": "The Blur Cap Rule", "body": "backdrop-filter: blur() values are capped at blur(24px). If a surface needs more blur to look right, the background opacity is wrong — fix the alpha, not the blur.", "section": "elevation" },
+      { "name": "The No-Confirm Rule", "body": "No 'Are you sure?' confirmations for reversible actions. Close a modal with × — it closes. Delete a profile — it deletes. Trust the user.", "section": "components" },
+      { "name": "The Live-Apply Rule", "body": "Every setting change applies immediately. No 'Save' buttons. Theme switches, CTA style changes, background updates — all live. The 350ms transition class makes it smooth.", "section": "components" },
+      { "name": "The Spring Toggle Rule", "body": "Toggle knobs always use the spring easing cubic-bezier(0.34,1.56,0.64,1). The overshoot is the tactile signature of the system. Don't flatten it to ease.", "section": "components" },
+      { "name": "The Staggered Entrance Rule", "body": "Settings cards enter with 40ms delay increments. The first card appears at 0ms, the second at 40ms, up to the eighth at 280ms. This creates a 'loading' feel without a spinner.", "section": "components" }
+    ],
+    "dos": [
+      "Do use the alphacolor convention: rgba(white, opacity) in dark mode, rgba(black, opacity) in light mode.",
+      "Do keep accent colors (--accent-*) identical across themes. They are the one invariant.",
+      "Do use font-display: swap on all font-face rules. Invisible text during load is unacceptable.",
+      "Do set color-scheme: dark on :root and color-scheme: light on light-mode bodies. Native controls depend on this.",
+      "Do cap backdrop-filter: blur() at blur(24px). Performance matters more than glass intensity.",
+      "Do apply the prefers-reduced-motion, prefers-reduced-transparency, and prefers-contrast: more media queries.",
+      "Do use text-transform: uppercase for system chrome. Use lowercase for user content.",
+      "Do make every interactive element focus-visible with 2px solid var(--accent-blue) and 2px offset.",
+      "Do apply staggered entrance animations to card lists (40ms increments).",
+      "Do use the spring easing cubic-bezier(0.34,1.56,0.64,1) for toggle knob transitions."
+    ],
+    "donts": [
+      "Don't use VS Code's utilitarian gray flatness. The system has depth through glassmorphism.",
+      "Don't use SaaS landing-page cliches — gradient heroes, 'trusted by' logos, pricing tables.",
+      "Don't use neon/hacker aesthetics — cyberpunk green-on-black, Matrix rain, 'h4ck3r' vibes.",
+      "Don't use gamified dashboards — XP bars, achievement badges, cartoon mascots.",
+      "Don't use corporate enterprise blue, sterile white, or 'synergy' energy.",
+      "Don't use #000 or #fff as raw values. Always use the alpha convention.",
+      "Don't override accent colors in light mode. They are theme-agnostic by design.",
+      "Don't add heavy shadows or skeuomorphic depth. The system is flat with glassmorphic atmosphere.",
+      "Don't use backdrop-filter: blur() values above 24px.",
+      "Don't introduce a third font family. JetBrains Mono and Bebas Neue are the entire system.",
+      "Don't use bounce, elastic, or spring easing on anything other than toggle knobs.",
+      "Don't animate CSS layout properties (width, height, top, left). Use transform and opacity only.",
+      "Don't use gradient text (background-clip: text). Use solid color with weight or size for emphasis.",
+      "Don't use side-stripe borders. Use full borders, background tints, or nothing.",
+      "Don't wrap everything in containers. Most elements don't need a card or wrapper.",
+      "Don't use modals as a first thought. Exhaust inline and progressive alternatives first.",
+      "Don't add 'Save' or 'Apply' buttons to settings. Changes apply live.",
+      "Don't add 'Are you sure?' confirmations for reversible actions. Trust the user."
+    ]
+  }
+}

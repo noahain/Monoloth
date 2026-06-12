@@ -17,7 +17,7 @@ struct PtyOutput {
 }
 
 struct PtySession {
-    writer: Box<dyn Write + Send>,
+    writer: Arc<Mutex<Box<dyn Write + Send>>>,
     resizer: Option<Arc<Mutex<Box<dyn portable_pty::MasterPty + Send>>>>,
     child: Box<dyn portable_pty::ChildKiller + Send>,
     read_thread: Option<thread::JoinHandle<()>>,
@@ -26,7 +26,7 @@ struct PtySession {
 #[derive(Clone)]
 pub struct PtyManager {
     sessions: Arc<Mutex<HashMap<String, PtySession>>>,
-    app_handle: OnceLock<tauri::AppHandle>,
+    app_handle: Arc<OnceLock<tauri::AppHandle>>,
     session_generation: Arc<Mutex<HashMap<String, u64>>>,
 }
 
@@ -34,7 +34,7 @@ impl PtyManager {
     pub fn new() -> Self {
         Self {
             sessions: Arc::new(Mutex::new(HashMap::new())),
-            app_handle: OnceLock::new(),
+            app_handle: Arc::new(OnceLock::new()),
             session_generation: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -93,7 +93,7 @@ impl PtyManager {
         });
 
         let session = PtySession {
-            writer,
+            writer: Arc::new(Mutex::new(writer)),
             resizer: Some(Arc::new(Mutex::new(pair.master))),
             child,
             read_thread: Some(read_handle),
@@ -105,7 +105,7 @@ impl PtyManager {
     }
 
     fn emit_output(
-        app_handle: &OnceLock<tauri::AppHandle>,
+        app_handle: &Arc<OnceLock<tauri::AppHandle>>,
         data: String,
         eof: bool,
         session_id: &str,
@@ -125,7 +125,7 @@ impl PtyManager {
     }
 
     fn read_loop(
-        app_handle: OnceLock<tauri::AppHandle>,
+        app_handle: Arc<OnceLock<tauri::AppHandle>>,
         mut reader: Box<dyn std::io::Read + Send>,
         session_id: String,
         generation: u64,
@@ -183,7 +183,7 @@ impl PtyManager {
     }
 
     fn flush_leftover(
-        app_handle: &OnceLock<tauri::AppHandle>,
+        app_handle: &Arc<OnceLock<tauri::AppHandle>>,
         leftover: &mut Vec<u8>,
         session_id: &str,
         generation: u64,
@@ -197,16 +197,18 @@ impl PtyManager {
     }
 
     pub fn write_input(&self, session_id: &str, data: &str) -> Result<(), String> {
-        let mut sessions = self.sessions.lock();
-        let session = sessions
-            .get_mut(session_id)
-            .ok_or_else(|| format!("No PTY session: {}", session_id))?;
-        session
-            .writer
+        let writer = {
+            let sessions = self.sessions.lock();
+            sessions
+                .get(session_id)
+                .map(|s| s.writer.clone())
+                .ok_or_else(|| format!("No PTY session: {}", session_id))?
+        };
+        let mut writer = writer.lock();
+        writer
             .write_all(data.as_bytes())
             .map_err(|e| format!("Failed to write: {}", e))?;
-        session
-            .writer
+        writer
             .flush()
             .map_err(|e| format!("Failed to flush: {}", e))?;
         Ok(())
@@ -241,7 +243,9 @@ impl PtyManager {
             let _ = s.child.kill();
             drop(s.writer);
             s.resizer = None;
-            let _ = s.read_thread.take();
+            if let Some(handle) = s.read_thread.take() {
+                let _ = handle.join();
+            }
         }
     }
 

@@ -36,7 +36,7 @@ pub fn start_terminal(
 
         let active_profile = config.get_active_profile();
         if record {
-            history.session_start(&active_profile, &format!("[Panel] {}", shell_exe), &directory);
+            history.session_start_with_id(&session_id, &active_profile, &format!("[Panel] {}", shell_exe), &directory);
         }
         return Ok(gen);
     }
@@ -51,8 +51,11 @@ pub fn start_terminal(
         resolve_command(&startup_cmd)?
     };
 
+    let args_str: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    let gen = pty.spawn(&session_id, &cmd, &args_str, &directory, cols, rows)?;
+
     if record {
-        let display_command = if cmd_type == "custom" { &startup_cmd } else { &startup_cmd };
+        let display_command = if cmd_type == "custom" { &startup_cmd } else { &cmd };
         history.session_start(&active_profile, display_command, &directory);
     }
 
@@ -66,10 +69,14 @@ pub fn start_terminal(
                             if let Some(cmd_str) = cmd_obj.get("command").and_then(|v| v.as_str()) {
                                 match cmd_obj.get("mode").and_then(|v| v.as_str()) {
                                     Some("before") => {
-                                        let _ = run_before_command(cmd_str, &directory);
+                                        if let Err(e) = run_before_command(cmd_str, &directory) {
+                                            eprintln!("[Monoloth] Before command failed: {}", e);
+                                        }
                                     }
                                     Some("parallel") => {
-                                        let _ = run_parallel_command(cmd_str.to_string(), directory.clone());
+                                        if let Err(e) = run_parallel_command(cmd_str.to_string(), directory.clone()) {
+                                            eprintln!("[Monoloth] Parallel command failed: {}", e);
+                                        }
                                     }
                                     _ => {}
                                 }
@@ -80,9 +87,6 @@ pub fn start_terminal(
             }
         }
     }
-
-    let args_str: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    let gen = pty.spawn(&session_id, &cmd, &args_str, &directory, cols, rows)?;
 
     Ok(gen)
 }
@@ -102,9 +106,8 @@ pub fn terminate_terminal(pty: State<PtyManager>, history: State<HistoryManager>
     let sid = session_id.unwrap_or_else(|| "main".to_string());
     if sid == "main" {
         history.session_end();
-        // Also terminate the panel session if active, to prevent stale
-        // pty-output events from interfering with a new session.
-        pty.terminate("panel");
+    } else {
+        history.session_end_by_id(&sid);
     }
     pty.terminate(&sid);
 }
@@ -136,32 +139,42 @@ fn resolve_command(preset: &str) -> Result<(String, Vec<String>), String> {
 
 fn wrap_path_for_windows(path: &str) -> (String, Vec<String>) {
     if cfg!(windows) {
-        ("cmd".into(), vec!["/C".into(), path.to_string()])
+        // Only wrap in cmd /C for bare names that need PATHEXT resolution.
+        // Don't wrap known shells or absolute paths, as cmd /C breaks their
+        // TTY detection, colors, and PSReadline support.
+        let is_shell = path.eq_ignore_ascii_case("powershell")
+            || path.eq_ignore_ascii_case("pwsh")
+            || path.eq_ignore_ascii_case("cmd");
+        let is_path = path.contains('/') || path.contains('\\');
+        if is_shell || is_path {
+            (path.to_string(), vec![])
+        } else {
+            ("cmd".into(), vec!["/C".into(), path.to_string()])
+        }
     } else {
         (path.to_string(), vec![])
     }
 }
 
 fn resolve_custom_command(cmd_line: &str) -> Result<(String, Vec<String>), String> {
-    let parts = shlex::split(cmd_line).ok_or_else(|| "Failed to parse command line".to_string())?;
+    let trimmed = cmd_line.trim();
+    if trimmed.is_empty() {
+        return Err("Empty command".into());
+    }
+
+    if cfg!(windows) {
+        // On Windows, pass the raw command line to cmd /C without splitting.
+        // shlex implements POSIX shell lexing where \ is an escape character,
+        // which mangles Windows backslash paths (e.g., C:\Users\name\script.bat).
+        let args: Vec<String> = vec!["/C".to_string(), trimmed.to_string()];
+        return Ok(("cmd".into(), args));
+    }
+
+    let parts = shlex::split(trimmed).ok_or_else(|| "Failed to parse command line".to_string())?;
     if parts.is_empty() {
         return Err("Empty command".into());
     }
     let exe = &parts[0];
-
-    if cfg!(windows) {
-        // On Windows, wrap the full custom command in cmd /C to delegate
-        // PATHEXT resolution to Windows. portable-pty's search_path prefers
-        // extensionless files, which breaks npm-installed extensionless scripts
-        // (e.g. claude, codex) that coexist with their .cmd counterparts and
-        // would fail with CreateProcessW error 193.
-        let args: Vec<String> = std::iter::once("/C".to_string())
-            .chain(std::iter::once(exe.to_string()))
-            .chain(parts[1..].iter().cloned())
-            .collect();
-        return Ok(("cmd".into(), args));
-    }
-
     Ok((exe.to_string(), parts[1..].to_vec()))
 }
 
@@ -173,67 +186,77 @@ fn find_opencode() -> Result<String, String> {
         }
     }
 
-    if let Ok(output) = Command::new("where").arg("opencode").output() {
-        if output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout);
-            if let Some(first) = path.lines().next() {
-                let trimmed = first.trim().to_string();
-                return Ok(trimmed);
+    if cfg!(windows) {
+        if let Ok(output) = Command::new("where").arg("opencode").output() {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout);
+                if let Some(first) = path.lines().next() {
+                    let trimmed = first.trim().to_string();
+                    return Ok(trimmed);
+                }
+            }
+        }
+
+        let npm_paths = [
+            "C:\\Program Files\\nodejs\\opencode.cmd",
+            "C:\\Program Files\\nodejs\\opencode.exe",
+        ];
+        for p in &npm_paths {
+            if PathBuf::from(p).exists() {
+                return Ok(p.to_string());
+            }
+        }
+
+        if let Ok(output) = Command::new("cmd")
+            .args(["/C", "npm", "prefix", "-g"])
+            .output()
+        {
+            if output.status.success() {
+                let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let cmd_path = format!("{}\\opencode.cmd", prefix);
+                if PathBuf::from(&cmd_path).exists() {
+                    return Ok(cmd_path);
+                }
+                let exe_path = format!("{}\\opencode.exe", prefix);
+                if PathBuf::from(&exe_path).exists() {
+                    return Ok(exe_path);
+                }
+            }
+        }
+
+        if let Ok(output) = Command::new("cmd").args(["/C", "yarn", "global", "bin"]).output() {
+            if output.status.success() {
+                let bin_dir = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let cmd_path = format!("{}\\opencode.cmd", bin_dir);
+                if PathBuf::from(&cmd_path).exists() {
+                    return Ok(cmd_path);
+                }
+            }
+        }
+    } else {
+        if let Ok(output) = Command::new("which").arg("opencode").output() {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout);
+                if let Some(first) = path.lines().next() {
+                    return Ok(first.trim().to_string());
+                }
             }
         }
     }
 
-    let npm_paths = [
-        "C:\\Program Files\\nodejs\\opencode.cmd",
-        "C:\\Program Files\\nodejs\\opencode.exe",
-    ];
-    for p in &npm_paths {
-        if PathBuf::from(p).exists() {
-            return Ok(p.to_string());
-        }
-    }
-
-    if let Ok(output) = Command::new("cmd")
-        .args(["/C", "npm", "prefix", "-g"])
-        .output()
-    {
-        if output.status.success() {
-            let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            let cmd_path = format!("{}\\opencode.cmd", prefix);
-            if PathBuf::from(&cmd_path).exists() {
-                return Ok(cmd_path);
-            }
-            let exe_path = format!("{}\\opencode.exe", prefix);
-            if PathBuf::from(&exe_path).exists() {
-                return Ok(exe_path);
-            }
-        }
-    }
-
-    if let Ok(output) = Command::new("cmd").args(["/C", "yarn", "global", "bin"]).output() {
-        if output.status.success() {
-            let bin_dir = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            let cmd_path = format!("{}\\opencode.cmd", bin_dir);
-            if PathBuf::from(&cmd_path).exists() {
-                return Ok(cmd_path);
-            }
-        }
-    }
-
-    Ok("opencode".into())
+    Err("opencode not found — install it or set OPENCODE_BIN_PATH".into())
 }
 
 fn run_before_command(cmd: &str, cwd: &str) -> Result<String, String> {
+    use std::process::Stdio;
+
     let mut child = shell_command(cmd)
         .current_dir(cwd)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("Failed to spawn: {}", e))?;
 
-    // Take stdout/stderr before the polling loop to prevent pipe buffer deadlock.
-    // If the child writes more than the OS pipe buffer (4-64KB) and we don't
-    // read, the child blocks on write and try_wait() never returns Some.
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
     let out_thread = std::thread::spawn(move || {
@@ -266,6 +289,7 @@ fn run_before_command(cmd: &str, cwd: &str) -> Result<String, String> {
             Ok(None) => {
                 if start.elapsed() > timeout {
                     let _ = child.kill();
+                    let _ = child.wait();
                     return Err("Before command timed out after 30s".into());
                 }
                 std::thread::sleep(std::time::Duration::from_millis(100));
@@ -293,30 +317,49 @@ mod tests {
 
     #[test]
     #[cfg(windows)]
-    fn wrap_cmd_path_uses_cmd_c() {
+    fn wrap_cmd_path_does_not_wrap() {
         let _lock = TEST_LOCK.lock().unwrap();
         let (cmd, args) = wrap_path_for_windows(r"C:\Users\foo\npm\opencode.cmd");
-        assert_eq!(cmd, "cmd");
-        assert_eq!(args, vec!["/C".to_string(), r"C:\Users\foo\npm\opencode.cmd".to_string()]);
+        assert_eq!(cmd, r"C:\Users\foo\npm\opencode.cmd");
+        assert!(args.is_empty());
     }
 
     #[test]
     #[cfg(windows)]
-    fn wrap_exe_path_uses_cmd_c() {
+    fn wrap_exe_path_does_not_wrap() {
         let _lock = TEST_LOCK.lock().unwrap();
         let (cmd, args) = wrap_path_for_windows(r"C:\Program Files\opencode\opencode.exe");
-        assert_eq!(cmd, "cmd");
-        assert_eq!(args, vec!["/C".to_string(), r"C:\Program Files\opencode\opencode.exe".to_string()]);
+        assert_eq!(cmd, r"C:\Program Files\opencode\opencode.exe");
+        assert!(args.is_empty());
     }
 
     #[test]
     #[cfg(windows)]
-    fn resolve_opencode_preset_wraps_bare_name() {
+    fn wrap_powershell_does_not_wrap() {
         let _lock = TEST_LOCK.lock().unwrap();
-        std::env::set_var("OPENCODE_BIN_PATH", r"C:\monoloth_test_sentinel\opencode.exe");
+        let (cmd, args) = wrap_path_for_windows("powershell");
+        assert_eq!(cmd, "powershell");
+        assert!(args.is_empty());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn wrap_pwsh_does_not_wrap() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let (cmd, args) = wrap_path_for_windows("pwsh");
+        assert_eq!(cmd, "pwsh");
+        assert!(args.is_empty());
+    }
+
+    #[test]
+    fn resolve_opencode_preset_finds_path() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let sentinel = r"C:\monoloth_test_sentinel\opencode.exe";
+        std::env::set_var("OPENCODE_BIN_PATH", sentinel);
         let (cmd, args) = resolve_command("opencode").unwrap();
-        assert_eq!(cmd, "cmd");
-        assert_eq!(args, vec!["/C".to_string(), r"C:\monoloth_test_sentinel\opencode.exe".to_string()]);
+        // Paths should not be wrapped in cmd /C
+        assert_eq!(cmd, sentinel);
+        assert!(args.is_empty());
         std::env::remove_var("OPENCODE_BIN_PATH");
     }
 
@@ -356,8 +399,6 @@ mod tests {
     #[test]
     #[cfg(windows)]
     fn resolve_custom_cmd_path_wraps_in_cmd_c() {
-        // Use forward slashes to side-step the unrelated shlex POSIX escape
-        // behavior on backslashes. cmd /C accepts forward slashes on Windows.
         let (cmd, args) = resolve_custom_command("C:/Users/foo/npm/claude.cmd").unwrap();
         assert_eq!(cmd, "cmd");
         assert_eq!(args, vec!["/C".to_string(), "C:/Users/foo/npm/claude.cmd".to_string()]);
@@ -366,12 +407,11 @@ mod tests {
     #[test]
     #[cfg(windows)]
     fn resolve_custom_exe_path_wraps_in_cmd_c() {
-        // Quote the path so shlex keeps it as one token.
         let (cmd, args) = resolve_custom_command(r#""C:/Program Files/claude/claude.exe""#).unwrap();
         assert_eq!(cmd, "cmd");
         assert_eq!(
             args,
-            vec!["/C".to_string(), "C:/Program Files/claude/claude.exe".to_string()]
+            vec!["/C".to_string(), r#""C:/Program Files/claude/claude.exe""#.to_string()]
         );
     }
 
@@ -385,53 +425,34 @@ mod tests {
 
     #[test]
     #[cfg(windows)]
-    fn resolve_custom_with_args_preserves_args() {
+    fn resolve_custom_with_args_wraps_in_cmd_c() {
         let (cmd, args) = resolve_custom_command("claude --model sonnet --verbose").unwrap();
         assert_eq!(cmd, "cmd");
         assert_eq!(
             args,
-            vec![
-                "/C".to_string(),
-                "claude".to_string(),
-                "--model".to_string(),
-                "sonnet".to_string(),
-                "--verbose".to_string(),
-            ]
+            vec!["/C".to_string(), "claude --model sonnet --verbose".to_string()]
         );
     }
 
     #[test]
     #[cfg(windows)]
-    fn resolve_custom_with_quoted_arg_preserves_parsed_parts() {
-        // shlex::split should strip the quotes and the underlying value is what
-        // we wrap. The point of the test is to ensure quoted args don't break
-        // the cmd /C wrapping.
+    fn resolve_custom_with_quoted_arg_wraps_in_cmd_c() {
         let (cmd, args) = resolve_custom_command(r#"claude --prompt "hello world""#).unwrap();
         assert_eq!(cmd, "cmd");
         assert_eq!(
             args,
-            vec![
-                "/C".to_string(),
-                "claude".to_string(),
-                "--prompt".to_string(),
-                "hello world".to_string(),
-            ]
+            vec!["/C".to_string(), r#"claude --prompt "hello world""#.to_string()]
         );
     }
 
     #[test]
     #[cfg(windows)]
     fn resolve_custom_path_with_space_wraps_in_cmd_c() {
-        // Quote the path so shlex's POSIX splitter keeps it as one token.
         let (cmd, args) = resolve_custom_command(r#""C:/Program Files/My Tool/run.exe" --flag"#).unwrap();
         assert_eq!(cmd, "cmd");
         assert_eq!(
             args,
-            vec![
-                "/C".to_string(),
-                "C:/Program Files/My Tool/run.exe".to_string(),
-                "--flag".to_string(),
-            ]
+            vec!["/C".to_string(), r#""C:/Program Files/My Tool/run.exe" --flag"#.to_string()]
         );
     }
 

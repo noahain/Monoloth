@@ -33,7 +33,8 @@
             _trapHandler = null;
         }
         if (!container) return;
-        var focusable = container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        var allFocusable = container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        var focusable = Array.from(allFocusable).filter(function (el) { return el.offsetParent !== null; });
         if (focusable.length === 0) return;
         var first = focusable[0];
         var last = focusable[focusable.length - 1];

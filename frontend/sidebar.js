@@ -32,6 +32,7 @@
     var _resizeStartHeight = 0;
     var _resizeDebounceTimer = null;
     var _configSaveTimer = null;
+    var _panelHeightSaveTimer = null;
     var _panelRestoreNeeded = false;
 
     // ---- SVG Icons ----
@@ -135,12 +136,13 @@
         } else if (mode === 'cmdPanel') {
             if (!_panelRunning) {
                 showCmdPanel();
-                initCmdPanel(dir);
             }
             if (!_cmdPanelOpen) {
                 showCmdPanel();
             }
-            window.monolithApi.send_input('panel', cmd + '\n').catch(function () {});
+            initCmdPanel(dir).then(function () {
+                window.monolithApi.send_input('panel', cmd + '\n').catch(function () {});
+            });
         }
     }
 
@@ -348,7 +350,7 @@
     function loadPanelConfig() {
         if (!window.monolithApi) return;
         window.monolithApi.get_config('cmdPanelHeight').then(function (val) {
-            _panelHeight = (typeof val === 'number') ? val : 250;
+            _panelHeight = (typeof val === 'number') ? val : 200;
             applyPanelHeight(_panelHeight);
         }).catch(function () {});
         window.monolithApi.get_config('panelShell').then(function (val) {
@@ -417,14 +419,24 @@
         }
     }
 
+    function refitPanelTerminal() {
+        if (panelFitAddon && panelTerm && window.monolithApi) {
+            try {
+                panelFitAddon.fit();
+                window.monolithApi.resize_terminal('panel', panelTerm.cols, panelTerm.rows).catch(function () {});
+                try { panelTerm.refresh(0, panelTerm.rows - 1); } catch (e) {}
+            } catch (e) {}
+        }
+    }
+
     function initCmdPanel(dir) {
-        if (!window.monolithApi) return;
+        if (!window.monolithApi) return Promise.resolve();
         dir = dir || getCurrentDir() || '%USERPROFILE%';
 
         hidePanelExitBanner();
 
         if (!panelTerm) {
-            if (typeof Terminal === 'undefined') return;
+            if (typeof Terminal === 'undefined') return Promise.resolve();
             var panelBg = 'transparent';
             panelTerm = new Terminal({
                 theme: { background: panelBg, foreground: '#b8b8b8', cursor: '#c0c0c0' },
@@ -458,7 +470,7 @@
         _panelRunning = true;
         var pCols = panelTerm ? panelTerm.cols : 80;
         var pRows = panelTerm ? panelTerm.rows : 24;
-        window.monolithApi.start_terminal('panel', dir, false, _panelShell, pCols, pRows)
+        var startPromise = window.monolithApi.start_terminal('panel', dir, false, _panelShell, pCols, pRows)
             .then(function (result) {
                 if (!result || !result.success) {
                     _panelRunning = false;
@@ -475,11 +487,13 @@
                         try { panelTerm.refresh(0, panelTerm.rows - 1); } catch (e) {}
                     }, 100);
                 }
+                return result;
             })
             .catch(function () {
                 _panelRunning = false;
                 showPanelExitBanner();
             });
+        return startPromise;
     }
 
     function showPanelExitBanner() {
@@ -539,6 +553,7 @@
         if (newHeight > maxH) newHeight = maxH;
 
         applyPanelHeight(newHeight);
+        refitPanelTerminal();
 
         if (_resizeDebounceTimer) clearTimeout(_resizeDebounceTimer);
         _resizeDebounceTimer = setTimeout(function () {
@@ -562,6 +577,7 @@
         if (window.MonolothApp && window.MonolothApp.refitTerminals) {
             window.MonolothApp.refitTerminals();
         }
+        refitPanelTerminal();
     }
 
     // ---- CMD Panel Close ----
@@ -875,8 +891,8 @@
     }
 
     function debounceSavePanelHeight(height) {
-        if (_configSaveTimer) clearTimeout(_configSaveTimer);
-        _configSaveTimer = setTimeout(function () {
+        if (_panelHeightSaveTimer) clearTimeout(_panelHeightSaveTimer);
+        _panelHeightSaveTimer = setTimeout(function () {
             if (window.monolithApi) {
                 window.monolithApi.set_config('cmdPanelHeight', height).catch(function () {});
             }
@@ -1036,14 +1052,17 @@
         if (window.MonolothApp && window.MonolothApp.refitTerminals) {
             window.MonolothApp.refitTerminals();
         }
+        refitPanelTerminal();
     }
 
     // ---- Init ----
+    var _initialized = false;
     function init() {
+        if (_initialized) return;
+        _initialized = true;
         loadSidebarConfig();
         loadPanelConfig();
 
-        // Defer settings tab setup until DOM is fully ready
         setTimeout(function () {
             setupSettingsTab();
         }, 500);
@@ -1073,6 +1092,7 @@
         isPanelOpen: function () { return _cmdPanelOpen; },
         isPanelRunning: function () { return _panelRunning; },
         consumePanelClosing: function () { if (_panelClosing) { _panelClosing = false; return true; } return false; },
+        handlePanelExit: showPanelExitBanner,
         toggleCmdPanel: toggleCmdPanel,
         showCmdPanel: showCmdPanel,
         hideCmdPanel: hideCmdPanel,
@@ -1085,13 +1105,11 @@
         writeToPanel: function (data) { if (panelTerm) { panelTerm.write(data); } },
         restorePanelState: function () {
             if (typeof Terminal === 'undefined' || !window.monolithApi) return;
-            window.monolithApi.get_config('cmdPanelOpen').then(function (val) {
-                if (val === true) {
-                    var dir = getCurrentDir() || '%USERPROFILE%';
-                    showCmdPanel();
-                    initCmdPanel(dir);
-                }
-            }).catch(function () {});
+            if (!_panelRestoreNeeded) return;
+            _panelRestoreNeeded = false;
+            var dir = getCurrentDir() || '%USERPROFILE%';
+            showCmdPanel();
+            initCmdPanel(dir);
         }
     };
 

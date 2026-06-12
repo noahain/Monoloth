@@ -34,8 +34,11 @@ pub fn set_background_config(
     if let Some(v) = bg_color { config.set("bg_color", Value::String(v)); }
     if let Some(v) = bg_gradient { config.set("bg_gradient", Value::String(v)); }
     if let Some(v) = bg_transparency {
-        let clamped = v.max(0.0).min(100.0);
-        config.set("bg_transparency", Value::Number(serde_json::Number::from_f64(clamped).unwrap_or(100.into())));
+        if v.is_nan() {
+            return;
+        }
+        let clamped = v.max(0.0).min(100.0).round() as i64;
+        config.set("bg_transparency", Value::Number(clamped.into()));
     }
     if let Some(v) = theme_mode { config.set("theme_mode", Value::String(v)); }
     if let Some(v) = cta_button_style { config.set("cta_button_style", Value::String(v)); }

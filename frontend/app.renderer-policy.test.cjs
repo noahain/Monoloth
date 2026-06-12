@@ -103,6 +103,11 @@ function createDocument() {
         createElement(tag) {
             return new FakeElement(tag);
         },
+        createTextNode(text) {
+            const el = new FakeElement('text');
+            el.textContent = String(text);
+            return el;
+        },
         getElementById(id) {
             if (!elements.has(id)) elements.set(id, new FakeElement(id));
             return elements.get(id);

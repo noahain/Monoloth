@@ -30,6 +30,33 @@ pub fn profiles_dir() -> PathBuf {
     config_dir().join("profiles")
 }
 
+pub fn validate_profile_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("Profile name cannot be empty".into());
+    }
+    if name.contains('/')
+        || name.contains('\\')
+        || name.contains("..")
+        || name.contains(':')
+        || name.contains('\0')
+    {
+        return Err("Profile name contains invalid characters".into());
+    }
+    // Reject Windows reserved names
+    let upper = name.to_uppercase();
+    let reserved = ["CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4",
+                     "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2",
+                     "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"];
+    if reserved.contains(&upper.as_str()) {
+        return Err("Profile name is a reserved system name".into());
+    }
+    // Allow only alphanumeric, space, hyphen, underscore
+    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == ' ' || c == '-' || c == '_') {
+        return Err("Profile name can only contain letters, numbers, spaces, hyphens, and underscores".into());
+    }
+    Ok(())
+}
+
 pub fn profile_path(name: &str) -> PathBuf {
     profiles_dir().join(format!("{}.json", name))
 }
@@ -126,7 +153,8 @@ fn save_json(path: &Path, map: &Map<String, Value>) {
     }
     match serde_json::to_string_pretty(&Value::Object(map.clone())) {
         Ok(json) => {
-            let tmp_path = path.with_extension(".tmp");
+            let file_name = path.file_name().unwrap_or_default();
+            let tmp_path = path.with_file_name(format!("{}.tmp", file_name.to_string_lossy()));
             if let Err(e) = fs::write(&tmp_path, &json) {
                 eprintln!("[Monoloth] Failed to write config {}: {}", path.display(), e);
                 return;
@@ -207,12 +235,26 @@ impl AppConfig {
     }
 
     pub fn set(&self, key: &str, value: Value) {
+        self.set_many(&[(key, value)]);
+    }
+
+    pub fn set_many(&self, pairs: &[(&str, Value)]) {
         let mut inner = self.inner.lock();
-        if is_global_key(key) || inner.active_profile == "Default" {
-            inner.global.insert(key.to_string(), value.clone());
+        let mut save_global = false;
+        let mut save_profile = false;
+        for (key, value) in pairs {
+            if is_global_key(key) || inner.active_profile == "Default" {
+                inner.global.insert(key.to_string(), value.clone());
+                save_global = true;
+            } else {
+                inner.profile_overrides.insert(key.to_string(), value.clone());
+                save_profile = true;
+            }
+        }
+        if save_global {
             save_json(&config_path(), &inner.global);
-        } else {
-            inner.profile_overrides.insert(key.to_string(), value.clone());
+        }
+        if save_profile {
             save_json(&profile_path(&inner.active_profile), &inner.profile_overrides);
         }
     }
@@ -233,7 +275,14 @@ impl AppConfig {
         self.inner.lock().active_profile.clone()
     }
 
-    pub fn switch_profile(&self, name: &str) {
+    pub fn switch_profile(&self, name: &str) -> Result<(), String> {
+        if name != "Default" {
+            validate_profile_name(name)?;
+            let path = profile_path(name);
+            if !path.exists() {
+                return Err("Profile does not exist".into());
+            }
+        }
         let mut inner = self.inner.lock();
         inner.active_profile = name.to_string();
         inner.global.insert("active_profile".into(), Value::String(name.to_string()));
@@ -243,6 +292,7 @@ impl AppConfig {
         } else {
             Map::new()
         };
+        Ok(())
     }
 
     pub fn list_profiles(&self) -> Vec<HashMap<String, Value>> {
@@ -256,6 +306,9 @@ impl AppConfig {
                 let path = entry.path();
                 if path.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("json")).unwrap_or(false) {
                     if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
+                        if name.eq_ignore_ascii_case("Default") {
+                            continue;
+                        }
                         profiles.push(HashMap::from([
                             ("name".to_string(), Value::String(name.into())),
                             ("isDefault".to_string(), Value::Bool(false)),
@@ -267,21 +320,27 @@ impl AppConfig {
         profiles
     }
 
-    pub fn create_profile(&self, name: &str) {
+    pub fn create_profile(&self, name: &str) -> Result<(), String> {
         if name == "Default" {
-            return;
+            return Err("Cannot create the Default profile".into());
+        }
+        validate_profile_name(name)?;
+        let path = profile_path(name);
+        if path.exists() {
+            return Err("Profile already exists".into());
         }
         let dir = profiles_dir();
-        let _ = fs::create_dir_all(&dir);
-        save_json(&profile_path(name), &Map::new());
+        fs::create_dir_all(&dir).map_err(|e| format!("Failed to create profiles dir: {}", e))?;
+        save_json(&path, &Map::new());
+        Ok(())
     }
 
-    pub fn delete_profile(&self, name: &str) {
+    pub fn delete_profile(&self, name: &str) -> Result<(), String> {
         if name == "Default" {
-            return;
+            return Err("Cannot delete the Default profile".into());
         }
+        validate_profile_name(name)?;
         let path = profile_path(name);
-        let _ = fs::remove_file(&path);
         let mut inner = self.inner.lock();
         if inner.active_profile == name {
             inner.active_profile = "Default".to_string();
@@ -289,15 +348,27 @@ impl AppConfig {
             save_json(&config_path(), &inner.global);
             inner.profile_overrides = Map::new();
         }
+        drop(inner);
+        fs::remove_file(&path).map_err(|e| format!("Failed to delete profile: {}", e))?;
+        Ok(())
     }
 
     pub fn rename_profile(&self, old: &str, new: &str) -> Result<(), String> {
+        if old == "Default" || new == "Default" {
+            return Err("Cannot rename to or from the Default profile".into());
+        }
+        validate_profile_name(old)?;
+        validate_profile_name(new)?;
         let old_path = profile_path(old);
         let new_path = profile_path(new);
-        if old_path.exists() {
-            fs::rename(&old_path, &new_path)
-                .map_err(|e| format!("Failed to rename profile: {}", e))?;
+        if !old_path.exists() {
+            return Err("Source profile does not exist".into());
         }
+        if new_path.exists() {
+            return Err("A profile with that name already exists".into());
+        }
+        fs::rename(&old_path, &new_path)
+            .map_err(|e| format!("Failed to rename profile: {}", e))?;
         let mut inner = self.inner.lock();
         if inner.active_profile == old {
             inner.active_profile = new.to_string();
@@ -308,13 +379,17 @@ impl AppConfig {
     }
 
     pub fn set_window_position(&self, x: i32, y: i32) {
-        self.set("window_x", Value::Number(x.into()));
-        self.set("window_y", Value::Number(y.into()));
+        self.set_many(&[
+            ("window_x", Value::Number(x.into())),
+            ("window_y", Value::Number(y.into())),
+        ]);
     }
 
     pub fn set_window_size(&self, width: u32, height: u32) {
-        self.set("window_width", Value::Number(width.into()));
-        self.set("window_height", Value::Number(height.into()));
+        self.set_many(&[
+            ("window_width", Value::Number(width.into())),
+            ("window_height", Value::Number(height.into())),
+        ]);
     }
 
     pub fn set_window_maximized(&self, max: bool) {
@@ -379,10 +454,10 @@ mod tests {
     fn test_profile_create_and_switch() {
         let (test_dir, _lock) = setup_test_env();
         let config = AppConfig::new();
-        config.create_profile("TestProfile");
-        config.switch_profile("TestProfile");
+        config.create_profile("TestProfile").unwrap();
+        config.switch_profile("TestProfile").unwrap();
         assert_eq!(config.get("active_profile").as_str().unwrap(), "TestProfile");
-        config.switch_profile("Default");
+        config.switch_profile("Default").unwrap();
         assert_eq!(config.get("active_profile").as_str().unwrap(), "Default");
         cleanup_test_env(&test_dir);
     }
@@ -404,8 +479,8 @@ mod tests {
     fn test_profile_rename_updates_active() {
         let (test_dir, _lock) = setup_test_env();
         let config = AppConfig::new();
-        config.create_profile("OldName");
-        config.switch_profile("OldName");
+        config.create_profile("OldName").unwrap();
+        config.switch_profile("OldName").unwrap();
         assert_eq!(config.get("active_profile").as_str().unwrap(), "OldName");
         assert!(config.rename_profile("OldName", "NewName").is_ok());
         assert_eq!(config.get("active_profile").as_str().unwrap(), "NewName");

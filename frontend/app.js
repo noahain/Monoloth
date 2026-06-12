@@ -34,7 +34,7 @@
     var _currentGradient = '';
     var _bgLayer = 'behind';
     var _filePickerType = 'custom';
-    var _confirmPrefs = null;
+    var _confirmPrefs = {};
 
     var UI = window.MonolothUI;
     var saveFocus = UI.saveFocus;
@@ -126,7 +126,6 @@
     }
 
     function parseShortcutString(str) {
-        // Parse "Ctrl+P" into { ctrl: true, shift: false, alt: false, key: 'KeyP' }
         var parts = str.split('+');
         var result = { ctrl: false, shift: false, alt: false, meta: false, key: '' };
         for (var i = 0; i < parts.length; i++) {
@@ -138,6 +137,8 @@
             else if (p === ',') result.key = 'Comma';
             else if (p === '.') result.key = 'Period';
             else if (p === ' ') result.key = 'Space';
+            else if (p === '+' || p === 'plus') result.key = 'Plus';
+            else if (p === '') result.key = 'Plus';
             else result.key = p.toUpperCase();
         }
         return result;
@@ -149,6 +150,7 @@
         if (eventKey === ' ') eventKey = 'Space';
         else if (eventKey === ',') eventKey = 'Comma';
         else if (eventKey === '.') eventKey = 'Period';
+        else if (eventKey === '+') eventKey = 'Plus';
         else if (eventKey.length === 1) eventKey = eventKey.toUpperCase();
         else eventKey = eventKey.charAt(0).toUpperCase() + eventKey.slice(1);
 
@@ -170,10 +172,17 @@
         }
     }
 
-    function shortcutToKbdHtml(str) {
-        return str.split('+').map(function (part) {
-            return '<kbd>' + part.trim() + '</kbd>';
-        }).join('+');
+    function renderShortcutHint(el, shortcut, suffix) {
+        if (!el) return;
+        el.textContent = '';
+        var parts = shortcut.split('+');
+        for (var i = 0; i < parts.length; i++) {
+            if (i > 0) el.appendChild(document.createTextNode('+'));
+            var kbd = document.createElement('kbd');
+            kbd.textContent = parts[i].trim();
+            el.appendChild(kbd);
+        }
+        if (suffix) el.appendChild(document.createTextNode(' ' + suffix));
     }
 
     function updateKbdHint() {
@@ -182,12 +191,12 @@
 
         var cmdsEl = document.getElementById('landing-shortcut-commands');
         if (cmdsEl) {
-            cmdsEl.innerHTML = shortcutToKbdHtml(cmds) + ' Commands';
+            renderShortcutHint(cmdsEl, cmds, 'Commands');
         }
 
         var settingsEl = document.getElementById('landing-shortcut-settings');
         if (settingsEl) {
-            settingsEl.innerHTML = shortcutToKbdHtml(settings) + ' Settings';
+            renderShortcutHint(settingsEl, settings, 'Settings');
         }
 
         var settingsBtn = document.getElementById('settings-btn');
@@ -249,17 +258,16 @@
 
     function applyTheme(mode) {
         _themeMode = mode;
-        // Add transition class for smooth theme switching
         document.body.classList.add('theme-transitioning');
         document.body.classList.remove('light-mode', 'adaptive-light');
         if (mode === 'light') {
             document.body.classList.add('light-mode');
         } else if (mode === 'auto' && _wallpaperBrightness !== null) {
             if (_wallpaperBrightness > 0.5) {
-                document.body.classList.add('light-mode', 'adaptive-light');
+                document.body.classList.add('adaptive-light');
             }
         }
-        // Remove transition class after transitions complete
+        syncOutlineOnLightClass();
         setTimeout(function () {
             document.body.classList.remove('theme-transitioning');
         }, 350);
@@ -270,9 +278,17 @@
         document.body.classList.add('theme-transitioning');
         document.body.classList.remove('cta-blur', 'cta-glass', 'cta-solid', 'cta-outline');
         document.body.classList.add('cta-' + style);
+        syncOutlineOnLightClass();
         setTimeout(function () {
             document.body.classList.remove('theme-transitioning');
         }, 350);
+    }
+
+    function syncOutlineOnLightClass() {
+        var isOutline = _ctaButtonStyle === 'outline';
+        var isLight = document.body.classList.contains('light-mode') ||
+                      document.body.classList.contains('adaptive-light');
+        document.body.classList.toggle('outline-on-light', isOutline && isLight);
     }
 
     function analyzeWallpaperBrightness(imagePath) {
@@ -280,7 +296,9 @@
         if (typeof window.monolithApi.analyze_image_brightness !== 'function') return;
         window.monolithApi.analyze_image_brightness(imagePath)
             .then(function (result) {
-                _wallpaperBrightness = (typeof result === 'number' ? result : 0);
+                _wallpaperBrightness = result && result.success && typeof result.brightness === 'number'
+                    ? result.brightness
+                    : 0;
                 if (_themeMode === 'auto') {
                     applyTheme('auto');
                 }
@@ -344,7 +362,7 @@
         window.monolithApi.get_recent_directories()
             .then(function (dirs) {
                 if (Array.isArray(dirs) && dirs.length > 0) {
-                    _recentDirs = dirs;
+                    _recentDirs = dirs.slice(0, 7);
                     renderRecentDirectories();
                 } else {
                     window.monolithApi.get_last_directory().then(function (res) {
@@ -434,6 +452,7 @@
     waitForBridge(5000, function (ready) {
         if (ready) {
             _bridgeReady = true;
+            loadConfirmPrefs();
             updateStatusBar('Ready');
             loadShortcuts(function () {
                 updateKbdHint();
@@ -453,8 +472,16 @@
                 .catch(function () {});
             Promise.all([bgPromise, profilesPromise, startupPromise]).then(function () {
                 if (bridgeLoading) bridgeLoading.style.display = 'none';
+                if (window.__monolithReady) {
+                    window.__monolithReady.config = true;
+                    if (window.__monolithReveal) window.__monolithReveal();
+                }
             }).catch(function () {
                 if (bridgeLoading) bridgeLoading.style.display = 'none';
+                if (window.__monolithReady) {
+                    window.__monolithReady.config = true;
+                    if (window.__monolithReveal) window.__monolithReveal();
+                }
             });
         } else {
             if (bridgeLoading) bridgeLoading.style.display = 'none';
@@ -477,8 +504,9 @@
     }
 
     function showSettings() {
-        _currentViewState = (landing && !landing.classList.contains('hidden')) ? 'landing' :
-                            (terminalView && terminalView.classList.contains('active')) ? 'terminal' : 'landing';
+        if (_currentViewState !== 'landing' && _currentViewState !== 'terminal') {
+            _currentViewState = (landing && !landing.classList.contains('hidden')) ? 'landing' : 'terminal';
+        }
         setCurrentView('settings');
 
         if (landing) landing.classList.add('hidden');
@@ -1045,7 +1073,7 @@
             previewThumb.style.backgroundImage = 'none';
             previewThumb.style.backgroundColor = config.color || '#0a0a0a';
             previewThumb.classList.add('has-image');
-            if (placeholder) { placeholder.textContent = config.color || '#0a0a0a'; placeholder.style.display = ''; }
+            if (placeholder) { placeholder.style.display = 'none'; }
         } else if (type === 'gradient' && config.gradient) {
             previewThumb.style.height = '100px';
             previewThumb.style.backgroundImage = config.gradient;
@@ -1181,9 +1209,9 @@
     }
 
     function saveAppearanceSettings(msg) {
-        var image = _bgType === 'image' ? (_bgImagePath || null) : null;
-        var color = _bgType === 'color' ? (_currentColor || null) : null;
-        var gradient = _bgType === 'gradient' ? (_currentGradient || null) : null;
+        var image = _bgType === 'image' ? (_bgImagePath || undefined) : undefined;
+        var color = _bgType === 'color' ? (_currentColor || undefined) : undefined;
+        var gradient = _bgType === 'gradient' ? (_currentGradient || undefined) : undefined;
         saveBackground(_bgType, { image: image, color: color, gradient: gradient }, msg);
     }
 
@@ -1257,7 +1285,7 @@
     var bgPickBtn = document.getElementById('bg-pick-btn');
     if (bgPickBtn) {
         bgPickBtn.addEventListener('click', function () {
-            pickPath({ id: 'bg', title: 'Choose Background Image', mode: 'file', filter: 'All files|*.*' })
+            pickPath({ id: 'bg', title: 'Choose Background Image', mode: 'file', filter: null })
                 .then(function (filePath) {
                     if (!filePath) return;
                     saveBackground('image', { image: filePath, color: null, gradient: null }, 'Background image set.');
@@ -1318,13 +1346,9 @@
 
         bgSlider.addEventListener('change', function () {
             if (!window.monolithApi) return;
-            window.monolithApi.get_background_config()
-                .then(function (config) {
-                    var slider = document.getElementById('bg-transparency-slider');
-                    var transparency = slider ? parseInt(slider.value, 10) : 75;
-                    var args = [config.type, config.image, config.color, config.gradient, transparency, config.themeMode, config.ctaButtonStyle, config.bgLayer];
-                    return window.monolithApi.set_background_config.apply(null, args);
-                })
+            var slider = document.getElementById('bg-transparency-slider');
+            var transparency = slider ? parseInt(slider.value, 10) : 75;
+            window.monolithApi.set_background_config(undefined, undefined, undefined, undefined, transparency)
                 .then(function () {
                     loadBackgroundConfig();
                     showStatus('appearance-status', 'Transparency updated.', false);
@@ -1391,8 +1415,8 @@
     }
 
     function loadStartupConfig() {
-        if (!window.monolithApi) return;
-        window.monolithApi.get_startup_config()
+        if (!window.monolithApi) return Promise.resolve();
+        return window.monolithApi.get_startup_config()
             .then(function (res) {
                 _startupConfig = res || { command: 'opencode', type: 'preset' };
                 updateStartupTypeUI(_startupConfig.type, _startupConfig.command);
@@ -1868,29 +1892,27 @@
 
         requestAnimationFrame(function() {
             if (fitAddon) fitAddon.fit();
-            window.monolithApi.start_terminal('main', dir, true, null, term.cols, term.rows)
-                .then((result) => {
-                    if (!result || !result.success) {
-                        term.writeln('');
-                        term.writeln('Failed to start ' + getStartupLabel() + '. ' + (result && result.error ? result.error : 'Check that it is installed and in your PATH.'));
-                    } else {
-                        _terminalRunning = true;
-                        if (result.generation) {
-                            _sessionGeneration['main'] = result.generation;
+            if (window.monolithApi) {
+                window.monolithApi.start_terminal('main', dir, true, null, term.cols, term.rows)
+                    .then((result) => {
+                        if (!result || !result.success) {
+                            term.writeln('');
+                            term.writeln('Failed to start ' + getStartupLabel() + '. ' + (result && result.error ? result.error : 'Check that it is installed and in your PATH.'));
+                        } else {
+                            _terminalRunning = true;
+                            if (result.generation) {
+                                _sessionGeneration['main'] = result.generation;
+                            }
                         }
-                    }
-                })
-                .catch((err) => {
-                    term.writeln('');
-                    term.writeln('Error starting ' + getStartupLabel() + ': ' + err);
-                });
+                    })
+                    .catch((err) => {
+                        term.writeln('');
+                        term.writeln('Error starting ' + getStartupLabel() + ': ' + err);
+                    });
+            }
         });
 
         syncTerminalWebglRenderer(initBgConfig);
-
-        term.onScroll(function() {
-            term.refresh(0, term.rows - 1);
-        });
 
         // --- Keyboard copy/paste shortcuts ---
         term.attachCustomKeyEventHandler((e) => {
@@ -1963,7 +1985,9 @@
                 }, 500);
             } else {
                 navigator.clipboard.readText().then(function (text) {
-                    if (window.monolithApi && text) window.monolithApi.send_input(text);
+                    if (window.monolithApi && text) {
+                        window.monolithApi.send_input('main', text).catch(function () {});
+                    }
                 }).catch(function () {});
             }
         };
@@ -2042,6 +2066,7 @@
                             countdown--;
                             if (countdown <= 0) {
                                 clearInterval(countdownInterval);
+                                if (_exitTimer) { clearTimeout(_exitTimer); _exitTimer = null; }
                                 if (exitBanner.parentNode) exitBanner.remove();
                                 backToLanding();
                             } else {
@@ -2071,6 +2096,8 @@
                     if (eof) {
                         if (window.SidebarManager.consumePanelClosing()) {
                             _panelRunning = false;
+                        } else if (typeof window.SidebarManager.handlePanelExit === 'function') {
+                            window.SidebarManager.handlePanelExit();
                         } else {
                             window.SidebarManager.terminateCmdPanel();
                         }
@@ -2411,22 +2438,26 @@
                 backToLanding();
             }
         }
+        if (e.code === 'Escape' && idEl && idEl.classList.contains('active')) {
+            closeDialog();
+            return;
+        }
+        if (e.code === 'Escape' && profileSwitcher && profileSwitcher.classList.contains('active')) {
+            closeProfileSwitcher();
+            return;
+        }
         if (e.code === 'Escape' && paletteEl && paletteEl.classList.contains('active')) {
             if (_paletteState.subPalette) {
                 exitSubPalette();
             } else {
                 closePalette();
             }
+            return;
         }
         if (e.code === 'Escape' && settingsPage && settingsPage.classList.contains('active') && !_editingShortcutKey) {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
             hideSettings();
-        }
-        if (e.code === 'Escape' && profileSwitcher && profileSwitcher.classList.contains('active')) {
-            closeProfileSwitcher();
-        }
-        if (e.code === 'Escape' && idEl && idEl.classList.contains('active')) {
-            closeDialog();
+            return;
         }
         if (paletteEl && paletteEl.classList.contains('active')) {
             if (e.code === 'ArrowDown' || e.code === 'ArrowUp') {
@@ -2555,7 +2586,10 @@
             var duration = Math.max(0, endTs - startTs);
             toolMap[tool].totalSeconds += duration;
 
-            var date = s.start_time.substring(0, 10); // YYYY-MM-DD
+            var d = new Date(startTs * 1000);
+            var date = d.getFullYear() + '-' +
+                       String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                       String(d.getDate()).padStart(2, '0');
             if (!toolMap[tool].daily[date]) {
                 toolMap[tool].daily[date] = 0;
             }
@@ -2739,6 +2773,7 @@
         console.log('[Monoloth][Picker] openFilePicker called with opts:', JSON.stringify(opts));
         if (!fpEl) { console.error('[Monoloth][Picker] fpEl is null'); return Promise.reject(new Error('Picker element not found')); }
         if (!window.monolithApi) { console.error('[Monoloth][Picker] monolithApi not available'); return Promise.reject(new Error('Picker not available')); }
+        if (fpState.resolve) { return Promise.reject(new Error('Picker already open')); }
 
         _loadPickerLastDirs();
 
@@ -3256,8 +3291,8 @@
     var _activeProfile = 'Default';
 
     function loadProfiles() {
-        if (!window.monolithApi) return;
-        window.monolithApi.get_profiles()
+        if (!window.monolithApi) return Promise.resolve();
+        return window.monolithApi.get_profiles()
             .then(function (res) {
                 if (res && res.success) {
                     _profiles = res.profiles || [];
@@ -3308,7 +3343,17 @@
             var actions = document.createElement('div');
             actions.className = 'profile-item-actions';
 
-            if (!profile.isDefault && profile.name !== _activeProfile) {
+            if (profile.isDefault) {
+                var defaultLabel = document.createElement('span');
+                defaultLabel.className = 'profile-default-label';
+                defaultLabel.textContent = 'Built-in';
+                actions.appendChild(defaultLabel);
+            } else if (profile.name === _activeProfile) {
+                var activeLabel = document.createElement('span');
+                activeLabel.className = 'profile-default-label';
+                activeLabel.textContent = 'Active';
+                actions.appendChild(activeLabel);
+            } else {
                 var switchBtn = document.createElement('button');
                 switchBtn.className = 'profile-action-btn profile-switch-btn';
                 switchBtn.textContent = 'Switch';
@@ -3335,11 +3380,6 @@
                     deleteProfileConfirm(profile.name);
                 });
                 actions.appendChild(deleteBtn);
-            } else {
-                var defaultLabel = document.createElement('span');
-                defaultLabel.className = 'profile-default-label';
-                defaultLabel.textContent = 'Built-in';
-                actions.appendChild(defaultLabel);
             }
 
             item.appendChild(actions);
@@ -3585,14 +3625,17 @@
         if (tbRefresh) {
             tbRefresh.addEventListener('click', function() {
                 if (_currentLaunchDir) {
-                    // Skip the old session's EOF event to prevent back-to-landing
                     _skipNextEof['main'] = true;
-                    if (_terminalRunning && window.monolithApi) {
-                        window.monolithApi.terminate().catch(function () {});
-                    }
-                    _terminalRunning = false;
-                    initTerminal(_currentLaunchDir);
-                    loadBackgroundConfig();
+                    var terminatePromise = _terminalRunning && window.monolithApi
+                        ? window.monolithApi.terminate()
+                        : Promise.resolve();
+
+                    terminatePromise.finally(function () {
+                        _skipNextEof['main'] = false;
+                        _terminalRunning = false;
+                        initTerminal(_currentLaunchDir);
+                        loadBackgroundConfig();
+                    });
                 }
             });
         }
@@ -3657,13 +3700,13 @@
             if (idTitle) idTitle.textContent = title;
             if (idBody) {
                 if (skipKey) {
-                    idBody.innerHTML = '<p>' + message + '</p>' +
+                    idBody.innerHTML = '<p>' + escapeHtml(message) + '</p>' +
                         '<label class="id-skip">' +
                         '<input type="checkbox" id="id-skip-cb-el">' +
                         '<span class="id-skip-label">Don\'t ask again</span>' +
                         '</label>';
                 } else {
-                    idBody.innerHTML = '<p>' + message + '</p>';
+                    idBody.innerHTML = '<p>' + escapeHtml(message) + '</p>';
                 }
             }
             if (idFooter) {
@@ -3885,11 +3928,6 @@
         switchTab: switchTab
     };
 
-    // Initialize sidebar on first terminal show
-    if (typeof window.SidebarManager !== 'undefined') {
-        window.SidebarManager.init();
-    }
-
     // Auto-check for updates (silent on failure, see MonolothUpdater.init)
     if (window.MonolothUpdater && typeof window.MonolothUpdater.init === 'function') {
         window.MonolothUpdater.init();
@@ -3899,8 +3937,5 @@
     if (window.MonolothTooltip) {
         window.MonolothTooltip.scan(document.body);
     }
-
-    // Load confirm dialog "don't ask again" prefs
-    loadConfirmPrefs();
 
 })();

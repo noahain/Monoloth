@@ -43,21 +43,25 @@ pub struct DriveInfo {
 #[tauri::command]
 pub fn get_path_info(path: String) -> PathInfo {
     let expanded = expand_env_vars(&path);
-    eprintln!("[Monoloth][Rust] get_path_info called: {} (expanded: {})", path, expanded);
     let path_buf = PathBuf::from(&expanded);
-    let absolute_raw = path_buf.canonicalize().unwrap_or_else(|_| { eprintln!("[Monoloth][Rust] get_path_info: canonicalize failed for {}", expanded); path_buf.clone() });
+    let absolute_raw = path_buf.canonicalize().unwrap_or_else(|_| path_buf.clone());
     let absolute_str = clean_path(&absolute_raw.to_string_lossy());
-    let parent = PathBuf::from(&absolute_str).parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
-    let result = PathInfo {
-        success: true,
+    let absolute = if PathBuf::from(&absolute_str).is_absolute() {
+        absolute_str.clone()
+    } else {
+        std::env::current_dir()
+            .map(|cwd| clean_path(&cwd.join(&absolute_str).to_string_lossy()))
+            .unwrap_or(absolute_str.clone())
+    };
+    let parent = PathBuf::from(&absolute).parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
+    PathInfo {
+        success: path_buf.exists(),
         exists: path_buf.exists(),
         is_dir: path_buf.is_dir(),
         is_file: path_buf.is_file(),
-        absolute: absolute_str,
+        absolute,
         parent,
-    };
-    eprintln!("[Monoloth][Rust] get_path_info result: exists={}, is_dir={}, absolute={}", result.exists, result.is_dir, result.absolute);
-    result
+    }
 }
 
 #[tauri::command]
@@ -83,11 +87,15 @@ pub fn pick_file(filter: Option<String>) -> Option<String> {
         let parts: Vec<&str> = f.split('|').collect();
         if parts.len() >= 2 {
             let label = parts[0];
-            let exts: Vec<&str> = parts[1].split(';').collect();
+            let exts: Vec<&str> = parts[1].split(';')
+                .map(|s| s.trim_start_matches("*.").trim_start_matches("."))
+                .collect();
             eprintln!("[Monoloth][Rust] pick_file adding filter: {} -> {:?}", label, exts);
             dialog = dialog.add_filter(label, &exts);
         } else {
-            let exts: Vec<&str> = f.split(',').collect();
+            let exts: Vec<&str> = f.split(',')
+                .map(|s| s.trim_start_matches("*.").trim_start_matches("."))
+                .collect();
             eprintln!("[Monoloth][Rust] pick_file adding default filter: {:?}", exts);
             dialog = dialog.add_filter("Files", &exts);
         }
@@ -117,15 +125,14 @@ pub fn list_directory(path: String) -> Result<Vec<DirEntry>, String> {
     let read_dir = fs::read_dir(&path).map_err(|e| format!("Cannot read directory: {}", e))?;
     for entry in read_dir.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
-        let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
+        let meta = entry.metadata();
+        let is_dir = meta.as_ref().map(|m| m.is_dir()).unwrap_or(false);
         let size = if is_dir {
             0
         } else {
-            entry.metadata().map(|m| m.len()).unwrap_or(0)
+            meta.as_ref().map(|m| m.len()).unwrap_or(0)
         };
-        let modified = entry
-            .metadata()
-            .ok()
+        let modified = meta.ok()
             .and_then(|m| m.modified().ok())
             .map(|t| format_time(&t))
             .unwrap_or_default();
@@ -145,7 +152,7 @@ pub fn list_directory(path: String) -> Result<Vec<DirEntry>, String> {
     }
 
     entries.sort_by(|a, b| {
-        a.is_dir.cmp(&b.is_dir).reverse().then(a.name.cmp(&b.name))
+        a.is_dir.cmp(&b.is_dir).reverse().then(a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });
 
     eprintln!("[Monoloth][Rust] list_directory returning {} entries", entries.len());
@@ -191,7 +198,11 @@ pub fn get_file_preview(path: String) -> Result<FilePreview, String> {
     }
 
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-    let image_exts = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "svg"];
+    let image_exts = ["jpg", "jpeg", "png", "gif", "bmp", "webp"];
+    if ext == "svg" {
+        let content = fs::read_to_string(&path).map_err(|e| format!("Cannot read file: {}", e))?;
+        return Ok(FilePreview::Text(content));
+    }
     if !ext.is_empty() && image_exts.contains(&ext.as_str()) {
         let data_url = read_image_as_data_url(path.to_string_lossy().to_string())?;
         return Ok(FilePreview::Image(data_url));
@@ -207,7 +218,11 @@ pub fn get_file_preview(path: String) -> Result<FilePreview, String> {
         let mut bytes = Vec::new();
         let mut limited = file.take(4096);
         limited.read_to_end(&mut bytes).map_err(|e| format!("Cannot read file: {}", e))?;
-        let content = String::from_utf8_lossy(&bytes).to_string();
+        let valid_len = match std::str::from_utf8(&bytes) {
+            Ok(_) => bytes.len(),
+            Err(e) => e.valid_up_to(),
+        };
+        let content = String::from_utf8_lossy(&bytes[..valid_len]).to_string();
         return Ok(FilePreview::Text(content));
     }
 
@@ -220,19 +235,50 @@ pub fn open_in_explorer(path: String) -> Result<bool, String> {
     if !path_buf.exists() {
         return Err("Path does not exist".into());
     }
-    if path_buf.is_dir() {
-        Command::new("explorer")
-            .arg(path_buf.to_string_lossy().to_string())
-            .spawn()
-            .map_err(|e| format!("Failed to open explorer: {}", e))?;
-    } else {
-        Command::new("explorer")
-            .args([
-                "/select,",
-                &path_buf.to_string_lossy().to_string(),
-            ])
-            .spawn()
-            .map_err(|e| format!("Failed to open explorer: {}", e))?;
+    #[cfg(windows)]
+    {
+        if path_buf.is_dir() {
+            Command::new("explorer")
+                .arg(path_buf.to_string_lossy().to_string())
+                .spawn()
+                .map_err(|e| format!("Failed to open explorer: {}", e))?;
+        } else {
+            use std::os::windows::process::CommandExt;
+            Command::new("explorer")
+                .raw_arg(format!("/select,\"{}\"", path_buf.to_string_lossy()))
+                .spawn()
+                .map_err(|e| format!("Failed to open explorer: {}", e))?;
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        if path_buf.is_dir() {
+            Command::new("open")
+                .arg(path_buf.to_string_lossy().to_string())
+                .spawn()
+                .map_err(|e| format!("Failed to open Finder: {}", e))?;
+        } else {
+            Command::new("open")
+                .args(["-R", &path_buf.to_string_lossy().to_string()])
+                .spawn()
+                .map_err(|e| format!("Failed to open Finder: {}", e))?;
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if path_buf.is_dir() {
+            Command::new("xdg-open")
+                .arg(path_buf.to_string_lossy().to_string())
+                .spawn()
+                .map_err(|e| format!("Failed to open file manager: {}", e))?;
+        } else {
+            if let Some(parent) = path_buf.parent() {
+                Command::new("xdg-open")
+                    .arg(parent.to_string_lossy().to_string())
+                    .spawn()
+                    .map_err(|e| format!("Failed to open file manager: {}", e))?;
+            }
+        }
     }
     Ok(true)
 }
@@ -241,11 +287,15 @@ fn format_time(time: &std::time::SystemTime) -> String {
     use std::time::SystemTime;
     let now = SystemTime::now();
     if let Ok(dur) = now.duration_since(*time) {
-        let days = dur.as_secs() / 86400;
+        let secs = dur.as_secs();
+        if secs < 60 {
+            return "just now".into();
+        }
+        let days = secs / 86400;
         if days == 0 {
-            let hours = dur.as_secs() / 3600;
+            let hours = secs / 3600;
             if hours == 0 {
-                let mins = dur.as_secs() / 60;
+                let mins = secs / 60;
                 format!("{}m ago", mins)
             } else {
                 format!("{}h ago", hours)
