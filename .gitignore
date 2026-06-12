@@ -39,3 +39,10 @@ Thumbs.db
 # Local-only directories (not source-controlled)
 /configs/
 /docs/
+
+# Working notes and design artifacts (local-only)
+bug-audit-sources.txt
+PRODUCT.md
+DESIGN.md
+CLAUDE.md
+.impeccable/
