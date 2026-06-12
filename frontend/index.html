@@ -542,14 +542,16 @@
         <!-- CMD Panel -->
         <div id="cmd-panel" class="cmd-panel">
             <div class="cmd-panel-resize-handle" id="cmd-panel-resize-handle"></div>
-            <div class="cmd-panel-toolbar">
-                <span class="cmd-panel-title">CMD Panel</span>
-                <button id="cmd-panel-close" class="cmd-panel-close" data-tooltip="Close Panel">&times;</button>
+
+            <!-- Tab Bar -->
+            <div class="cmd-panel-tab-bar" id="cmd-panel-tab-bar">
+                <div class="cmd-panel-tabs" id="cmd-panel-tabs"></div>
+                <button class="cmd-panel-new-tab" id="cmd-panel-new-tab" data-tooltip="New Tab (Ctrl+T)">+</button>
+                <button class="cmd-panel-close" id="cmd-panel-close" data-tooltip="Close Panel">&times;</button>
             </div>
+
+            <!-- Terminal container holds all tab containers -->
             <div id="cmd-panel-terminal" class="cmd-panel-terminal"></div>
-            <div id="cmd-panel-exit-banner" class="cmd-panel-exit-banner" style="display:none;">
-                <span>Session ended — Click to restart</span>
-            </div>
         </div>
     </div>
 
@@ -689,19 +691,19 @@
             setTimeout(fontsReady, 1500);
         })();
     </script>
-    <script src="lib/xterm.js?v=14"></script>
-    <script src="lib/xterm-addon-fit.js?v=16"></script>
-    <script src="lib/xterm-addon-webgl.js?v=15"></script>
-    <script src="tauri-bridge.js?v=23"></script>
+    <script src="lib/xterm.js?v=15"></script>
+    <script src="lib/xterm-addon-fit.js?v=17"></script>
+    <script src="lib/xterm-addon-webgl.js?v=16"></script>
+    <script src="tauri-bridge.js?v=24"></script>
 
-    <script src="lib/dom-utils.js?v=4"></script>
-    <script src="lib/plugin-updater.js?v=4"></script>
-    <script src="lib/plugin-process.js?v=3"></script>
-    <script src="lib/updater-toast.js?v=8"></script>
-    <script src="tooltip.js?v=8"></script>
+    <script src="lib/dom-utils.js?v=5"></script>
+    <script src="lib/plugin-updater.js?v=5"></script>
+    <script src="lib/plugin-process.js?v=4"></script>
+    <script src="lib/updater-toast.js?v=9"></script>
+    <script src="tooltip.js?v=9"></script>
 
-    <script src="app.js?v=73"></script>
+    <script src="app.js?v=74"></script>
 
-    <script src="sidebar.js?v=29"></script>
+    <script src="sidebar.js?v=30"></script>
 </body>
 </html>
