@@ -7,8 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=123">
-    <link rel="stylesheet" href="lib/xterm.css?v=12">
+    <link rel="stylesheet" href="style.css?v=126">
+    <link rel="stylesheet" href="lib/xterm.css?v=13">
     <style>
         .landing-brand, .landing-card, .landing-status-bar {
             visibility: hidden;
@@ -543,10 +543,9 @@
         <div id="cmd-panel" class="cmd-panel">
             <div class="cmd-panel-resize-handle" id="cmd-panel-resize-handle"></div>
 
-    <!-- Tab Bar -->
+    <!-- Tab Bar (segmented control, matches .settings-tab) -->
     <div class="cmd-panel-tab-bar" id="cmd-panel-tab-bar">
-        <div class="cmd-panel-tabs-group">
-            <div class="cmd-panel-tabs" id="cmd-panel-tabs"></div>
+        <div class="cmd-panel-tabs" id="cmd-panel-tabs">
             <button class="cmd-panel-new-tab" id="cmd-panel-new-tab" data-tooltip="New Tab (Ctrl+T)">+</button>
         </div>
         <button class="cmd-panel-close" id="cmd-panel-close" data-tooltip="Close Panel">&times;</button>
@@ -693,19 +692,19 @@
             setTimeout(fontsReady, 1500);
         })();
     </script>
-    <script src="lib/xterm.js?v=16"></script>
-    <script src="lib/xterm-addon-fit.js?v=18"></script>
-    <script src="lib/xterm-addon-webgl.js?v=17"></script>
-    <script src="tauri-bridge.js?v=25"></script>
+    <script src="lib/xterm.js?v=18"></script>
+    <script src="lib/xterm-addon-fit.js?v=20"></script>
+    <script src="lib/xterm-addon-webgl.js?v=19"></script>
+    <script src="tauri-bridge.js?v=27"></script>
 
-    <script src="lib/dom-utils.js?v=6"></script>
-    <script src="lib/plugin-updater.js?v=6"></script>
-    <script src="lib/plugin-process.js?v=5"></script>
-    <script src="lib/updater-toast.js?v=10"></script>
-    <script src="tooltip.js?v=10"></script>
+    <script src="lib/dom-utils.js?v=8"></script>
+    <script src="lib/plugin-updater.js?v=8"></script>
+    <script src="lib/plugin-process.js?v=7"></script>
+    <script src="lib/updater-toast.js?v=12"></script>
+    <script src="tooltip.js?v=12"></script>
 
-    <script src="app.js?v=75"></script>
+    <script src="app.js?v=77"></script>
 
-    <script src="sidebar.js?v=31"></script>
+    <script src="sidebar.js?v=33"></script>
 </body>
 </html>

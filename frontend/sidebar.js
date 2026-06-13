@@ -450,6 +450,10 @@
             return Promise.resolve();
         }
 
+        if (tab.initializing) {
+            return tab.initPromise || Promise.resolve();
+        }
+
         if (_activeTabId && _activeTabId !== tabId) {
             var oldTab = _panelTabs.get(_activeTabId);
             if (oldTab) {
@@ -484,6 +488,9 @@
     function initTabXterm(tab) {
         var terminalDiv = tab.container.querySelector('.cmd-panel-tab-terminal');
 
+        tab.initializing = true;
+        tab.initPromise = null;
+
         var term = new Terminal({
             theme: { background: 'transparent', foreground: '#b8b8b8', cursor: '#c0c0c0' },
             fontFamily: '"Cascadia Mono", "Consolas", "Lucida Console", "Courier New", monospace',
@@ -513,7 +520,7 @@
         var cols = term.cols || 80;
         var rows = term.rows || 24;
 
-        return window.monolithApi.start_terminal(tab.sessionId, dir, false, _panelShell, cols, rows)
+        var initPromise = window.monolithApi.start_terminal(tab.sessionId, dir, false, _panelShell, cols, rows)
             .then(function (result) {
                 if (result && result.success) {
                     tab.running = true;
@@ -540,7 +547,13 @@
                 tab.running = false;
                 showTabExitBanner(tab);
                 return tab;
+            })
+            .finally(function () {
+                tab.initializing = false;
             });
+
+        tab.initPromise = initPromise;
+        return initPromise;
     }
 
     function closeTab(tabId, force) {
@@ -549,7 +562,7 @@
 
         force = force || false;
 
-        if (tab.dirty && !force) {
+        if (tab.running && !force) {
             if (window.MonolothApp && window.MonolothApp.showConfirm) {
                 window.MonolothApp.showConfirm('Close Tab', 'This tab has a running process. Close anyway?', 'close_dirty_tab')
                     .then(function (confirmed) {
@@ -573,11 +586,22 @@
         if (tab.term) {
             try { tab.term.dispose(); } catch (e) {}
             try { tab.fitAddon.dispose(); } catch (e) {}
+            tab.term = null;
+            tab.fitAddon = null;
         }
 
         tab.container.remove();
         var tabItem = document.querySelector('.cmd-panel-tab[data-tab-id="' + tabId + '"]');
         if (tabItem) tabItem.remove();
+
+        var nextTab = null;
+        if (_activeTabId === tabId) {
+            var tabs = getAllTabs();
+            var idx = tabs.findIndex(function (t) { return t.id === tabId; });
+            if (idx !== -1) {
+                nextTab = tabs[idx - 1] || tabs[idx + 1] || tabs[0] || null;
+            }
+        }
 
         _panelTabs.delete(tabId);
 
@@ -587,12 +611,7 @@
             return;
         }
 
-        if (_activeTabId === tabId) {
-            var tabs = getAllTabs();
-            var idx = tabs.findIndex(function (t) { return t.id === tabId; });
-            var nextTab = tabs[idx - 1] || tabs[idx + 1] || tabs[0];
-            if (nextTab) activateTab(nextTab.id);
-        }
+        if (nextTab) activateTab(nextTab.id);
     }
 
     function getAllTabs() {
@@ -702,6 +721,11 @@
     }
 
     function showTabContextMenu(tabId, x, y) {
+        if (typeof _activeContextMenuCleanup === 'function') {
+            _activeContextMenuCleanup();
+            _activeContextMenuCleanup = null;
+        }
+
         var existing = document.querySelector('.cmd-panel-context-menu');
         if (existing) existing.remove();
 
@@ -724,7 +748,12 @@
                 document.removeEventListener(l.event, l.handler);
             });
             dismissListeners = [];
+            if (_activeContextMenuCleanup === cleanup) {
+                _activeContextMenuCleanup = null;
+            }
         }
+
+        _activeContextMenuCleanup = cleanup;
 
         menu.addEventListener('click', function (e) {
             var action = e.target.getAttribute('data-action');

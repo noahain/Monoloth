@@ -1780,7 +1780,6 @@
                 tabsSnap.forEach(function (t) { window.SidebarManager.closeTab(t.id, true); });
             }
             window.SidebarManager.hideCmdPanel();
-            window.SidebarManager.hide();
         }
         if (window.monolithApi) {
             window.monolithApi.terminate_terminal('main').catch(function () {});
@@ -2100,10 +2099,6 @@
                 if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.writeToTab) {
                     window.SidebarManager.writeToTab(tabId, data, eof);
                 }
-            } else if (sessionId === 'panel') {
-                if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.getTab) {
-                    window.SidebarManager.writeToTab('panel', data, eof);
-                }
             }
         };
 
@@ -2392,6 +2387,15 @@
         _paletteState.selectedIndex = idx;
     }
 
+    function isTypingInMainTerminalOrInput() {
+        var el = document.activeElement;
+        if (!el) return false;
+        var isXtermHelper = el.classList && el.classList.contains('xterm-helper-textarea');
+        var inMainTerm = isXtermHelper && !el.closest('#cmd-panel');
+        var inTextField = (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && !isXtermHelper;
+        return inMainTerm || inTextField;
+    }
+
     document.addEventListener('keydown', function (e) {
         if (_editingShortcutKey && shortcutEditMode && shortcutEditMode.style.display !== 'none') return;
 
@@ -2421,6 +2425,7 @@
         }
         if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key === 't') {
             if (typeof window.SidebarManager !== 'undefined') {
+                if (isTypingInMainTerminalOrInput()) return;
                 e.preventDefault();
                 if (!window.SidebarManager.isPanelOpen()) window.SidebarManager.toggleCmdPanel();
                 window.SidebarManager.createTab();
@@ -2428,6 +2433,7 @@
         }
         if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key === 'w') {
             if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.isPanelOpen() && window.SidebarManager.getTabCount() > 0) {
+                if (isTypingInMainTerminalOrInput()) return;
                 e.preventDefault();
                 var activeTab = window.SidebarManager.getActiveTab();
                 if (activeTab) window.SidebarManager.closeTab(activeTab.id);
@@ -2435,6 +2441,7 @@
         }
         if ((e.ctrlKey || e.metaKey) && e.key === 'Tab') {
             if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.getTabCount() > 1) {
+                if (isTypingInMainTerminalOrInput()) return;
                 e.preventDefault();
                 var tabsA = window.SidebarManager.getAllTabs();
                 var activeTabA = window.SidebarManager.getActiveTab();
@@ -2449,6 +2456,7 @@
         }
         if (e.altKey && !e.ctrlKey && !e.shiftKey && e.key >= '1' && e.key <= '9') {
             if (typeof window.SidebarManager !== 'undefined') {
+                if (isTypingInMainTerminalOrInput()) return;
                 e.preventDefault();
                 var tabIndex = parseInt(e.key, 10) - 1;
                 var tabsB = window.SidebarManager.getAllTabs();
@@ -3939,6 +3947,9 @@
                 var tabId = sessionId.replace('panel-', '');
                 var tab = window.SidebarManager.getTab(tabId);
                 if (!tab) return;
+                if (window.monolithApi) {
+                    window.monolithApi.terminate_terminal(sessionId).catch(function () {});
+                }
                 if (tab.term) {
                     try { tab.term.dispose(); } catch (e) {}
                     try { tab.fitAddon.dispose(); } catch (e) {}
