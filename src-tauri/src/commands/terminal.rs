@@ -265,7 +265,7 @@ fn run_before_command(cmd: &str, cwd: &str) -> Result<String, String> {
 
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
-        let mut guard = thread_child.lock().unwrap();
+        let mut guard = thread_child.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(child) = guard.take() {
             let result = child.wait_with_output();
             let _ = tx.send(result);
@@ -283,7 +283,7 @@ fn run_before_command(cmd: &str, cwd: &str) -> Result<String, String> {
         }
         Ok(Err(e)) => Err(format!("Failed to collect output: {}", e)),
         Err(mpsc::RecvTimeoutError::Timeout) => {
-            let mut guard = shared_child.lock().unwrap();
+            let mut guard = shared_child.lock().unwrap_or_else(|p| p.into_inner());
             if let Some(mut child) = guard.take() {
                 let _ = child.kill();
             }

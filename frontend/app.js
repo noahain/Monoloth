@@ -12,7 +12,6 @@
     let term = null;
     let fitAddon = null;
     let webglAddon = null;
-    let bridgeReady = false;
     let _bgImagePath = '';
     let _bgTransparency = 75;
     let _currentLaunchDir = '';
@@ -36,7 +35,15 @@
     var _filePickerType = 'custom';
     var _confirmPrefs = {};
 
-    function isGifUrl(url) { return url && (url.indexOf('data:') === 0 ? false : /\.gif($|\?)/i.test(url)); }
+    function isGifUrl(url) {
+        if (!url) return false;
+        if (url.indexOf('data:') === 0) return url.indexOf('data:image/gif') === 0;
+        return /\.gif($|\?)/i.test(url);
+    }
+
+    function cacheBustParam(url) {
+        return (url.indexOf('?') === -1 ? '?t=' : '&t=') + Date.now();
+    }
 
     function normalizeKeyName(key) {
         if (key === ' ') return 'Space';
@@ -139,10 +146,16 @@
     }
 
     function parseShortcutString(str) {
+        var keyOverride = '';
+        if (str.indexOf('++') !== -1) {
+            keyOverride = 'Plus';
+            str = str.replace(/\+\+/g, '+');
+        }
         var parts = str.split('+');
-        var result = { ctrl: false, shift: false, alt: false, meta: false, key: '' };
+        var result = { ctrl: false, shift: false, alt: false, meta: false, key: keyOverride };
         for (var i = 0; i < parts.length; i++) {
             var p = parts[i].trim().toLowerCase();
+            if (!p) continue;
             if (p === 'ctrl' || p === 'control') result.ctrl = true;
             else if (p === 'shift') result.shift = true;
             else if (p === 'alt') result.alt = true;
@@ -151,7 +164,6 @@
             else if (p === '.') result.key = 'Period';
             else if (p === ' ') result.key = 'Space';
             else if (p === '+' || p === 'plus') result.key = 'Plus';
-            else if (p === '') result.key = 'Plus';
             else result.key = p.toUpperCase();
         }
         return result;
@@ -165,7 +177,7 @@
                e.shiftKey === s.shift &&
                e.altKey === s.alt &&
                (e.metaKey || false) === s.meta &&
-               eventKey === s.key;
+               eventKey.toLowerCase() === s.key.toLowerCase();
     }
 
     function renderShortcutUI() {
@@ -235,10 +247,12 @@
     var _wallpaperBrightness = null;
 
     function hexToLuminance(hex) {
-        hex = hex.replace('#', '');
+        if (!hex) return 0;
+        hex = String(hex).replace('#', '');
         if (hex.length === 3) {
             hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
         }
+        if (!/^[0-9a-fA-F]{6}$/.test(hex)) return 0;
         var r = parseInt(hex.substring(0, 2), 16);
         var g = parseInt(hex.substring(2, 4), 16);
         var b = parseInt(hex.substring(4, 6), 16);
@@ -295,6 +309,7 @@
     }
 
     function analyzeWallpaperBrightness(imagePath) {
+        if (!imagePath) return;
         if (!window.monolithApi) return;
         if (typeof window.monolithApi.analyze_image_brightness !== 'function') return;
         window.monolithApi.analyze_image_brightness(imagePath)
@@ -316,7 +331,6 @@
         const start = Date.now();
         const check = () => {
             if (window.monolithApi) {
-                bridgeReady = true;
                 callback(true);
             } else if (Date.now() - start > timeoutMs) {
                 callback(false);
@@ -353,8 +367,6 @@
         }
         if (window.monolithApi) {
             window.monolithApi.set_recent_directories(_recentDirs).catch(function () {});
-        }
-        if (window.monolithApi) {
             window.monolithApi.save_last_directory(path).catch(function () {});
         }
         renderRecentDirectories();
@@ -362,28 +374,24 @@
 
     function loadRecentDirectories() {
         if (!window.monolithApi) return;
+        function fallbackToLastDirectory() {
+            window.monolithApi.get_last_directory().then(function (res) {
+                if (res && res.success && res.path) {
+                    _recentDirs = [res.path];
+                    renderRecentDirectories();
+                }
+            }).catch(function () {});
+        }
         window.monolithApi.get_recent_directories()
             .then(function (dirs) {
                 if (Array.isArray(dirs) && dirs.length > 0) {
                     _recentDirs = dirs.slice(0, 7);
                     renderRecentDirectories();
                 } else {
-                    window.monolithApi.get_last_directory().then(function (res) {
-                        if (res && res.success && res.path) {
-                            _recentDirs = [res.path];
-                            renderRecentDirectories();
-                        }
-                    }).catch(function () {});
+                    fallbackToLastDirectory();
                 }
             })
-            .catch(function () {
-                window.monolithApi.get_last_directory().then(function (res) {
-                    if (res && res.success && res.path) {
-                        _recentDirs = [res.path];
-                        renderRecentDirectories();
-                    }
-                }).catch(function () {});
-            });
+            .catch(fallbackToLastDirectory);
     }
 
     function renderRecentDirectories() {
@@ -416,8 +424,8 @@
             item.appendChild(arrow);
 
             item.addEventListener('click', function () {
-                showTerminal(dirPath);
                 addToRecentDirectories(dirPath);
+                showTerminal(dirPath);
             });
             recentProjectsList.appendChild(item);
         });
@@ -483,6 +491,10 @@
         } else {
             if (bridgeLoading) bridgeLoading.style.display = 'none';
             updateStatusBar('Bridge unavailable');
+            if (window.__monolithReady) {
+                window.__monolithReady.config = true;
+                if (window.__monolithReveal) window.__monolithReveal();
+            }
         }
     });
 
@@ -572,18 +584,13 @@
 
     tabs.forEach(function (tab) {
         tab.addEventListener('click', function () {
-            var target = tab.dataset.tab;
-            document.querySelectorAll('.settings-tab').forEach(function (t) { t.classList.remove('active'); });
-            document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
-            tab.classList.add('active');
-            var panel = document.getElementById('tab-' + target);
-            if (panel) panel.classList.add('active');
-            loadSettingsTab(target);
+            switchTab(tab.dataset.tab);
         });
     });
 
     // --- Collapsible sections ---
-    document.querySelector('.settings-content').addEventListener('click', function (e) {
+    var settingsContent = document.querySelector('.settings-content');
+    if (settingsContent) settingsContent.addEventListener('click', function (e) {
         var trigger = e.target.closest('.collapsible-trigger');
         if (!trigger) return;
         var section = trigger.closest('.collapsible-section');
@@ -696,7 +703,6 @@
             }
         });
     }
-
     // --- Appearance: Custom Background System ---
 
     const bgOverlay = document.getElementById('bg-overlay');
@@ -713,7 +719,7 @@
         if (type === 'image' && config.imageUrl) {
             var isGif = isGifUrl(config.imageUrl);
             var isDataUrl = config.imageUrl.indexOf('data:') === 0;
-            var cacheBust = isDataUrl || isGif ? '' : (config.imageUrl.indexOf('?') === -1 ? '?t=' + Date.now() : '&t=' + Date.now());
+            var cacheBust = (isDataUrl || isGif) ? '' : cacheBustParam(config.imageUrl);
             return {
                 backgroundImage: 'url("' + config.imageUrl + cacheBust + '")',
                 backgroundSize: 'cover',
@@ -832,25 +838,25 @@
         };
     }
 
-    function getTerminalDarkTheme(terminalBg) {
+    function getTerminalDarkTheme() {
         return {
             foreground: '#b8b8b8',
             cursor: '#c0c0c0',
             selectionBackground: '#4a4a4a',
-            red: '#b0b0b0',
-            green: '#a0a0a0',
-            yellow: '#c0c0c0',
-            blue: '#909090',
-            magenta: '#b0b0b0',
-            cyan: '#a0a0a0',
-            white: '#e0e0e0',
-            brightBlack: '#4a4a4a',
-            brightRed: '#d0d0d0',
-            brightGreen: '#c0c0c0',
-            brightYellow: '#e0e0e0',
-            brightBlue: '#b0b0b0',
-            brightMagenta: '#d0d0d0',
-            brightCyan: '#c0c0c0',
+            red: '#cd3131',
+            green: '#0dbc79',
+            yellow: '#e5e510',
+            blue: '#2472c8',
+            magenta: '#bc3fbc',
+            cyan: '#11a8cd',
+            white: '#e5e5e5',
+            brightBlack: '#666666',
+            brightRed: '#f14c4c',
+            brightGreen: '#23d18b',
+            brightYellow: '#f5f543',
+            brightBlue: '#3b8eea',
+            brightMagenta: '#d670d6',
+            brightCyan: '#29b8db',
             brightWhite: '#ffffff'
         };
     }
@@ -872,7 +878,7 @@
             try { existing = Object.assign({}, term.getOption('theme')); } catch (e) {}
             existing.background = themeBg;
 
-            var textTheme = isLight ? getTerminalLightTheme() : getTerminalDarkTheme(themeBg);
+            var textTheme = isLight ? getTerminalLightTheme() : getTerminalDarkTheme();
             Object.assign(existing, textTheme);
 
             if (layer === 'overlay') {
@@ -942,17 +948,19 @@
         }
     }
 
+    var _bgPreviewToken = 0;
     function renderBgPreview(config) {
         var previewThumb = document.getElementById('bg-preview-thumb');
         if (!previewThumb) return;
         var placeholder = previewThumb.querySelector('.bg-preview-placeholder');
         var type = config.type || 'none';
         var existingPreviewGif = previewThumb.querySelector('.bg-preview-gif');
+        var myToken = ++_bgPreviewToken;
 
         if (type === 'image' && config.imageUrl) {
             var isGif = isGifUrl(config.imageUrl);
             var isDataUrl = config.imageUrl.indexOf('data:') === 0;
-            var cacheBust = isDataUrl ? '' : (config.imageUrl.indexOf('?') === -1 ? '?t=' + Date.now() : '&t=' + Date.now());
+            var cacheBust = isDataUrl ? '' : cacheBustParam(config.imageUrl);
             var imageUrl = config.imageUrl + cacheBust;
 
             if (isGif) {
@@ -972,6 +980,7 @@
                 if (existingPreviewGif) existingPreviewGif.remove();
                 var img = new Image();
                 img.onload = function() {
+                    if (myToken !== _bgPreviewToken) return;
                     var aspectRatio = img.height / img.width;
                     var containerWidth = previewThumb.offsetWidth;
                     var newHeight = Math.max(100, containerWidth * aspectRatio);
@@ -985,6 +994,7 @@
                     if (placeholder) placeholder.style.display = 'none';
                 };
                 img.onerror = function() {
+                    if (myToken !== _bgPreviewToken) return;
                     previewThumb.style.height = '100px';
                     previewThumb.style.backgroundImage = 'none';
                     previewThumb.style.backgroundColor = 'transparent';
@@ -1034,12 +1044,17 @@
         });
     }
 
+    var _loadBackgroundConfigRetries = 0;
     function loadBackgroundConfig() {
         if (!window.monolithApi) return Promise.resolve();
         if (typeof window.monolithApi.get_background_config !== 'function') {
-            setTimeout(loadBackgroundConfig, 300);
+            if (_loadBackgroundConfigRetries < 10) {
+                _loadBackgroundConfigRetries++;
+                setTimeout(loadBackgroundConfig, 300);
+            }
             return Promise.resolve();
         }
+        _loadBackgroundConfigRetries = 0;
         return window.monolithApi.get_background_config()
             .then(function (config) {
                 if (!config) return;
@@ -1197,11 +1212,15 @@
             var type = this.dataset.type;
             updateBgTypeUI(type);
 
-            var extras = { image: null, color: null, gradient: null };
             if (type === 'none') {
                 saveBackground('none', { image: null, color: null, gradient: null }, 'Background cleared.');
                 return;
             }
+            var extras = {
+                image: _bgImagePath || null,
+                color: _currentColor || null,
+                gradient: _currentGradient || null
+            };
             saveBackground(type, extras, 'Background type changed.');
         });
     });
@@ -1271,14 +1290,8 @@
 
         bgSlider.addEventListener('change', function () {
             if (!window.monolithApi) return;
-            var slider = document.getElementById('bg-transparency-slider');
-            var transparency = slider ? parseInt(slider.value, 10) : 75;
-            window.monolithApi.set_background_config(undefined, undefined, undefined, undefined, transparency)
-                .then(function () {
-                    loadBackgroundConfig();
-                    showStatus('appearance-status', 'Transparency updated.', false);
-                })
-                .catch(function () {});
+            _bgTransparency = parseInt(this.value, 10);
+            saveAppearanceSettings('Transparency updated.');
         });
     }
 
@@ -1524,11 +1537,6 @@
         });
     }
 
-    // Load file picker config on init
-    loadFilePickerConfig();
-    loadStartupConfig();
-    loadSecondaryCommands();
-
     // --- Shortcuts Tab ---
     var shortcutEditMode = document.getElementById('shortcut-edit-mode');
     var shortcutEditName = document.getElementById('shortcut-edit-name');
@@ -1659,6 +1667,7 @@
             window.monolithApi.terminate_terminal('main');
         }
         _terminalRunning = false;
+        _sessionGeneration['main'] = (_sessionGeneration['main'] || 0) + 1;
         if (landing) {
             landing.classList.add('hidden');
         }
@@ -1929,23 +1938,53 @@
             try { term.refresh(0, term.rows - 1); } catch (e) {}
         }
 
-        var resizeTimeout;
+        var resizeDebounceTimer;
         var _resizeListener = function () {
-            clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(syncSize, 100);
+            clearTimeout(resizeDebounceTimer);
+            resizeDebounceTimer = setTimeout(syncSize, 100);
         };
         window.addEventListener('resize', _resizeListener);
         _resizeHandler = _resizeListener;
 
-        var resizeTimeout = null;
+        var resizeObserverTimeout;
         _resizeObserver = new ResizeObserver(function () {
-            clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(syncSize, 100);
+            clearTimeout(resizeObserverTimeout);
+            resizeObserverTimeout = setTimeout(syncSize, 100);
         });
         _resizeObserver.observe(terminalContainer);
 
         var firstOutput = true;
-        var _exitTimer = null;
+        var _exitCountdownInterval = null;
+        var _exitBanner = null;
+
+        function startSessionExitCountdown() {
+            _terminalRunning = false;
+            if (_exitCountdownInterval) { clearInterval(_exitCountdownInterval); _exitCountdownInterval = null; }
+            if (_exitBanner && _exitBanner.parentNode) _exitBanner.remove();
+            var exitBanner = document.createElement('div');
+            exitBanner.className = 'session-exit-banner';
+            exitBanner.style.cssText = 'position:absolute;bottom:40px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,0.9);color:#c0c0c0;padding:8px 16px;border-radius:6px;font-family:monospace;font-size:13px;z-index:101;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(4px);pointer-events:auto;cursor:pointer;';
+            exitBanner.textContent = 'Session ended \u2014 returning to launcher in 5s (click to stay)';
+            if (terminalView) terminalView.appendChild(exitBanner);
+            _exitBanner = exitBanner;
+            var countdown = 5;
+            exitBanner.addEventListener('click', function () {
+                if (_exitCountdownInterval) { clearInterval(_exitCountdownInterval); _exitCountdownInterval = null; }
+                if (exitBanner.parentNode) exitBanner.remove();
+            });
+            _exitCountdownInterval = setInterval(function () {
+                countdown--;
+                if (countdown <= 0) {
+                    clearInterval(_exitCountdownInterval);
+                    _exitCountdownInterval = null;
+                    if (exitBanner.parentNode) exitBanner.remove();
+                    backToLanding();
+                } else {
+                    exitBanner.textContent = 'Session ended \u2014 returning to launcher in ' + countdown + 's (click to stay)';
+                }
+            }, 1000);
+        }
+
         window.writeToTerm = (data, eof, sessionId, generation) => {
             sessionId = sessionId || 'main';
             generation = generation || 0;
@@ -1961,33 +2000,7 @@
                 if (term) {
                     if (eof) {
                         term.write(data);
-                        var exitBanner = document.createElement('div');
-                        exitBanner.className = 'session-exit-banner';
-                        exitBanner.style.cssText = 'position:absolute;bottom:40px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,0.9);color:#c0c0c0;padding:8px 16px;border-radius:6px;font-family:monospace;font-size:13px;z-index:101;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(4px);pointer-events:auto;cursor:pointer;';
-                        exitBanner.textContent = 'Session ended \u2014 returning to launcher in 5s (click to stay)';
-                        if (terminalView) terminalView.appendChild(exitBanner);
-                        var countdown = 5;
-                        var cancelled = false;
-                        exitBanner.addEventListener('click', function () {
-                            cancelled = true;
-                            if (exitBanner.parentNode) exitBanner.remove();
-                        });
-                        var countdownInterval = setInterval(function () {
-                            if (cancelled) { clearInterval(countdownInterval); return; }
-                            countdown--;
-                            if (countdown <= 0) {
-                                clearInterval(countdownInterval);
-                                if (_exitTimer) { clearTimeout(_exitTimer); _exitTimer = null; }
-                                if (exitBanner.parentNode) exitBanner.remove();
-                                backToLanding();
-                            } else {
-                                exitBanner.textContent = 'Session ended \u2014 returning to launcher in ' + countdown + 's (click to stay)';
-                            }
-                        }, 1000);
-                        if (_exitTimer) { clearTimeout(_exitTimer); _exitTimer = null; }
-                        _exitTimer = setTimeout(function () {
-                            if (!cancelled) backToLanding();
-                        }, 5000);
+                        startSessionExitCountdown();
                         return;
                     }
                     term.write(data);
@@ -1995,17 +2008,18 @@
                         firstOutput = false;
                         setTimeout(syncSize, 1500);
                     }
-                    if (_exitTimer) { clearTimeout(_exitTimer); _exitTimer = null; }
                     if (typeof data === 'string' && data.indexOf('[session ended]') !== -1) {
-                        _exitTimer = setTimeout(function () {
-                            backToLanding();
-                        }, 5000);
+                        startSessionExitCountdown();
                     }
                 }
             } else if (sessionId.startsWith('panel-tab-')) {
                 var tabId = sessionId.replace('panel-', '');
                 if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.writeToTab) {
                     window.SidebarManager.writeToTab(tabId, data, eof);
+                }
+            } else if (sessionId === 'panel') {
+                if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.writeToPanel) {
+                    window.SidebarManager.writeToPanel(data, eof);
                 }
             }
         };
@@ -2033,7 +2047,7 @@
     }
 
     // --- Command Palette (Ctrl+P) ---
-    var _paletteState = { active: false, subPalette: null, parentCommands: null, selectedIndex: 0 };
+    var _paletteState = { subPalette: null, parentCommands: null, selectedIndex: 0 };
 
     var _paletteIcons = {
         folder: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
@@ -2139,7 +2153,6 @@
 
     function closePalette() {
         if (!paletteEl) return;
-        _paletteState.active = false;
         _paletteState.subPalette = null;
         _paletteState.parentCommands = null;
         closeModal(paletteEl);
@@ -2578,7 +2591,9 @@
 
     function parseISO(iso) {
         if (!iso) return 0;
-        return new Date(iso).getTime() / 1000;
+        var t = new Date(iso).getTime();
+        if (isNaN(t)) return 0;
+        return t / 1000;
     }
 
     function formatDuration(totalSeconds) {
@@ -2889,12 +2904,16 @@
         loadDrives();
     }
 
+    var FILE_IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.ico'];
+    var FILE_CODE_EXTS = ['.js', '.py', '.html', '.css', '.json', '.xml', '.ts', '.jsx', '.tsx', '.yaml', '.yml', '.md', '.sh', '.bat', '.ps1', '.lua', '.rb', '.go', '.rs', '.c', '.cpp', '.h', '.java', '.kt', '.swift'];
+    var FILE_ARCHIVE_EXTS = ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.zst'];
+
     function getItemIcon(entry) {
         if (entry.isDir) return { cls: 'folder', svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' };
         var ext = (entry.extension || '').toLowerCase();
-        if ('.png.jpg.jpeg.gif.bmp.webp.svg.ico'.indexOf(ext) !== -1) return { cls: 'file-image', svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' };
-        if ('.js.py.html.css.json.xml.ts.jsx.tsx.yaml.yml.md.sh.bat.ps1.lua.rb.go.rs.c.cpp.h.java.kt.swift'.indexOf(ext) !== -1) return { cls: 'file-code', svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>' };
-        if ('.zip.rar.7z.tar.gz.bz2.xz.zst'.indexOf(ext) !== -1) return { cls: 'file-archive', svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><line x1="10" y1="12" x2="14" y2="12"/></svg>' };
+        if (FILE_IMAGE_EXTS.indexOf(ext) !== -1) return { cls: 'file-image', svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' };
+        if (FILE_CODE_EXTS.indexOf(ext) !== -1) return { cls: 'file-code', svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>' };
+        if (FILE_ARCHIVE_EXTS.indexOf(ext) !== -1) return { cls: 'file-archive', svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><line x1="10" y1="12" x2="14" y2="12"/></svg>' };
         return { cls: 'file', svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' };
     }
 
@@ -3066,8 +3085,11 @@
         if (parent.endsWith(':')) parent += '\\';
         var p = parent.replace(/\\+$/, '');
         var idx = p.lastIndexOf('\\');
-        if (idx > 0) doNavigate(p.substring(0, idx));
-        else if (idx === 0) doNavigate(p.substring(0, idx + 1));
+        var result;
+        if (idx > 0) result = p.substring(0, idx);
+        else if (idx === 0) result = p.substring(0, idx + 1);
+        if (result && result.endsWith(':')) result += '\\';
+        doNavigate(result);
     });
 
     if (fpRefresh) fpRefresh.addEventListener('click', function () { if (fpState.currentPath) loadDirectory(fpState.currentPath); });

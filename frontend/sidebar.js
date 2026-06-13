@@ -472,6 +472,11 @@
         }
         _activeTabId = tabId;
 
+        if (tab.dirty) {
+            tab.dirty = false;
+            updateDirtyDot(tab);
+        }
+
         if (!tab.term) {
             return initTabXterm(tab);
         }
@@ -506,6 +511,48 @@
         var fitAddon = new FitAddon.FitAddon();
         term.loadAddon(fitAddon);
         term.open(terminalDiv);
+
+        term.attachCustomKeyEventHandler(function (e) {
+            if (e.ctrlKey && !e.shiftKey && e.code === 'KeyC' && term.hasSelection()) {
+                navigator.clipboard.writeText(term.getSelection()).catch(function () {});
+                term.clearSelection();
+                return false;
+            }
+            if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
+                if (term.hasSelection()) {
+                    navigator.clipboard.writeText(term.getSelection()).catch(function () {});
+                    term.clearSelection();
+                }
+                return false;
+            }
+            if ((e.ctrlKey && e.code === 'KeyV') || (e.shiftKey && e.code === 'Insert')) {
+                return false;
+            }
+            if (e.ctrlKey && e.shiftKey && e.code === 'KeyW') {
+                return false;
+            }
+            return true;
+        });
+
+        terminalDiv.addEventListener('contextmenu', function (e) {
+            e.preventDefault();
+            var sel = term.hasSelection() ? term.getSelection() : '';
+            if (sel) {
+                navigator.clipboard.writeText(sel).catch(function () {});
+                term.clearSelection();
+            }
+        });
+
+        if (term.element) {
+            term.element.addEventListener('paste', function (e) {
+                var text = e.clipboardData.getData('text');
+                if (text && window.monolithApi) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.monolithApi.send_input(tab.sessionId, text).catch(function () {});
+                }
+            });
+        }
 
         term.onData(function (data) {
             if (window.monolithApi) {
@@ -1400,6 +1447,11 @@
                     updateDirtyDot(tab);
                 }
             }
+        },
+        writeToPanel: function (data, eof) {
+            var tab = getActiveTab();
+            if (!tab || !tab.term) return;
+            this.writeToTab(tab.id, data, eof);
         },
 
         toggleCmdPanel: toggleCmdPanel,
