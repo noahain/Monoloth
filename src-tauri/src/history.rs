@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use log::warn;
 
 fn history_path() -> PathBuf {
     crate::config::config_dir().join("history.json")
@@ -353,7 +354,7 @@ fn load_json(path: &Path) -> HistoryData {
 fn save_json(path: &Path, data: &HistoryData) {
     if let Some(parent) = path.parent() {
         if let Err(e) = fs::create_dir_all(parent) {
-            eprintln!("[Monoloth] Failed to create history dir: {}", e);
+            warn!("[Monoloth] Failed to create history dir: {}", e);
             return;
         }
     }
@@ -362,7 +363,7 @@ fn save_json(path: &Path, data: &HistoryData) {
             let file_name = path.file_name().unwrap_or_default();
             let tmp_path = path.with_file_name(format!("{}.tmp", file_name.to_string_lossy()));
             if let Err(e) = fs::write(&tmp_path, &json) {
-                eprintln!(
+                warn!(
                     "[Monoloth] Failed to write history {}: {}",
                     path.display(),
                     e
@@ -370,13 +371,13 @@ fn save_json(path: &Path, data: &HistoryData) {
                 return;
             }
             if let Err(e) = fs::rename(&tmp_path, path) {
-                eprintln!(
+                warn!(
                     "[Monoloth] Failed to rename history {}: {}",
                     path.display(),
                     e
                 );
             }
         }
-        Err(e) => eprintln!("[Monoloth] Failed to serialize history: {}", e),
+        Err(e) => warn!("[Monoloth] Failed to serialize history: {}", e),
     }
 }

@@ -47,6 +47,7 @@ function createUpdaterHarness() {
         removeEventListener() {}
     };
     window.window = window;
+    window.__TAURI_CORE__ = window.__TAURI__.core;
 
     const context = {
         console,

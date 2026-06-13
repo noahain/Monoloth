@@ -79,8 +79,10 @@ function makeHarness({ checkResult, checkError } = {}) {
         addEventListener() {},
         removeEventListener() {}
     };
+    window.__TAURI_CORE__ = window.__TAURI__.core;
     window.window = window;
     window.document = document;
+    window.MonolothUI = { escapeHtml: (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;') };
 
     const context = {
         console,
@@ -89,7 +91,8 @@ function makeHarness({ checkResult, checkError } = {}) {
         navigator: { clipboard: { readText: () => Promise.resolve(''), writeText: () => Promise.resolve() } },
         Promise,
         setTimeout, clearTimeout,
-        requestAnimationFrame: (fn) => { fn(); return 1; }
+        requestAnimationFrame: (fn) => { fn(); return 1; },
+        MonolothUI: { escapeHtml: (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;') }
     };
     context.globalThis = context;
     vm.createContext(context);
@@ -187,12 +190,15 @@ test('init() retries once after a transient IPC failure and mounts the toast', a
         addEventListener() {},
         removeEventListener() {}
     };
+    window.__TAURI_CORE__ = window.__TAURI__.core;
     window.window = window;
     window.document = document;
+    window.MonolothUI = { escapeHtml: (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;') };
     const context = {
         console, document, window,
         Promise, setTimeout, clearTimeout,
-        requestAnimationFrame: (fn) => { fn(); return 1; }
+        requestAnimationFrame: (fn) => { fn(); return 1; },
+        MonolothUI: { escapeHtml: (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;') }
     };
     context.globalThis = context;
     vm.createContext(context);

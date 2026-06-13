@@ -1,9 +1,6 @@
 (function () {
     'use strict';
 
-    function getUpdater() { return window.__TAURI_PLUGIN_UPDATER__ || null; }
-    function getProcess() { return window.__TAURI_PLUGIN_PROCESS__ || null; }
-
     var STALL_TIMEOUT_MS = 2 * 60 * 1000;
 
     var state = {
@@ -62,13 +59,13 @@
 
     function buildToastHtml(update) {
         return ''
-            + '<div class="update-toast" data-version="' + escAttr(update.version || '') + '">'
+            + '<div class="update-toast" data-version="' + esc(update.version || '') + '">'
             +   '<div class="update-toast-header">'
             +     '<span class="update-toast-title">Update available</span>'
             +     '<button class="update-toast-close" aria-label="Dismiss">&times;</button>'
             +   '</div>'
             +   '<div class="update-toast-body">'
-            +     '<p>Version <strong>v' + escAttr(update.version || '?') + '</strong> is ready to install.</p>'
+            +     '<p>Version <strong>v' + esc(update.version || '?') + '</strong> is ready to install.</p>'
             +     '<div class="update-toast-actions">'
             +       '<button class="update-toast-update btn-primary">Update</button>'
             +       '<button class="update-toast-cancel" hidden>Cancel</button>'
@@ -84,22 +81,15 @@
 
     function buildPillHtml(update) {
         return ''
-            + '<div class="update-pill" data-version="' + escAttr(update.version || '') + '">'
-            +   '<span class="update-pill-label">Updating v' + escAttr(update.version || '?') + '&hellip;</span>'
+            + '<div class="update-pill" data-version="' + esc(update.version || '') + '">'
+            +   '<span class="update-pill-label">Updating v' + esc(update.version || '?') + '&hellip;</span>'
             +   '<button class="update-pill-restart btn-primary" hidden>Restart</button>'
             +   '<button class="update-pill-open" aria-label="Open">&hellip;</button>'
             +   '<button class="update-pill-close" aria-label="Dismiss">&times;</button>'
             + '</div>';
     }
 
-    function escAttr(s) {
-        return String(s == null ? '' : s)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
+    function esc(s) { return MonolothUI.escapeHtml(s); }
 
     function formatBytes(bytes) {
         if (bytes < 1024) return bytes + ' B';
@@ -144,8 +134,8 @@
             UNKNOWN:    { title: 'Update failed',                body: 'See console for details. Click Retry to try again.' }
         }[errorClass] || { title: 'Update failed', body: 'Click Retry to try again.' };
         errorEl.innerHTML = ''
-            + '<p class="update-toast-error-title"><strong>' + escAttr(copy.title) + '</strong></p>'
-            + '<p>' + escAttr(copy.body) + '</p>'
+            + '<p class="update-toast-error-title"><strong>' + esc(copy.title) + '</strong></p>'
+            + '<p>' + esc(copy.body) + '</p>'
             + '<div class="update-toast-actions">'
             +   '<button class="update-toast-retry btn-primary">Retry</button>'
             +   '<button class="update-toast-close">Dismiss</button>'
@@ -295,11 +285,11 @@
     }
 
     function relaunch() {
-        var process = getProcess();
+        var process = window.__TAURI_PLUGIN_PROCESS__ || null;
         if (process && typeof process.relaunch === 'function') {
             process.relaunch();
-        } else if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {
-            window.__TAURI__.core.invoke('plugin:process|restart');
+        } else if (window.__TAURI_CORE__) {
+            window.__TAURI_CORE__.invoke('plugin:process|restart');
         } else {
             console.error('Cannot relaunch: tauri-plugin-process not available');
         }
@@ -346,7 +336,7 @@
         }, 10000);
 
         try {
-            var updater = getUpdater();
+            var updater = window.__TAURI_PLUGIN_UPDATER__ || null;
             if (!updater) {
                 clearTimeout(timeoutId);
                 return;
@@ -381,7 +371,7 @@
         } else if (status) {
             status.textContent = 'Checking…';
         }
-        var updater = getUpdater();
+        var updater = window.__TAURI_PLUGIN_UPDATER__ || null;
         if (!updater) {
             if (btn) btn.disabled = false;
             if (status) status.textContent = 'Updater not available';
@@ -439,8 +429,8 @@
                     if (actionsEl) actionsEl.hidden = true;
                     if (errorEl) {
                         errorEl.innerHTML = ''
-                            + '<p class="update-toast-error-title"><strong>' + escAttr(copy.title) + '</strong></p>'
-                            + '<p>' + escAttr(copy.body) + '</p>'
+                            + '<p class="update-toast-error-title"><strong>' + esc(copy.title) + '</strong></p>'
+                            + '<p>' + esc(copy.body) + '</p>'
                             + '<div class="update-toast-actions">'
                             +   '<button class="update-toast-retry btn-primary">Retry</button>'
                             +   '<button class="update-toast-cancel">Cancel</button>'

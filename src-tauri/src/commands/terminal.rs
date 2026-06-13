@@ -1,10 +1,8 @@
 use crate::config::AppConfig;
 use crate::history::HistoryManager;
 use crate::pty::PtyManager;
+use log::warn;
 use serde_json::Value;
-use std::io::Read;
-use std::path::PathBuf;
-use std::process::Command;
 use tauri::State;
 
 use super::{expand_env_vars, shell_command};
@@ -70,12 +68,12 @@ pub fn start_terminal(
                                 match cmd_obj.get("mode").and_then(|v| v.as_str()) {
                                     Some("before") => {
                                         if let Err(e) = run_before_command(cmd_str, &directory) {
-                                            eprintln!("[Monoloth] Before command failed: {}", e);
+                                            warn!("Before command failed: {}", e);
                                         }
                                     }
                                     Some("parallel") => {
                                         if let Err(e) = run_parallel_command(cmd_str.to_string(), directory.clone()) {
-                                            eprintln!("[Monoloth] Parallel command failed: {}", e);
+                                            warn!("Parallel command failed: {}", e);
                                         }
                                     }
                                     _ => {}
@@ -179,6 +177,8 @@ fn resolve_custom_command(cmd_line: &str) -> Result<(String, Vec<String>), Strin
 }
 
 fn find_opencode() -> Result<String, String> {
+    use std::path::PathBuf;
+    use std::process::Command;
     if let Ok(p) = std::env::var("OPENCODE_BIN_PATH") {
         let p = p.trim();
         if !p.is_empty() {
@@ -249,52 +249,48 @@ fn find_opencode() -> Result<String, String> {
 
 fn run_before_command(cmd: &str, cwd: &str) -> Result<String, String> {
     use std::process::Stdio;
+    use std::sync::mpsc;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
 
-    let mut child = shell_command(cmd)
+    let child = shell_command(cmd)
         .current_dir(cwd)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("Failed to spawn: {}", e))?;
 
-    let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
-    let out_thread = std::thread::spawn(move || {
-        let mut buf = String::new();
-        if let Some(mut out) = stdout {
-            let _ = out.read_to_string(&mut buf);
+    let shared_child = Arc::new(Mutex::new(Some(child)));
+    let thread_child = shared_child.clone();
+
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut guard = thread_child.lock().unwrap();
+        if let Some(child) = guard.take() {
+            let result = child.wait_with_output();
+            let _ = tx.send(result);
         }
-        buf
-    });
-    let err_thread = std::thread::spawn(move || {
-        let mut buf = String::new();
-        if let Some(mut err) = stderr {
-            let _ = err.read_to_string(&mut buf);
-        }
-        buf
     });
 
-    let timeout = std::time::Duration::from_secs(30);
-    let start = std::time::Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let stdout = out_thread.join().unwrap_or_default();
-                let stderr = err_thread.join().unwrap_or_default();
-                if !status.success() {
-                    return Err(format!("Command exited with code: {:?}", status.code()));
-                }
-                return Ok(format!("{}{}", stdout, stderr));
+    match rx.recv_timeout(Duration::from_secs(30)) {
+        Ok(Ok(output)) => {
+            if !output.status.success() {
+                return Err(format!("Command exited with code: {:?}", output.status.code()));
             }
-            Ok(None) => {
-                if start.elapsed() > timeout {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return Err("Before command timed out after 30s".into());
-                }
-                std::thread::sleep(std::time::Duration::from_millis(100));
+            Ok(format!("{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)))
+        }
+        Ok(Err(e)) => Err(format!("Failed to collect output: {}", e)),
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            let mut guard = shared_child.lock().unwrap();
+            if let Some(mut child) = guard.take() {
+                let _ = child.kill();
             }
-            Err(e) => return Err(format!("Failed to wait: {}", e)),
+            Err("Before command timed out after 30s".into())
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            Err("Before command thread panicked".into())
         }
     }
 }
