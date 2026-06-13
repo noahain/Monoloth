@@ -33,8 +33,8 @@
     var _resizeStartHeight = 0;
     var _resizeDebounceTimer = null;
     var _configSaveTimer = null;
-    var _panelHeightSaveTimer = null;
     var _panelRestoreNeeded = false;
+    var _activeContextMenuCleanup = null;
 
     // ---- SVG Icons ----
     var ICONS = {
@@ -213,10 +213,7 @@
     }
 
     function findDefaultButton(id) {
-        for (var i = 0; i < DEFAULT_BUTTONS.length; i++) {
-            if (DEFAULT_BUTTONS[i].id === id) return DEFAULT_BUTTONS[i];
-        }
-        return null;
+        return DEFAULT_BUTTONS.find(function(b) { return b.id === id; }) || null;
     }
 
     function getDefaultSidebarConfig() {
@@ -365,10 +362,8 @@
         document.documentElement.style.setProperty('--cmd-panel-height', height + 'px');
     }
 
-    function escapeHtml(text) {
-        var div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+    function escapeHtml(str) {
+        return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
 
     function createTab(name, activate, dir) {
@@ -815,16 +810,7 @@
     }
 
     function toggleCmdPanel() {
-        if (_cmdPanelOpen) {
-            hideCmdPanel();
-        } else {
-            showCmdPanel();
-            if (_panelTabs.size === 0) {
-                createTab();
-            } else {
-                activateTab(_activeTabId || getAllTabs()[0].id);
-            }
-        }
+        handleOpenCmdPanel();
     }
 
     // ---- CMD Panel Resize ----
@@ -933,7 +919,7 @@
         // Default Buttons
         html += '<div class="adv-section"><h4>Default Buttons</h4>';
         html += '<div class="sidebar-default-buttons" id="sidebar-default-buttons">';
-        cfg.buttons.sort(function (a, b) { return a.order - b.order; }).forEach(function (b, idx) {
+        cfg.buttons.slice().sort(function (a, b) { return a.order - b.order; }).forEach(function (b, idx) {
             var def = findDefaultButton(b.id);
             var name = def ? def.name : b.id;
             html += '<div class="sidebar-setting-row" data-id="' + b.id + '" data-type="default">';
@@ -951,7 +937,7 @@
         // Custom Buttons
         html += '<div class="adv-section"><h4>Custom Buttons</h4>';
         html += '<div class="sidebar-custom-buttons" id="sidebar-custom-buttons">';
-        (cfg.customButtons || []).sort(function (a, b) { return a.order - b.order; }).forEach(function (b) {
+        (cfg.customButtons || []).slice().sort(function (a, b) { return a.order - b.order; }).forEach(function (b) {
             html += '<div class="sidebar-setting-row" data-id="' + b.id + '" data-type="custom">';
             html += '<span class="sidebar-drag-handle" data-tooltip="Drag to reorder"></span>';
             html += '<span class="sidebar-setting-icon">' + (ICONS[b.icon] || ICONS.terminal) + '</span>';
@@ -1060,12 +1046,8 @@
             btn.addEventListener('click', function () {
                 var id = this.dataset.id;
                 var customBtns = _sidebarConfig.customButtons || [];
-                for (var i = 0; i < customBtns.length; i++) {
-                    if (customBtns[i].id === id) {
-                        showCustomBtnEditor(customBtns[i]);
-                        break;
-                    }
-                }
+                var found = customBtns.find(function(b) { return b.id === id; });
+                if (found) showCustomBtnEditor(found);
             });
         });
 
@@ -1134,18 +1116,7 @@
         var container = document.querySelector('#tab-sidebar');
         if (!container) return;
 
-        // Use event delegation on the container for handles
-        container.addEventListener('mousedown', function (e) {
-            var handle = e.target.closest('.sidebar-drag-handle');
-            if (!handle) return;
-            var row = handle.closest('.sidebar-setting-row');
-            if (!row) return;
-            e.preventDefault();
-            _dragData = { id: row.dataset.id, type: row.dataset.type };
-            row.classList.add('dragging');
-        });
-
-        document.addEventListener('mousemove', function (e) {
+        function onDragMouseMove(e) {
             if (!_dragData) return;
 
             var rows = document.querySelectorAll('#tab-sidebar .sidebar-setting-row');
@@ -1153,9 +1124,9 @@
 
             var target = getRowUnderCursor(e);
             if (target) target.classList.add('drag-over');
-        });
+        }
 
-        document.addEventListener('mouseup', function (e) {
+        function onDragMouseUp(e) {
             if (!_dragData) return;
 
             var target = getRowUnderCursor(e);
@@ -1177,15 +1148,26 @@
                 }
             }
             clearDragState();
+            document.removeEventListener('mousemove', onDragMouseMove);
+            document.removeEventListener('mouseup', onDragMouseUp);
+        }
+
+        container.addEventListener('mousedown', function (e) {
+            var handle = e.target.closest('.sidebar-drag-handle');
+            if (!handle) return;
+            var row = handle.closest('.sidebar-setting-row');
+            if (!row) return;
+            e.preventDefault();
+            _dragData = { id: row.dataset.id, type: row.dataset.type };
+            row.classList.add('dragging');
+            document.addEventListener('mousemove', onDragMouseMove);
+            document.addEventListener('mouseup', onDragMouseUp);
         });
     }
 
     function reorderButtons(arr, dragId, targetId) {
-        var dragIdx = -1, targetIdx = -1;
-        for (var i = 0; i < arr.length; i++) {
-            if (arr[i].id === dragId) dragIdx = i;
-            if (arr[i].id === targetId) targetIdx = i;
-        }
+        var dragIdx = arr.findIndex(function(b) { return b.id === dragId; });
+        var targetIdx = arr.findIndex(function(b) { return b.id === targetId; });
         if (dragIdx === -1 || targetIdx === -1) return;
         var item = arr.splice(dragIdx, 1)[0];
         arr.splice(targetIdx, 0, item);
@@ -1194,20 +1176,6 @@
         }
     }
 
-    function debounceSavePanelHeight(height) {
-        if (_panelHeightSaveTimer) clearTimeout(_panelHeightSaveTimer);
-        _panelHeightSaveTimer = setTimeout(function () {
-            if (window.monolithApi) {
-                window.monolithApi.set_config('cmdPanelHeight', height).catch(function () {});
-            }
-        }, 100);
-    }
-
-    function savePanelHeight(height) {
-        if (window.monolithApi) {
-            window.monolithApi.set_config('cmdPanelHeight', height).catch(function () {});
-        }
-    }
 
     function showCustomBtnEditor(editBtn) {
         var editor = document.getElementById('custom-btn-editor');
@@ -1282,12 +1250,8 @@
 
             _sidebarConfig.customButtons = _sidebarConfig.customButtons || [];
             if (isEdit) {
-                for (var i = 0; i < _sidebarConfig.customButtons.length; i++) {
-                    if (_sidebarConfig.customButtons[i].id === id) {
-                        _sidebarConfig.customButtons[i] = btnData;
-                        break;
-                    }
-                }
+                var idx = _sidebarConfig.customButtons.findIndex(function(b) { return b.id === id; });
+                if (idx !== -1) _sidebarConfig.customButtons[idx] = btnData;
             } else {
                 _sidebarConfig.customButtons.push(btnData);
                 _sidebarConfig.customButtonCounter = (_sidebarConfig.customButtonCounter || 0) + 1;

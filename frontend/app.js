@@ -36,6 +36,19 @@
     var _filePickerType = 'custom';
     var _confirmPrefs = {};
 
+    function isGifUrl(url) { return url && (url.indexOf('data:') === 0 ? false : /\.gif($|\?)/i.test(url)); }
+
+    function normalizeKeyName(key) {
+        if (key === ' ') return 'Space';
+        if (key === ',') return 'Comma';
+        if (key === '.') return 'Period';
+        if (key === '+') return 'Plus';
+        if (key.length === 1) return key.toUpperCase();
+        return key.charAt(0).toUpperCase() + key.slice(1);
+    }
+
+    function copyToClipboard(text) { navigator.clipboard.writeText(text).catch(function () {}); }
+
     var UI = window.MonolothUI;
     var saveFocus = UI.saveFocus;
     var restoreFocus = UI.restoreFocus;
@@ -146,13 +159,7 @@
 
     function shortcutMatches(e, shortcutStr) {
         var s = parseShortcutString(shortcutStr);
-        var eventKey = e.key;
-        if (eventKey === ' ') eventKey = 'Space';
-        else if (eventKey === ',') eventKey = 'Comma';
-        else if (eventKey === '.') eventKey = 'Period';
-        else if (eventKey === '+') eventKey = 'Plus';
-        else if (eventKey.length === 1) eventKey = eventKey.toUpperCase();
-        else eventKey = eventKey.charAt(0).toUpperCase() + eventKey.slice(1);
+        var eventKey = normalizeKeyName(e.key);
 
         return e.ctrlKey === s.ctrl &&
                e.shiftKey === s.shift &&
@@ -161,14 +168,10 @@
                eventKey === s.key;
     }
 
-    function formatShortcutForDisplay(str) {
-        return str.replace(/\+/g, ' + ');
-    }
-
     function renderShortcutUI() {
         for (var key in DEFAULT_SHORTCUTS) {
             var el = document.getElementById('shortcut-' + key);
-            if (el) el.textContent = formatShortcutForDisplay(getShortcut(key));
+            if (el) el.textContent = getShortcut(key).replace(/\+/g, ' + ');
         }
     }
 
@@ -204,7 +207,7 @@
             if (window.MonolothTooltip) {
                 window.MonolothTooltip.detach(settingsBtn);
             }
-            var newTip = 'Settings (' + formatShortcutForDisplay(settings) + ')';
+            var newTip = 'Settings (' + settings.replace(/\+/g, ' + ') + ')';
             settingsBtn.setAttribute('data-tooltip', newTip);
             settingsBtn.setAttribute('aria-label', 'Open ' + newTip);
             if (window.MonolothTooltip) {
@@ -217,7 +220,7 @@
             if (window.MonolothTooltip) {
                 window.MonolothTooltip.detach(tbMenu);
             }
-            var menuTip = 'Command Palette (' + formatShortcutForDisplay(cmds) + ')';
+            var menuTip = 'Command Palette (' + cmds.replace(/\+/g, ' + ') + ')';
             tbMenu.setAttribute('data-tooltip', menuTip);
             tbMenu.setAttribute('aria-label', menuTip);
             if (window.MonolothTooltip) {
@@ -392,34 +395,32 @@
         }
         recentProjectsSection.style.display = '';
         recentProjectsList.innerHTML = '';
-        for (var i = 0; i < _recentDirs.length; i++) {
-            (function (dirPath) {
-                var item = document.createElement('div');
-                item.className = 'recent-project-item';
+        _recentDirs.forEach(function (dirPath) {
+            var item = document.createElement('div');
+            item.className = 'recent-project-item';
 
-                var icon = document.createElement('div');
-                icon.className = 'recent-project-icon';
-                icon.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
-                item.appendChild(icon);
+            var icon = document.createElement('div');
+            icon.className = 'recent-project-icon';
+            icon.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+            item.appendChild(icon);
 
-                var pathSpan = document.createElement('span');
-                pathSpan.className = 'recent-project-path';
-                pathSpan.textContent = dirPath;
-                pathSpan.title = dirPath;
-                item.appendChild(pathSpan);
+            var pathSpan = document.createElement('span');
+            pathSpan.className = 'recent-project-path';
+            pathSpan.textContent = dirPath;
+            pathSpan.title = dirPath;
+            item.appendChild(pathSpan);
 
-                var arrow = document.createElement('div');
-                arrow.className = 'recent-project-arrow';
-                arrow.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
-                item.appendChild(arrow);
+            var arrow = document.createElement('div');
+            arrow.className = 'recent-project-arrow';
+            arrow.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+            item.appendChild(arrow);
 
-                item.addEventListener('click', function () {
-                    showTerminal(dirPath);
-                    addToRecentDirectories(dirPath);
-                });
-                recentProjectsList.appendChild(item);
-            })(_recentDirs[i]);
-        }
+            item.addEventListener('click', function () {
+                showTerminal(dirPath);
+                addToRecentDirectories(dirPath);
+            });
+            recentProjectsList.appendChild(item);
+        });
     }
 
     // Show loading indicator while bridge initializes
@@ -442,10 +443,6 @@
                     });
             });
         });
-    }
-
-    function saveLastDir(path) {
-        addToRecentDirectories(path);
     }
 
     // Load background config once bridge is ready
@@ -678,19 +675,16 @@
     }
 
     // Click status to dismiss immediately
-    ['updater-status', 'appearance-status', 'file-picker-status', 'shortcuts-status', 'history-status', 'profiles-status', 'startup-status', 'secondary-cmd-status', 'sidebar-status'].forEach(function (id) {
-        var el = document.getElementById(id);
-        if (el) {
-            el.addEventListener('click', function () {
-                if (_statusTimers[id]) { clearTimeout(_statusTimers[id]); }
-                el.classList.remove('anim-enter');
-                el.classList.add('anim-exit');
-                setTimeout(function () {
-                    el.textContent = '';
-                    el.classList.remove('error', 'success', 'dismissible', 'anim-exit');
-                }, 300);
-            });
-        }
+    document.body.addEventListener('click', function (e) {
+        var el = e.target;
+        if (!el.id || !el.id.endsWith('-status')) return;
+        if (_statusTimers[el.id]) { clearTimeout(_statusTimers[el.id]); }
+        el.classList.remove('anim-enter');
+        el.classList.add('anim-exit');
+        setTimeout(function () {
+            el.textContent = '';
+            el.classList.remove('error', 'success', 'dismissible', 'anim-exit');
+        }, 300);
     });
 
     // --- Advanced Tab ---
@@ -717,13 +711,8 @@
         var type = config.type || 'none';
 
         if (type === 'image' && config.imageUrl) {
+            var isGif = isGifUrl(config.imageUrl);
             var isDataUrl = config.imageUrl.indexOf('data:') === 0;
-            var isGif = false;
-            if (isDataUrl) {
-                isGif = config.imageUrl.indexOf('image/gif') !== -1 || config.imageUrl.indexOf('image/GIF') !== -1;
-            } else {
-                isGif = config.imageUrl.toLowerCase().indexOf('.gif') !== -1 && config.imageUrl.toLowerCase().indexOf('.gif?') === -1;
-            }
             var cacheBust = isDataUrl || isGif ? '' : (config.imageUrl.indexOf('?') === -1 ? '?t=' + Date.now() : '&t=' + Date.now());
             return {
                 backgroundImage: 'url("' + config.imageUrl + cacheBust + '")',
@@ -765,34 +754,6 @@
         var type = config.type || 'none';
         if (type === 'none') return '#0a0a0a';
         return 'transparent';
-    }
-
-    function shouldUseWebglRenderer(config) {
-        return false;
-    }
-
-    function syncTerminalWebglRenderer(config) {
-        if (!term) return;
-
-        if (!shouldUseWebglRenderer(config)) {
-            if (webglAddon) {
-                try { webglAddon.dispose(); } catch (e) {}
-                webglAddon = null;
-                if (term.rows > 0) {
-                    try { term.refresh(0, term.rows - 1); } catch (e) {}
-                }
-            }
-            return;
-        }
-
-        if (webglAddon || typeof WebglAddon === 'undefined') return;
-        try {
-            webglAddon = new WebglAddon.WebglAddon();
-            term.loadAddon(webglAddon);
-        } catch (e) {
-            webglAddon = null;
-            console.warn('[Monoloth] Failed to load WebGL addon, falling back to canvas renderer:', e);
-        }
     }
 
     function applyBackground(config) {
@@ -907,34 +868,12 @@
         var themeBg = layer === 'overlay' ? '#000000' : computeTerminalBg(config);
         var isLight = document.body.classList.contains('light-mode') || document.body.classList.contains('adaptive-light');
         try {
-            var useWebgl = shouldUseWebglRenderer(config);
-            if (!useWebgl) {
-                syncTerminalWebglRenderer(config);
-            }
-
             var existing = {};
             try { existing = Object.assign({}, term.getOption('theme')); } catch (e) {}
             existing.background = themeBg;
 
             var textTheme = isLight ? getTerminalLightTheme() : getTerminalDarkTheme(themeBg);
-            existing.foreground = textTheme.foreground;
-            existing.cursor = textTheme.cursor;
-            existing.selectionBackground = textTheme.selectionBackground;
-            existing.red = textTheme.red;
-            existing.green = textTheme.green;
-            existing.yellow = textTheme.yellow;
-            existing.blue = textTheme.blue;
-            existing.magenta = textTheme.magenta;
-            existing.cyan = textTheme.cyan;
-            existing.white = textTheme.white;
-            existing.brightBlack = textTheme.brightBlack;
-            existing.brightRed = textTheme.brightRed;
-            existing.brightGreen = textTheme.brightGreen;
-            existing.brightYellow = textTheme.brightYellow;
-            existing.brightBlue = textTheme.brightBlue;
-            existing.brightMagenta = textTheme.brightMagenta;
-            existing.brightCyan = textTheme.brightCyan;
-            existing.brightWhite = textTheme.brightWhite;
+            Object.assign(existing, textTheme);
 
             if (layer === 'overlay') {
                 existing.black = '#000000';
@@ -948,10 +887,6 @@
             if (term.rows > 0) {
                 term.refresh(0, term.rows - 1);
             }
-
-            if (useWebgl) {
-                syncTerminalWebglRenderer(config);
-            }
         } catch (e) { /* ignore */ }
     }
 
@@ -961,12 +896,7 @@
         if (layer === 'overlay' && config.type !== 'none') {
             var isGifOverlay = false;
             if (config.imageUrl) {
-                var isDataUrlOv = config.imageUrl.indexOf('data:') === 0;
-                if (isDataUrlOv) {
-                    isGifOverlay = config.imageUrl.indexOf('image/gif') !== -1 || config.imageUrl.indexOf('image/GIF') !== -1;
-                } else {
-                    isGifOverlay = config.imageUrl.toLowerCase().indexOf('.gif') !== -1 && config.imageUrl.toLowerCase().indexOf('.gif?') === -1;
-                }
+                isGifOverlay = isGifUrl(config.imageUrl);
             }
             if (isGifOverlay) {
                 terminalBgOverlay.style.backgroundImage = 'none';
@@ -1020,13 +950,8 @@
         var existingPreviewGif = previewThumb.querySelector('.bg-preview-gif');
 
         if (type === 'image' && config.imageUrl) {
+            var isGif = isGifUrl(config.imageUrl);
             var isDataUrl = config.imageUrl.indexOf('data:') === 0;
-            var isGif = false;
-            if (isDataUrl) {
-                isGif = config.imageUrl.indexOf('image/gif') !== -1 || config.imageUrl.indexOf('image/GIF') !== -1;
-            } else {
-                isGif = config.imageUrl.toLowerCase().indexOf('.gif') !== -1 && config.imageUrl.toLowerCase().indexOf('.gif?') === -1;
-            }
             var cacheBust = isDataUrl ? '' : (config.imageUrl.indexOf('?') === -1 ? '?t=' + Date.now() : '&t=' + Date.now());
             var imageUrl = config.imageUrl + cacheBust;
 
@@ -1705,12 +1630,7 @@
         if (key === 'Control' || key === 'Shift' || key === 'Alt' || key === 'Meta') {
             // Modifier only, don't set key yet
         } else {
-            if (key === ' ') key = 'Space';
-            else if (key === ',') key = 'Comma';
-            else if (key === '.') key = 'Period';
-            else if (key.length === 1) key = key.toUpperCase();
-            else key = key.charAt(0).toUpperCase() + key.slice(1);
-            _editingShortcutKeys.key = key;
+            _editingShortcutKeys.key = normalizeKeyName(key);
         }
 
         // Build display string
@@ -1915,18 +1835,16 @@
             }
         });
 
-        syncTerminalWebglRenderer(initBgConfig);
-
         // --- Keyboard copy/paste shortcuts ---
         term.attachCustomKeyEventHandler((e) => {
             if (e.ctrlKey && !e.shiftKey && e.code === 'KeyC' && term.hasSelection()) {
-                navigator.clipboard.writeText(term.getSelection()).catch(() => {});
+                copyToClipboard(term.getSelection());
                 term.clearSelection();
                 return false;
             }
             if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
                 if (term.hasSelection()) {
-                    navigator.clipboard.writeText(term.getSelection()).catch(() => {});
+                    copyToClipboard(term.getSelection());
                     term.clearSelection();
                 }
                 return false;
@@ -1976,7 +1894,7 @@
             e.preventDefault();
             var selection = term.getSelection();
             if (selection) {
-                navigator.clipboard.writeText(selection).catch(function () {});
+                copyToClipboard(selection);
                 var indicator = document.createElement('div');
                 indicator.className = 'copied-toast';
                 indicator.textContent = 'Copied!';
@@ -2019,22 +1937,12 @@
         window.addEventListener('resize', _resizeListener);
         _resizeHandler = _resizeListener;
 
-        if (typeof ResizeObserver !== 'undefined') {
-            var resizeTimeout = null;
-            _resizeObserver = new ResizeObserver(function () {
-                clearTimeout(resizeTimeout);
-                resizeTimeout = setTimeout(syncSize, 100);
-            });
-            _resizeObserver.observe(terminalContainer);
-        } else {
-            var pollTimer = setInterval(function () {
-                if (terminalContainer.offsetWidth > 0 && terminalContainer.offsetHeight > 0) {
-                    syncSize();
-                    clearInterval(pollTimer);
-                }
-            }, 50);
-            setTimeout(function () { clearInterval(pollTimer); syncSize(); }, 3000);
-        }
+        var resizeTimeout = null;
+        _resizeObserver = new ResizeObserver(function () {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(syncSize, 100);
+        });
+        _resizeObserver.observe(terminalContainer);
 
         var firstOutput = true;
         var _exitTimer = null;
@@ -2158,7 +2066,7 @@
         { id: 'copy-path', icon: 'copy', label: 'Copy Current Path', group: 'nav', action: function () {
             if (window.SidebarManager) {
                 var dir = (window.MonolothApp && window.MonolothApp.getCurrentDir) ? window.MonolothApp.getCurrentDir() : '';
-                if (dir) navigator.clipboard.writeText(dir).catch(function () {});
+                if (dir) copyToClipboard(dir);
             }
         }},
         { id: 'toggle-sidebar', icon: 'menu', label: 'Toggle Sidebar', group: 'actions', shortcutKey: 'toggle_sidebar', action: function () {
@@ -2169,8 +2077,8 @@
         }},
         { id: 'clear-term', icon: 'trash', label: 'Clear Terminal', group: 'actions', shortcutKey: 'clear_terminal', action: function () { if (term) term.clear(); }},
         { id: 'settings', icon: 'gear', label: 'Settings', group: 'config', shortcutKey: 'settings', action: function () { showSettings(); } },
-        { id: 'appearance', icon: 'palette', label: 'Appearance Settings', group: 'config', action: function () { openAppearanceSettings(); } },
-        { id: 'history', icon: 'clock', label: 'History', group: 'config', action: function () { openHistorySettings(); } },
+        { id: 'appearance', icon: 'palette', label: 'Appearance Settings', group: 'config', action: function () { showSettings(); switchTab('appearance'); } },
+        { id: 'history', icon: 'clock', label: 'History', group: 'config', action: function () { showSettings(); switchTab('history'); } },
         { id: 'profiles', icon: 'user', label: 'Switch Profile', group: 'config', shortcutKey: 'switch_profile', action: function () { openProfileSwitcher(); } },
     ];
 
@@ -2326,7 +2234,7 @@
             item.appendChild(labelSpan);
 
             if (cmd.shortcutKey) {
-                var shortcutStr = formatShortcutForDisplay(getShortcut(cmd.shortcutKey));
+                var shortcutStr = getShortcut(cmd.shortcutKey).replace(/\+/g, ' + ');
                 if (shortcutStr) {
                     var shortcutSpan = document.createElement('span');
                     shortcutSpan.className = 'command-palette-shortcut';
@@ -2560,16 +2468,6 @@
         loadSettingsTab(name);
     }
 
-    function openAppearanceSettings() {
-        showSettings();
-        switchTab('appearance');
-    }
-
-    function openHistorySettings() {
-        showSettings();
-        switchTab('history');
-    }
-
     // ================================================================
     // History Tab
     // ================================================================
@@ -2679,14 +2577,8 @@
     }
 
     function parseISO(iso) {
-        if (!iso || iso.length < 19) return 0;
-        var year = parseInt(iso.substring(0, 4), 10);
-        var month = parseInt(iso.substring(5, 7), 10) - 1;
-        var day = parseInt(iso.substring(8, 10), 10);
-        var hour = parseInt(iso.substring(11, 13), 10);
-        var min = parseInt(iso.substring(14, 16), 10);
-        var sec = parseInt(iso.substring(17, 19), 10);
-        return Date.UTC(year, month, day, hour, min, sec) / 1000;
+        if (!iso) return 0;
+        return new Date(iso).getTime() / 1000;
     }
 
     function formatDuration(totalSeconds) {
@@ -2966,46 +2858,44 @@
         }
         if (displayed.length === 0) { fpEmpty.style.display = 'flex'; return; }
 
-        for (var j = 0; j < displayed.length; j++) {
-            (function (entry) {
-                var item = document.createElement('div');
-                item.className = 'fp-file-item';
-                item.dataset.name = entry.name;
-                item.dataset.isDir = entry.isDir ? 'true' : 'false';
+        displayed.forEach(function (entry) {
+            var item = document.createElement('div');
+            item.className = 'fp-file-item';
+            item.dataset.name = entry.name;
+            item.dataset.isDir = entry.isDir ? 'true' : 'false';
 
-                var ico = getItemIcon(entry);
-                var iconDiv = document.createElement('div');
-                iconDiv.className = 'fp-item-icon ' + ico.cls;
-                iconDiv.innerHTML = ico.svg;
-                item.appendChild(iconDiv);
+            var ico = getItemIcon(entry);
+            var iconDiv = document.createElement('div');
+            iconDiv.className = 'fp-item-icon ' + ico.cls;
+            iconDiv.innerHTML = ico.svg;
+            item.appendChild(iconDiv);
 
-                var ns = document.createElement('span');
-                ns.className = 'fp-item-name';
-                ns.textContent = entry.name;
-                item.appendChild(ns);
+            var ns = document.createElement('span');
+            ns.className = 'fp-item-name';
+            ns.textContent = entry.name;
+            item.appendChild(ns);
 
-                var ds = document.createElement('span');
-                ds.className = 'fp-item-date';
-                ds.textContent = formatDate(entry.modified);
-                item.appendChild(ds);
+            var ds = document.createElement('span');
+            ds.className = 'fp-item-date';
+            ds.textContent = formatDate(entry.modified);
+            item.appendChild(ds);
 
-                var ss = document.createElement('span');
-                ss.className = 'fp-item-size';
-                ss.textContent = entry.isDir ? '\u2014' : formatSize(entry.size);
-                item.appendChild(ss);
+            var ss = document.createElement('span');
+            ss.className = 'fp-item-size';
+            ss.textContent = entry.isDir ? '\u2014' : formatSize(entry.size);
+            item.appendChild(ss);
 
-                item.addEventListener('click', function () { onItemClick(entry); });
-                item.addEventListener('dblclick', function () {
-                    if (entry.isDir) {
-                        doNavigate(joinPath(fpState.currentPath, entry.name));
-                    } else if (fpState.mode === 'file') {
-                        onItemClick(entry);
-                        if (fpOk && !fpOk.disabled) fpOk.click();
-                    }
-                });
-                fpFileList.appendChild(item);
-            })(displayed[j]);
-        }
+            item.addEventListener('click', function () { onItemClick(entry); });
+            item.addEventListener('dblclick', function () {
+                if (entry.isDir) {
+                    doNavigate(joinPath(fpState.currentPath, entry.name));
+                } else if (fpState.mode === 'file') {
+                    onItemClick(entry);
+                    if (fpOk && !fpOk.disabled) fpOk.click();
+                }
+            });
+            fpFileList.appendChild(item);
+        });
         loadDrives();
     }
 
@@ -3086,15 +2976,15 @@
         if (fpPathInput) fpPathInput.value = path;
         var parts = path.split('\\').filter(Boolean);
         var acc = '';
-        for (var i = 0; i < parts.length; i++) {
+        parts.forEach(function (p, i) {
             if (i > 0) { var sp = document.createElement('span'); sp.className = 'fp-bc-sep'; sp.textContent = '\u203A'; fpBreadcrumb.appendChild(sp); }
             var seg = document.createElement('span');
             seg.className = 'fp-bc-segment' + (i === parts.length - 1 ? ' fp-bc-last' : '');
-            seg.textContent = parts[i];
-            if (i < parts.length - 1) (function (p) { seg.addEventListener('click', function (e) { e.stopPropagation(); doNavigate(p); }); })(acc + parts[i] + '\\');
-            acc += parts[i] + '\\';
+            seg.textContent = p;
+            if (i < parts.length - 1) { var clickPath = acc + p + '\\'; seg.addEventListener('click', function (e) { e.stopPropagation(); doNavigate(clickPath); }); }
+            acc += p + '\\';
             fpBreadcrumb.appendChild(seg);
-        }
+        });
     }
 
     function updateNavButtons() {
@@ -3133,9 +3023,7 @@
 
     function formatDate(ts) {
         if (!ts || ts <= 0) return '\u2014';
-        var d = new Date(ts * 1000);
-        var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        return months[d.getMonth()] + ' ' + d.getDate().toString().padStart(2,'0') + ', ' + d.getFullYear();
+        return new Date(ts * 1000).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' });
     }
 
     function formatSize(bytes) {
@@ -3152,15 +3040,13 @@
         window.monolithApi.get_drives().then(function (drives) {
             if (!drives || drives.length === 0) return;
             fpDrivesList.innerHTML = '';
-            for (var i = 0; i < drives.length; i++) {
-                (function (d) {
-                    var item = document.createElement('div');
-                    item.className = 'fp-drive-item';
-                    item.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> ' + d.letter + (d.label ? ' \u2014 ' + d.label : '');
-                    item.addEventListener('click', function () { doNavigate(d.letter + '\\'); });
-                    fpDrivesList.appendChild(item);
-                })(drives[i]);
-            }
+            drives.forEach(function (d) {
+                var item = document.createElement('div');
+                item.className = 'fp-drive-item';
+                item.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> ' + d.letter + (d.label ? ' \u2014 ' + d.label : '');
+                item.addEventListener('click', function () { doNavigate(d.letter + '\\'); });
+                fpDrivesList.appendChild(item);
+            });
             fpDrivesList.dataset.loaded = '1';
         }).catch(function () {});
     }
@@ -3257,23 +3143,21 @@
 
     // Sidebar clicks
     var sidebarItems = fpEl.querySelectorAll('.fp-sidebar-item');
-    for (var si = 0; si < sidebarItems.length; si++) {
-        (function (item) {
-            item.addEventListener('click', function () {
-                var p = item.dataset.path;
-                var sidebarItems = fpEl.querySelectorAll('.fp-sidebar-item');
-                for (var si2 = 0; si2 < sidebarItems.length; si2++) {
-                    sidebarItems[si2].classList.remove('active');
-                }
-                item.classList.add('active');
-                if (QUICK_PATHS[p]) {
-                    window.monolithApi.get_path_info(QUICK_PATHS[p]).then(function (info) {
-                        if (info && info.success && info.isDir) doNavigate(info.absolute);
-                    });
-                }
-            });
-        })(sidebarItems[si]);
-    }
+    sidebarItems.forEach(function (item) {
+        item.addEventListener('click', function () {
+            var p = item.dataset.path;
+            var sidebarItems = fpEl.querySelectorAll('.fp-sidebar-item');
+            for (var si2 = 0; si2 < sidebarItems.length; si2++) {
+                sidebarItems[si2].classList.remove('active');
+            }
+            item.classList.add('active');
+            if (QUICK_PATHS[p]) {
+                window.monolithApi.get_path_info(QUICK_PATHS[p]).then(function (info) {
+                    if (info && info.success && info.isDir) doNavigate(info.absolute);
+                });
+            }
+        });
+    });
 
     if (fpEl) fpEl.addEventListener('click', function (e) {
         if (e.target === fpEl || e.target.classList.contains('fp-overlay')) closePicker(null);
@@ -3583,7 +3467,6 @@
                 if (_useCustomTitlebar && window.monolithApi.is_window_maximized) {
                     window.monolithApi.is_window_maximized().then(function(result) {
                         _isMaximized = result.maximized;
-                        updateMaximizeIcon(_isMaximized);
                     });
                 }
             });
@@ -3592,7 +3475,6 @@
     function applyCustomTitlebarUI(enable, persist) {
         _useCustomTitlebar = enable;
         document.body.classList.toggle('custom-titlebar-active', enable);
-        updateTitlebarViewState();
 
         var toggleContainer = document.getElementById('titlebar-toggle');
         if (toggleContainer) {
@@ -3605,10 +3487,6 @@
         if (persist !== false && window.monolithApi) {
             window.monolithApi.toggle_custom_titlebar(enable);
         }
-    }
-
-    function updateTitlebarViewState() {
-        if (!_useCustomTitlebar) return;
     }
 
     function syncTitlebarToggleState() {
@@ -3624,11 +3502,6 @@
     function setCurrentView(view) {
         document.body.dataset.currentView = view;
         if (view !== 'settings') _currentViewState = view;
-        updateTitlebarViewState();
-    }
-
-    function updateMaximizeIcon(maximized) {
-        // Single-state icon — always shows the maximize square
     }
 
     function setupMaximizeSyncListener() {
@@ -3641,7 +3514,6 @@
                         window.monolithApi.is_window_maximized().then(function(result) {
                             if (result.maximized !== _isMaximized) {
                                 _isMaximized = result.maximized;
-                                updateMaximizeIcon(_isMaximized);
                             }
                         });
                     }
@@ -3703,7 +3575,6 @@
                 if (window.monolithApi) {
                     window.monolithApi.toggle_maximize_window().then(function(result) {
                         _isMaximized = result.maximized;
-                        updateMaximizeIcon(_isMaximized);
                     });
                 }
             });

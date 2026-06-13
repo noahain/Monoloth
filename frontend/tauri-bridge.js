@@ -3,40 +3,26 @@
 
     var api = {};
 
+    function getCore() {
+        return (window.__TAURI__ && window.__TAURI__.core) || window.__TAURI_INTERNALS__ || null;
+    }
+
     function invoke(cmd, args) {
-        var tauriInvoke = null;
-        if (window.__TAURI__) {
-            if (window.__TAURI__.core && window.__TAURI__.core.invoke) {
-                tauriInvoke = window.__TAURI__.core.invoke;
-            } else if (typeof window.__TAURI__.invoke === 'function') {
-                tauriInvoke = window.__TAURI__.invoke;
-            } else if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
-                tauriInvoke = window.__TAURI_INTERNALS__.invoke;
-            }
-        }
-        if (tauriInvoke) {
-            return Promise.resolve(tauriInvoke(cmd, args || {}));
-        }
+        var core = getCore();
+        if (core && typeof core.invoke === 'function') return Promise.resolve(core.invoke(cmd, args || {}));
         return Promise.reject('Tauri invoke not available');
     }
 
     function listen(event, handler) {
-        var tauriListen = null;
-        if (window.__TAURI__) {
-            if (window.__TAURI__.event && window.__TAURI__.event.listen) {
-                tauriListen = window.__TAURI__.event.listen;
-            } else if (typeof window.__TAURI__.listen === 'function') {
-                tauriListen = window.__TAURI__.listen;
-            } else if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.listen === 'function') {
-                tauriListen = window.__TAURI_INTERNALS__.listen;
-            }
-        }
-        if (tauriListen) {
-            return Promise.resolve(tauriListen(event, handler));
-        }
+        var t = window.__TAURI__;
+        var fn = (t && t.event && t.event.listen) || (t && typeof t.listen === 'function' && t.listen)
+            || (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.listen === 'function' && window.__TAURI_INTERNALS__.listen);
+        if (fn) return Promise.resolve(fn(event, handler));
         console.error('[TauriBridge] No listen method available');
         return Promise.reject('Tauri listen not available');
     }
+
+    window.__TAURI_CORE__ = getCore();
 
     // callApi: invoke a command and wrap the result in { success: true, ...transform(result) }
     // or { success: false, error: String(err) } on rejection.
@@ -71,10 +57,6 @@
             cols: cols,
             rows: rows
         }, function (gen) { return { generation: gen }; });
-    };
-
-    api.start_opencode = function (dir) {
-        return api.start_terminal('main', dir, true, null, null, null);
     };
 
     api.send_input = function (sessionId, data) {
@@ -260,7 +242,6 @@
             if (bg_type === 'image' && imgPath) {
                 promises.push(
                     invoke('read_image_as_data_url', { imagePath: imgPath })
-                        .then(function (dataUrl) { window._bgDataUrl = dataUrl; })
                         .catch(function () {})
                 );
             }
@@ -360,28 +341,24 @@
     };
 
     // --- Window Control Commands ---
-    function windowCommand(cmd, transform) {
-        return invoke(cmd, {}).then(function (result) {
-            var response = { success: true };
-            if (transform) Object.assign(response, transform(result));
-            return response;
-        }).catch(function (err) {
-            var response = { success: false, error: String(err) };
-            if (transform) Object.assign(response, transform(null));
-            return response;
-        });
-    }
-
     api.toggle_custom_titlebar = function (enable) {
         return callApi('toggle_custom_titlebar', { enable: enable });
     };
     api.minimize_window = function () { return callApi('minimize_window', {}); };
     api.toggle_maximize_window = function () {
-        return windowCommand('toggle_maximize_window', function (m) { return { maximized: !!m }; });
+        return invoke('toggle_maximize_window', {}).then(function (result) {
+            return { success: true, maximized: !!result };
+        }).catch(function (err) {
+            return { success: false, maximized: false, error: String(err) };
+        });
     };
     api.close_window = function () { return callApi('close_window', {}); };
     api.is_window_maximized = function () {
-        return windowCommand('is_window_maximized', function (m) { return { maximized: !!m }; });
+        return invoke('is_window_maximized', {}).then(function (result) {
+            return { success: true, maximized: !!result };
+        }).catch(function (err) {
+            return { success: false, maximized: false, error: String(err) };
+        });
     };
 
     // --- History ---

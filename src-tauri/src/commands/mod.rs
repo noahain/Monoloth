@@ -49,38 +49,6 @@ pub(super) fn expand_env_vars(path: &str) -> String {
                 result.push('%');
                 result.push_str(&var_name);
             }
-        } else if c == '$' && !cfg!(windows) {
-            let mut var_name = String::new();
-            if chars.peek() == Some(&'{') {
-                chars.next();
-                while let Some(&next) = chars.peek() {
-                    if next == '}' {
-                        chars.next();
-                        break;
-                    }
-                    var_name.push(next);
-                    chars.next();
-                }
-            } else {
-                while let Some(&next) = chars.peek() {
-                    if next.is_alphanumeric() || next == '_' {
-                        var_name.push(next);
-                        chars.next();
-                    } else {
-                        break;
-                    }
-                }
-            }
-            if !var_name.is_empty() {
-                if let Ok(val) = std::env::var(&var_name) {
-                    result.push_str(&val);
-                } else {
-                    result.push('$');
-                    result.push_str(&var_name);
-                }
-            } else {
-                result.push('$');
-            }
         } else if c == '~' && !cfg!(windows) && result.is_empty() {
             if chars.peek().map_or(true, |&next| next == '/' || next == ':') {
                 if let Ok(home) = std::env::var("HOME") {
@@ -95,7 +63,11 @@ pub(super) fn expand_env_vars(path: &str) -> String {
             result.push(c);
         }
     }
-    result
+    if cfg!(windows) {
+        result
+    } else {
+        shellexpand::env_with_context_no_errors(&result, |var| std::env::var(var).ok()).into_owned()
+    }
 }
 
 pub(super) fn clean_path(path: &str) -> String {

@@ -1268,12 +1268,14 @@ body.adaptive-light .shortcuts-status.dismissible:hover::after {
 }
 
 .updater-status.success,
-.appearance-status.success {
+.appearance-status.success,
+.shortcuts-status.success {
     color: var(--accent-green);
 }
 
 .updater-status.error,
-.appearance-status.error {
+.appearance-status.error,
+.shortcuts-status.error {
     color: var(--accent-red);
 }
 
@@ -1514,53 +1516,6 @@ body.adaptive-light .shortcut-edit-preview {
     font-size: 0.7rem;
     color: var(--accent-red);
     min-height: 1rem;
-}
-
-.shortcuts-status {
-    margin-top: 0.75rem;
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    min-height: 1.2rem;
-    line-height: 1.5;
-    word-break: break-word;
-    color: rgba(255, 255, 255, 0.35);
-    cursor: default;
-    transition: opacity 0.3s ease;
-    position: relative;
-}
-
-.shortcuts-status:empty {
-    margin-top: 0;
-    min-height: 0;
-}
-
-body.light-mode .shortcuts-status,
-body.adaptive-light .shortcuts-status {
-    color: var(--modal-text-dim);
-}
-
-.shortcuts-status.success {
-    color: var(--accent-green);
-}
-
-.shortcuts-status.error {
-    color: var(--accent-red);
-}
-
-.shortcuts-status.dismissible::after {
-    content: '\00d7';
-    position: absolute;
-    right: 0;
-    top: 0;
-    color: rgba(255, 255, 255, 0.2);
-    cursor: pointer;
-    font-size: 0.9rem;
-    line-height: 1;
-    padding: 0.2rem;
-}
-
-.shortcuts-status.dismissible:hover::after {
-    color: var(--modal-text-muted);
 }
 
 /* --- Appearance Tab --- */
@@ -2017,8 +1972,8 @@ body.adaptive-light .secondary-cmd-input:focus {
 }
 
 .secondary-cmd-mode option {
-    background: #1a1a1a;
-    color: #e0e0e0;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
 }
 
 body.light-mode .secondary-cmd-mode,
@@ -2030,8 +1985,8 @@ body.adaptive-light .secondary-cmd-mode {
 
 body.light-mode .secondary-cmd-mode option,
 body.adaptive-light .secondary-cmd-mode option {
-    background: #f5f5f5;
-    color: #1a1a1a;
+    background: var(--bg-primary);
+    color: var(--text-primary);
 }
 
 .secondary-cmd-toggle {
@@ -2520,12 +2475,6 @@ body.adaptive-light .gradient-btn.active {
 }
 
 /* Updater Tab */
-.version-number {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.7);
-}
-
 .github-link {
     display: inline-flex;
     align-items: center;
@@ -3466,13 +3415,6 @@ body.light-mode.cta-outline .settings-bar:hover,
 body.adaptive-light.cta-outline .settings-bar:hover {
     background: rgba(0, 0, 0, 0.03);
     border-color: rgba(0, 0, 0, 0.15);
-}
-
-#current-profile-name {
-    max-width: 100px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 /* ================================================================
@@ -4957,10 +4899,6 @@ body.adaptive-light .fp-empty svg { color: rgba(0, 0, 0, 0.18); }
     border-top: 2px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
     animation: fpSpin 0.8s linear infinite;
-}
-
-@keyframes fpSpin {
-    to { transform: rotate(360deg); }
 }
 
 .fp-preview-pane {
@@ -7088,14 +7026,6 @@ body.adaptive-light .sidebar-setting-name {
    Accessibility: prefers-* media queries
    ================================================================ */
 
-@media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-    }
-}
-
 @media (prefers-reduced-transparency: reduce) {
     body.cta-glass .settings-glass,
     body.cta-glass .fp-modal,
@@ -7641,8 +7571,8 @@ body.cta-glass .update-toast,
 body.cta-glass .update-pill {
     background: rgba(255,255,255,0.14);
     border-color: rgba(255,255,255,0.14);
-    backdrop-filter: blur(80px);
-    -webkit-backdrop-filter: blur(80px);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     box-shadow: 0 24px 80px rgba(0,0,0,0.45),
                 0 0 0 1px rgba(255,255,255,0.05),
                 inset 0 1px 0 rgba(255,255,255,0.12);

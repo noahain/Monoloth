@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use log::warn;
 use parking_lot::Mutex;
 
 pub const MIN_WINDOW_WIDTH: i64 = 200;
@@ -122,17 +123,15 @@ fn sanitize_window_state(map: &mut Map<String, Value>) {
     }
 }
 
-fn global_keys() -> Vec<&'static str> {
-    vec![
-        "active_profile", "last_directory", "window_width", "window_height",
-        "window_maximized", "fp_last_dir_bg_image", "fp_last_dir_choose",
-        "use_custom_titlebar", "window_x", "window_y",
-        "cmdPanelHeight", "panelShell", "confirm_dialog_prefs",
-    ]
-}
+const GLOBAL_KEYS: &[&str] = &[
+    "active_profile", "last_directory", "window_width", "window_height",
+    "window_maximized", "fp_last_dir_bg_image", "fp_last_dir_choose",
+    "use_custom_titlebar", "window_x", "window_y",
+    "cmdPanelHeight", "panelShell", "confirm_dialog_prefs",
+];
 
 fn is_global_key(key: &str) -> bool {
-    global_keys().contains(&key)
+    GLOBAL_KEYS.contains(&key)
 }
 
 fn load_json(path: &Path) -> Map<String, Value> {
@@ -147,23 +146,23 @@ fn load_json(path: &Path) -> Map<String, Value> {
 fn save_json(path: &Path, map: &Map<String, Value>) {
     if let Some(parent) = path.parent() {
         if let Err(e) = fs::create_dir_all(parent) {
-            eprintln!("[Monoloth] Failed to create config dir: {}", e);
+            warn!("Failed to create config dir: {}", e);
             return;
         }
     }
-    match serde_json::to_string_pretty(&Value::Object(map.clone())) {
+    match serde_json::to_string_pretty(map) {
         Ok(json) => {
             let file_name = path.file_name().unwrap_or_default();
             let tmp_path = path.with_file_name(format!("{}.tmp", file_name.to_string_lossy()));
             if let Err(e) = fs::write(&tmp_path, &json) {
-                eprintln!("[Monoloth] Failed to write config {}: {}", path.display(), e);
+                warn!("Failed to write config {}: {}", path.display(), e);
                 return;
             }
             if let Err(e) = fs::rename(&tmp_path, path) {
-                eprintln!("[Monoloth] Failed to rename config {}: {}", path.display(), e);
+                warn!("Failed to rename config {}: {}", path.display(), e);
             }
         }
-        Err(e) => eprintln!("[Monoloth] Failed to serialize config: {}", e),
+        Err(e) => warn!("Failed to serialize config: {}", e),
     }
 }
 
@@ -179,12 +178,6 @@ struct ConfigInner {
 }
 
 impl AppConfig {
-    /// Returns a clone of self (cheap — wraps Arc).
-    #[allow(dead_code)]
-    pub fn inner(&self) -> Self {
-        self.clone()
-    }
-
     pub fn new() -> Self {
         let global_path = config_path();
         let global = if global_path.exists() {

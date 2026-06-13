@@ -2,6 +2,7 @@ use std::fs;
 use std::io::Read;
 use std::path::PathBuf;
 use std::process::Command;
+use log::debug;
 
 use super::image::read_image_as_data_url;
 use super::{clean_path, expand_env_vars, parse_path};
@@ -66,22 +67,21 @@ pub fn get_path_info(path: String) -> PathInfo {
 
 #[tauri::command]
 pub fn pick_directory() -> Option<String> {
-    eprintln!("[Monoloth][Rust] pick_directory called (rfd FileDialog)");
+    debug!("pick_directory called");
     let dialog = rfd::FileDialog::new();
-    eprintln!("[Monoloth][Rust] pick_directory: dialog created, calling pick_folder...");
     if let Some(dir) = dialog.pick_folder() {
         let path = dir.to_string_lossy().to_string();
-        eprintln!("[Monoloth][Rust] pick_directory returned path: {}", path);
+        debug!("pick_directory returned path: {}", path);
         Some(path)
     } else {
-        eprintln!("[Monoloth][Rust] pick_directory returned None (user cancelled or dialog failed)");
+        debug!("pick_directory returned None");
         None
     }
 }
 
 #[tauri::command]
 pub fn pick_file(filter: Option<String>) -> Option<String> {
-    eprintln!("[Monoloth][Rust] pick_file called with filter: {:?}", filter);
+    debug!("pick_file called with filter: {:?}", filter);
     let mut dialog = rfd::FileDialog::new();
     if let Some(f) = filter {
         let parts: Vec<&str> = f.split('|').collect();
@@ -90,23 +90,22 @@ pub fn pick_file(filter: Option<String>) -> Option<String> {
             let exts: Vec<&str> = parts[1].split(';')
                 .map(|s| s.trim_start_matches("*.").trim_start_matches("."))
                 .collect();
-            eprintln!("[Monoloth][Rust] pick_file adding filter: {} -> {:?}", label, exts);
+            debug!("pick_file adding filter: {} -> {:?}", label, exts);
             dialog = dialog.add_filter(label, &exts);
         } else {
             let exts: Vec<&str> = f.split(',')
                 .map(|s| s.trim_start_matches("*.").trim_start_matches("."))
                 .collect();
-            eprintln!("[Monoloth][Rust] pick_file adding default filter: {:?}", exts);
+            debug!("pick_file adding default filter: {:?}", exts);
             dialog = dialog.add_filter("Files", &exts);
         }
     }
-    eprintln!("[Monoloth][Rust] pick_file calling pick_file...");
     if let Some(file) = dialog.pick_file() {
         let path = file.to_string_lossy().to_string();
-        eprintln!("[Monoloth][Rust] pick_file returned path: {}", path);
+        debug!("pick_file returned path: {}", path);
         Some(path)
     } else {
-        eprintln!("[Monoloth][Rust] pick_file returned None (user cancelled or dialog failed)");
+        debug!("pick_file returned None");
         None
     }
 }
@@ -114,13 +113,12 @@ pub fn pick_file(filter: Option<String>) -> Option<String> {
 #[tauri::command]
 pub fn list_directory(path: String) -> Result<Vec<DirEntry>, String> {
     let expanded = expand_env_vars(&path);
-    eprintln!("[Monoloth][Rust] list_directory called: {} (expanded: {})", path, expanded);
+    debug!("list_directory called: {} (expanded: {})", path, expanded);
     let path = PathBuf::from(&expanded);
     if !path.exists() {
-        eprintln!("[Monoloth][Rust] list_directory: path does not exist: {}", path.display());
+        debug!("list_directory: path does not exist: {}", path.display());
         return Err("Directory not found".into());
     }
-    eprintln!("[Monoloth][Rust] list_directory: path exists, reading entries...");
     let mut entries = Vec::new();
     let read_dir = fs::read_dir(&path).map_err(|e| format!("Cannot read directory: {}", e))?;
     for entry in read_dir.flatten() {
@@ -155,7 +153,7 @@ pub fn list_directory(path: String) -> Result<Vec<DirEntry>, String> {
         a.is_dir.cmp(&b.is_dir).reverse().then(a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });
 
-    eprintln!("[Monoloth][Rust] list_directory returning {} entries", entries.len());
+    debug!("list_directory returning {} entries", entries.len());
     Ok(entries)
 }
 

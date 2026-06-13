@@ -2,14 +2,6 @@ use crate::config::AppConfig;
 use serde_json::{Map, Value};
 use tauri::State;
 
-#[allow(dead_code)]
-#[derive(serde::Deserialize)]
-pub struct SecondaryCommand {
-    pub command: String,
-    pub mode: String,
-    pub enabled: bool,
-}
-
 #[tauri::command]
 pub fn get_profiles(config: State<AppConfig>) -> Value {
     let profiles = config.list_profiles();
