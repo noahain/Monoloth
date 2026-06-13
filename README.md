@@ -19,7 +19,7 @@
   </p>
 </div>
 
-[![Monoloth Main Window](assets/screenshots/main.png?v=3)](https://github.com/noahain/Monoloth)
+[![Monoloth Main Window](assets/screenshots/main.png?v=4)](https://github.com/noahain/Monoloth)
 
 ---
 
