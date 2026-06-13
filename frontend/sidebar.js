@@ -484,7 +484,7 @@
         tab.initializing = true;
         tab.initPromise = null;
 
-        var term = new Terminal({
+        var term = new Terminal(Object.assign({
             theme: { background: 'transparent', foreground: '#b8b8b8', cursor: '#c0c0c0' },
             fontFamily: '"Cascadia Mono", "Consolas", "Lucida Console", "Courier New", monospace',
             fontSize: 13,
@@ -492,14 +492,13 @@
             cursorStyle: 'block',
             scrollback: 2000,
             smoothScrollDuration: 0,
-            windowsMode: true,
             scrollOnUserInput: true,
             scrollSensitivity: 1,
             allowProposedApi: true,
             minimumContrastRatio: 1,
             fastScrollModifier: 'alt',
             fastScrollSensitivity: 5
-        });
+        }, (window.__monolithTermWinOpts ? window.__monolithTermWinOpts() : {})));
 
         var fitAddon = new FitAddon.FitAddon();
         term.loadAddon(fitAddon);

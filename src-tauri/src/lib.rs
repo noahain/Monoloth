@@ -228,6 +228,7 @@ pub fn run() {
             commands::resize_terminal,
             commands::terminate_terminal,
             commands::get_current_version,
+            commands::get_windows_pty_info,
             commands::analyze_image_brightness,
             commands::read_image_as_data_url,
             commands::get_profiles,

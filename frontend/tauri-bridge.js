@@ -280,6 +280,12 @@
         return callApiValue('get_current_version', {}, '2.0.0');
     };
 
+    // Returns { backend: 'conpty', buildNumber: <n> } on Windows, or null elsewhere
+    // / on failure. Used to configure xterm.js's windowsPty option correctly.
+    api.get_windows_pty_info = function () {
+        return callApiValue('get_windows_pty_info', {}, null);
+    };
+
     // --- Profiles ---
     api.get_profiles = function () {
         return invoke('get_profiles', {}).then(function (res) {

@@ -12,6 +12,10 @@
     let term = null;
     let fitAddon = null;
     let webglAddon = null;
+    // Windows PTY compat info ({ backend, buildNumber }) fetched once at startup.
+    // Drives xterm.js's windowsPty option so reflow heuristics match the real
+    // ConPTY build. null until loaded or on non-Windows.
+    var _windowsPtyInfo = null;
     let _bgImagePath = '';
     let _bgTransparency = 75;
     let _currentLaunchDir = '';
@@ -473,6 +477,12 @@
             window.monolithApi.get_file_picker_type()
                 .then(function (res) {
                     _filePickerType = res || 'custom';
+                })
+                .catch(function () {});
+            window.monolithApi.get_windows_pty_info()
+                .then(function (info) {
+                    _windowsPtyInfo = info || null;
+                    window.__monolithWindowsPty = _windowsPtyInfo;
                 })
                 .catch(function () {});
             Promise.all([bgPromise, profilesPromise, startupPromise]).then(function () {
@@ -1763,6 +1773,19 @@
 
 
 
+    // Builds the xterm.js windows option from cached PTY info. Prefers the modern
+    // windowsPty descriptor (correct reflow heuristics per ConPTY build); falls
+    // back to nothing when info is unavailable. Returns an object to spread into
+    // the Terminal config. Shared with sidebar.js via window.__monolithTermWinOpts.
+    function buildTerminalWindowsOptions() {
+        var info = window.__monolithWindowsPty || _windowsPtyInfo;
+        if (info && info.backend && typeof info.buildNumber === 'number') {
+            return { windowsPty: { backend: info.backend, buildNumber: info.buildNumber } };
+        }
+        return {};
+    }
+    window.__monolithTermWinOpts = buildTerminalWindowsOptions;
+
     // --- Terminal Setup ---
     function initTerminal(dir) {
         if (!terminalContainer) return;
@@ -1792,7 +1815,7 @@
         var initTheme = isLight ? getTerminalLightTheme() : getTerminalDarkTheme();
         initTheme.background = terminalBg;
         initTheme.black = terminalBlack;
-        term = new Terminal({
+        var termOptions = {
             allowTransparency: true,
             theme: initTheme,
             fontFamily: '"Cascadia Mono", "Consolas", "Lucida Console", "Courier New", monospace',
@@ -1805,14 +1828,15 @@
             smoothScrollDuration: 0,
             scrollSensitivity: 1,
             allowProposedApi: true,
-            windowsMode: true,
             macOptionIsMeta: true,
             macOptionClickForcesSelection: true,
             minimumContrastRatio: 1,
             fastScrollModifier: 'alt',
             fastScrollSensitivity: 5,
             scrollOnUserInput: true
-        });
+        };
+        Object.assign(termOptions, buildTerminalWindowsOptions());
+        term = new Terminal(termOptions);
 
         term.open(terminalContainer);
         term.focus();

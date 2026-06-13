@@ -38,3 +38,4 @@ shellexpand = "3"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["fileapi"] }
+winreg = "0.55"
