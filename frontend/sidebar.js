@@ -562,7 +562,7 @@
 
         force = force || false;
 
-        if (tab.running && !force) {
+        if (tab.running && tab.dirty && !force) {
             if (window.MonolothApp && window.MonolothApp.showConfirm) {
                 window.MonolothApp.showConfirm('Close Tab', 'This tab has a running process. Close anyway?', 'close_dirty_tab')
                     .then(function (confirmed) {
