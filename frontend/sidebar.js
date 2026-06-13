@@ -2,7 +2,6 @@
     'use strict';
 
     var UI = window.MonolothUI;
-    var escapeHtml = UI.escapeHtml;
     var forceReflow = UI.forceReflow;
     var silent = UI.silent;
     var openModal = UI.openModal;
@@ -14,19 +13,21 @@
     var cmdPanel = document.getElementById('cmd-panel');
     var cmdPanelClose = document.getElementById('cmd-panel-close');
     var cmdPanelTerminal = document.getElementById('cmd-panel-terminal');
-    var cmdPanelExitBanner = document.getElementById('cmd-panel-exit-banner');
     var cmdPanelResizeHandle = document.getElementById('cmd-panel-resize-handle');
 
     var _sidebarConfig = null;
     var _sidebarEnabled = true;  // default on, async config will override if needed
     var _sidebarPosition = 'left';
-    var _cmdPanelOpen = false;
-    var _panelRunning = false;
-    var _panelClosing = false;
-    var _panelHeight = 250;
+
+    // Tab Manager State
+    var _panelTabs = new Map();
+    var _activeTabId = null;
+    var _nextTabId = 1;
     var _panelShell = 'cmd';
-    var panelTerm = null;
-    var panelFitAddon = null;
+    var _panelHeight = 250;
+    var _cmdPanelOpen = false;
+    var _panelClosing = false;
+
     var _isDragging = false;
     var _resizeStartY = 0;
     var _resizeStartHeight = 0;
@@ -104,13 +105,11 @@
     }
 
     function openCmdPanelAt(dir) {
-        if (_panelRunning) {
-            if (!_cmdPanelOpen) {
-                showCmdPanel();
-            }
+        showCmdPanel();
+        if (_panelTabs.size === 0) {
+            createTab(null, true, dir);
         } else {
-            showCmdPanel();
-            initCmdPanel(dir);
+            activateTab(_activeTabId || getAllTabs()[0].id);
         }
     }
 
@@ -134,15 +133,13 @@
         } else if (mode === 'externalCmd') {
             window.monolithApi.open_external_terminal(cmd, dir).catch(function () {});
         } else if (mode === 'cmdPanel') {
-            if (!_panelRunning) {
-                showCmdPanel();
-            }
-            if (!_cmdPanelOpen) {
-                showCmdPanel();
-            }
-            initCmdPanel(dir).then(function () {
-                window.monolithApi.send_input('panel', cmd + '\n').catch(function () {});
-            });
+            if (!_cmdPanelOpen) showCmdPanel();
+            createTab(null, true, dir)
+                .then(function (tab) {
+                    if (tab && tab.running) {
+                        window.monolithApi.send_input(tab.sessionId, cmd + '\n').catch(function () {});
+                    }
+                });
         }
     }
 
@@ -368,42 +365,452 @@
         document.documentElement.style.setProperty('--cmd-panel-height', height + 'px');
     }
 
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function createTab(name, activate, dir) {
+        name = name || _panelShell || 'cmd';
+        activate = activate !== false;
+        dir = dir || (getCurrentDir() || '%USERPROFILE%');
+
+        var tabId = 'tab-' + _nextTabId;
+        var sessionId = 'panel-tab-' + _nextTabId;
+        _nextTabId++;
+
+        var container = document.createElement('div');
+        container.id = 'tab-container-' + tabId;
+        container.className = 'cmd-panel-tab-container';
+        if (activate) container.classList.add('active');
+
+        var terminalDiv = document.createElement('div');
+        terminalDiv.className = 'cmd-panel-tab-terminal';
+        container.appendChild(terminalDiv);
+
+        cmdPanelTerminal.appendChild(container);
+
+        var tabItem = document.createElement('div');
+        tabItem.className = 'cmd-panel-tab';
+        tabItem.setAttribute('data-tab-id', tabId);
+        if (activate) tabItem.classList.add('active');
+
+        tabItem.innerHTML = '<span class="cmd-panel-tab-name">' + escapeHtml(name) + '</span>' +
+            '<span class="cmd-panel-tab-dirty" style="display:none;">●</span>' +
+            '<button class="cmd-panel-tab-close" data-tab-id="' + tabId + '">&times;</button>';
+
+        document.getElementById('cmd-panel-tabs').appendChild(tabItem);
+
+        tabItem.addEventListener('click', function (e) {
+            if (e.target.classList.contains('cmd-panel-tab-close')) {
+                e.stopPropagation();
+                closeTab(tabId);
+            } else {
+                activateTab(tabId);
+            }
+        });
+
+        tabItem.querySelector('.cmd-panel-tab-name').addEventListener('dblclick', function (e) {
+            e.stopPropagation();
+            startRenameTab(tabId);
+        });
+
+        tabItem.addEventListener('contextmenu', function (e) {
+            e.preventDefault();
+            showTabContextMenu(tabId, e.clientX, e.clientY);
+        });
+
+        var tab = {
+            id: tabId,
+            name: name,
+            sessionId: sessionId,
+            running: false,
+            container: container,
+            term: null,
+            fitAddon: null,
+            generation: null,
+            dirty: false,
+            firstPromptReceived: false,
+            exitBanner: null,
+            dir: dir
+        };
+        _panelTabs.set(tabId, tab);
+
+        if (activate) {
+            return activateTab(tabId);
+        }
+        return Promise.resolve(tab);
+    }
+
+    function activateTab(tabId) {
+        var tab = _panelTabs.get(tabId);
+        if (!tab) {
+            console.warn('activateTab: tab not found', tabId);
+            return Promise.resolve();
+        }
+
+        if (tab.initializing) {
+            return tab.initPromise || Promise.resolve();
+        }
+
+        if (_activeTabId && _activeTabId !== tabId) {
+            var oldTab = _panelTabs.get(_activeTabId);
+            if (oldTab) {
+                oldTab.container.classList.remove('active');
+                oldTab.container.classList.add('inactive');
+                var oldItem = document.querySelector('.cmd-panel-tab[data-tab-id="' + _activeTabId + '"]');
+                if (oldItem) oldItem.classList.remove('active');
+                if (oldTab.firstPromptReceived) {
+                    oldTab.dirty = true;
+                    updateDirtyDot(oldTab);
+                }
+            }
+        }
+
+        tab.container.classList.remove('inactive');
+        tab.container.classList.add('active');
+        var newItem = document.querySelector('.cmd-panel-tab[data-tab-id="' + tabId + '"]');
+        if (newItem) {
+            newItem.classList.add('active');
+            newItem.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+        }
+        _activeTabId = tabId;
+
+        if (!tab.term) {
+            return initTabXterm(tab);
+        }
+
+        refitActiveTab();
+        return Promise.resolve();
+    }
+
+    function initTabXterm(tab) {
+        var terminalDiv = tab.container.querySelector('.cmd-panel-tab-terminal');
+
+        tab.initializing = true;
+        tab.initPromise = null;
+
+        var term = new Terminal({
+            theme: { background: 'transparent', foreground: '#b8b8b8', cursor: '#c0c0c0' },
+            fontFamily: '"Cascadia Mono", "Consolas", "Lucida Console", "Courier New", monospace',
+            fontSize: 13,
+            cursorBlink: true,
+            cursorStyle: 'block',
+            scrollback: 2000,
+            smoothScrollDuration: 0,
+            convertEol: true,
+            windowsMode: true
+        });
+
+        var fitAddon = new FitAddon.FitAddon();
+        term.loadAddon(fitAddon);
+        term.open(terminalDiv);
+
+        term.onData(function (data) {
+            if (window.monolithApi) {
+                window.monolithApi.send_input(tab.sessionId, data).catch(function () {});
+            }
+        });
+
+        tab.term = term;
+        tab.fitAddon = fitAddon;
+
+        var dir = tab.dir || (getCurrentDir() || '%USERPROFILE%');
+        var cols = term.cols || 80;
+        var rows = term.rows || 24;
+
+        var initPromise = window.monolithApi.start_terminal(tab.sessionId, dir, false, _panelShell, cols, rows)
+            .then(function (result) {
+                if (result && result.success) {
+                    tab.running = true;
+                    tab.generation = result.generation;
+                    if (window.MonolothApp && window.MonolothApp.setSessionGeneration) {
+                        window.MonolothApp.setSessionGeneration(tab.sessionId, result.generation);
+                    }
+                    setTimeout(function () {
+                        try {
+                            fitAddon.fit();
+                            window.monolithApi.resize_terminal(tab.sessionId, term.cols, term.rows);
+                            term.refresh(0, term.rows - 1);
+                            term.focus();
+                        } catch (e) {}
+                    }, 100);
+                } else {
+                    tab.running = false;
+                    showTabExitBanner(tab);
+                }
+                return tab;
+            })
+            .catch(function (err) {
+                console.error('Failed to start tab PTY:', err);
+                tab.running = false;
+                showTabExitBanner(tab);
+                return tab;
+            })
+            .finally(function () {
+                tab.initializing = false;
+            });
+
+        tab.initPromise = initPromise;
+        return initPromise;
+    }
+
+    function closeTab(tabId, force) {
+        var tab = _panelTabs.get(tabId);
+        if (!tab) return;
+
+        force = force || false;
+
+        if (tab.running && tab.dirty && !force) {
+            if (window.MonolothApp && window.MonolothApp.showConfirm) {
+                window.MonolothApp.showConfirm('Close Tab', 'This tab has a running process. Close anyway?', 'close_dirty_tab')
+                    .then(function (confirmed) {
+                        if (confirmed) _doCloseTab(tabId);
+                    });
+                return;
+            }
+        }
+
+        _doCloseTab(tabId);
+    }
+
+    function _doCloseTab(tabId) {
+        var tab = _panelTabs.get(tabId);
+        if (!tab) return;
+
+        if (window.monolithApi) {
+            window.monolithApi.terminate_terminal(tab.sessionId).catch(function () {});
+        }
+
+        if (tab.term) {
+            try { tab.term.dispose(); } catch (e) {}
+            try { tab.fitAddon.dispose(); } catch (e) {}
+            tab.term = null;
+            tab.fitAddon = null;
+        }
+
+        tab.container.remove();
+        var tabItem = document.querySelector('.cmd-panel-tab[data-tab-id="' + tabId + '"]');
+        if (tabItem) tabItem.remove();
+
+        var nextTab = null;
+        if (_activeTabId === tabId) {
+            var tabs = getAllTabs();
+            var idx = tabs.findIndex(function (t) { return t.id === tabId; });
+            if (idx !== -1) {
+                nextTab = tabs[idx - 1] || tabs[idx + 1] || tabs[0] || null;
+            }
+        }
+
+        _panelTabs.delete(tabId);
+
+        if (_panelTabs.size === 0) {
+            _activeTabId = null;
+            hideCmdPanel();
+            return;
+        }
+
+        if (nextTab) activateTab(nextTab.id);
+    }
+
+    function getAllTabs() {
+        return Array.from(_panelTabs.values());
+    }
+
+    function getTabCount() {
+        return _panelTabs.size;
+    }
+
+    function getActiveTab() {
+        return _activeTabId ? _panelTabs.get(_activeTabId) : null;
+    }
+
+    function getTab(id) {
+        return _panelTabs.get(id) || null;
+    }
+
+    function updateDirtyDot(tab) {
+        var tabItem = document.querySelector('.cmd-panel-tab[data-tab-id="' + tab.id + '"]');
+        if (!tabItem) return;
+        var dot = tabItem.querySelector('.cmd-panel-tab-dirty');
+        if (dot) dot.style.display = tab.dirty ? 'inline' : 'none';
+    }
+
+    function showTabExitBanner(tab) {
+        var banner = tab.container.querySelector('.cmd-panel-tab-exit-banner');
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.className = 'cmd-panel-tab-exit-banner';
+            banner.innerHTML = '<span>Session ended \u2014 Click to restart</span>';
+            tab.container.appendChild(banner);
+            tab.exitBanner = banner;
+            banner.addEventListener('click', function () {
+                if (window.MonolothApp && window.MonolothApp.restartSession) {
+                    window.MonolothApp.restartSession(tab.sessionId);
+                }
+            });
+        }
+        banner.style.display = '';
+        banner.classList.remove('anim-exit');
+        banner.classList.add('anim-enter');
+    }
+
+    function hideTabExitBanner(tab) {
+        if (!tab.exitBanner) return;
+        if (window.MonolothUI && typeof window.MonolothUI.togglePanelExitBanner === 'function') {
+            window.MonolothUI.togglePanelExitBanner(tab.exitBanner, false);
+        } else {
+            tab.exitBanner.style.display = 'none';
+        }
+    }
+
+    function refitActiveTab() {
+        var tab = getActiveTab();
+        if (!tab || !tab.term) return;
+        try {
+            tab.fitAddon.fit();
+            if (window.monolithApi) {
+                window.monolithApi.resize_terminal(tab.sessionId, tab.term.cols, tab.term.rows).catch(function () {});
+            }
+            tab.term.refresh(0, tab.term.rows - 1);
+        } catch (e) {
+            console.error('Failed to refit active tab:', e);
+        }
+    }
+
+    function startRenameTab(tabId) {
+        var tab = _panelTabs.get(tabId);
+        if (!tab) return;
+        var tabItem = document.querySelector('.cmd-panel-tab[data-tab-id="' + tabId + '"]');
+        if (!tabItem) return;
+        var nameSpan = tabItem.querySelector('.cmd-panel-tab-name');
+        if (!nameSpan) return;
+
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.value = tab.name;
+        input.style.cssText = 'width:100%;font-size:0.75rem;border:none;background:transparent;color:var(--text-primary);outline:none;';
+        input.maxLength = 20;
+
+        nameSpan.replaceWith(input);
+        input.focus();
+        input.select();
+
+        function finish() {
+            var newName = input.value.trim() || tab.name;
+            tab.name = newName;
+            var newSpan = document.createElement('span');
+            newSpan.className = 'cmd-panel-tab-name';
+            newSpan.textContent = newName;
+            newSpan.addEventListener('dblclick', function (e) {
+                e.stopPropagation();
+                startRenameTab(tabId);
+            });
+            input.replaceWith(newSpan);
+        }
+
+        input.addEventListener('blur', finish);
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') finish();
+            if (e.key === 'Escape') {
+                input.value = tab.name;
+                finish();
+            }
+        });
+    }
+
+    function showTabContextMenu(tabId, x, y) {
+        if (typeof _activeContextMenuCleanup === 'function') {
+            _activeContextMenuCleanup();
+            _activeContextMenuCleanup = null;
+        }
+
+        var existing = document.querySelector('.cmd-panel-context-menu');
+        if (existing) existing.remove();
+
+        var menu = document.createElement('div');
+        menu.className = 'cmd-panel-context-menu';
+        menu.style.left = x + 'px';
+        menu.style.top = y + 'px';
+
+        menu.innerHTML =
+            '<div class="cmd-panel-context-menu-item" data-action="new">New Tab</div>' +
+            '<div class="cmd-panel-context-menu-item" data-action="close">Close Tab</div>' +
+            '<div class="cmd-panel-context-menu-divider"></div>' +
+            '<div class="cmd-panel-context-menu-item" data-action="rename">Rename Tab</div>';
+
+        var dismissListeners = [];
+
+        function cleanup() {
+            menu.remove();
+            dismissListeners.forEach(function (l) {
+                document.removeEventListener(l.event, l.handler);
+            });
+            dismissListeners = [];
+            if (_activeContextMenuCleanup === cleanup) {
+                _activeContextMenuCleanup = null;
+            }
+        }
+
+        _activeContextMenuCleanup = cleanup;
+
+        menu.addEventListener('click', function (e) {
+            var action = e.target.getAttribute('data-action');
+            if (action === 'new') createTab();
+            if (action === 'close') closeTab(tabId);
+            if (action === 'rename') startRenameTab(tabId);
+            cleanup();
+        });
+
+        document.body.appendChild(menu);
+
+        setTimeout(function () {
+            var dismiss = function (e) {
+                if (!menu.contains(e.target)) cleanup();
+            };
+            var keyDismiss = function (e) {
+                if (e.key === 'Escape') cleanup();
+            };
+            document.addEventListener('click', dismiss);
+            document.addEventListener('keydown', keyDismiss);
+            dismissListeners.push({ event: 'click', handler: dismiss });
+            dismissListeners.push({ event: 'keydown', handler: keyDismiss });
+        }, 0);
+    }
+
     function showCmdPanel() {
         _cmdPanelOpen = true;
         if (cmdPanel) {
-            cmdPanel.classList.remove('anim-close');
             cmdPanel.classList.add('open');
-            // Force reflow then animate
-            void cmdPanel.offsetWidth;
             cmdPanel.classList.add('anim-open');
+            setTimeout(function () {
+                cmdPanel.classList.remove('anim-open');
+            }, 250);
         }
         var panelBtn = sidebarButtons.querySelector('[data-btn-id="open_cmd_panel"]');
         if (panelBtn) panelBtn.classList.add('active');
         if (window.monolithApi) {
             window.monolithApi.set_config('cmdPanelOpen', true).catch(function () {});
         }
-        if (window.MonolothApp && window.MonolothApp.refitTerminals) {
-            setTimeout(function () { window.MonolothApp.refitTerminals(); }, 50);
-        }
+        setTimeout(function () { refitActiveTab(); }, 50);
     }
 
     function hideCmdPanel() {
         _cmdPanelOpen = false;
+        _panelClosing = true;
         if (cmdPanel) {
-            cmdPanel.classList.remove('anim-open');
             cmdPanel.classList.add('anim-close');
-            // Wait for animation to finish before hiding
             setTimeout(function () {
-                cmdPanel.classList.remove('open', 'anim-close');
+                cmdPanel.classList.remove('open');
+                cmdPanel.classList.remove('anim-close');
+                _panelClosing = false;
             }, 200);
         }
         var panelBtn = sidebarButtons.querySelector('[data-btn-id="open_cmd_panel"]');
         if (panelBtn) panelBtn.classList.remove('active');
         if (window.monolithApi) {
             window.monolithApi.set_config('cmdPanelOpen', false).catch(function () {});
-        }
-        if (window.MonolothApp && window.MonolothApp.refitTerminals) {
-            setTimeout(function () { window.MonolothApp.refitTerminals(); }, 250);
         }
     }
 
@@ -412,122 +819,11 @@
             hideCmdPanel();
         } else {
             showCmdPanel();
-            if (!_panelRunning) {
-                var dir = getCurrentDir() || '%USERPROFILE%';
-                initCmdPanel(dir);
+            if (_panelTabs.size === 0) {
+                createTab();
+            } else {
+                activateTab(_activeTabId || getAllTabs()[0].id);
             }
-        }
-    }
-
-    function refitPanelTerminal() {
-        if (panelFitAddon && panelTerm && window.monolithApi) {
-            try {
-                panelFitAddon.fit();
-                window.monolithApi.resize_terminal('panel', panelTerm.cols, panelTerm.rows).catch(function () {});
-                try { panelTerm.refresh(0, panelTerm.rows - 1); } catch (e) {}
-            } catch (e) {}
-        }
-    }
-
-    function initCmdPanel(dir) {
-        if (!window.monolithApi) return Promise.resolve();
-        dir = dir || getCurrentDir() || '%USERPROFILE%';
-
-        hidePanelExitBanner();
-
-        if (!panelTerm) {
-            if (typeof Terminal === 'undefined') return Promise.resolve();
-            var panelBg = 'transparent';
-            panelTerm = new Terminal({
-                theme: { background: panelBg, foreground: '#b8b8b8', cursor: '#c0c0c0' },
-                fontFamily: '"Cascadia Mono", "Consolas", "Lucida Console", "Courier New", monospace',
-                fontSize: 13,
-                cursorBlink: true,
-                cursorStyle: 'block',
-                scrollback: 2000,
-                smoothScrollDuration: 0,
-                convertEol: true,
-                windowsMode: true
-            });
-
-            if (cmdPanelTerminal) {
-                panelTerm.open(cmdPanelTerminal);
-                panelTerm.focus();
-            }
-
-            if (typeof FitAddon !== 'undefined') {
-                panelFitAddon = new FitAddon.FitAddon();
-                panelTerm.loadAddon(panelFitAddon);
-            }
-
-            panelTerm.onData(function (data) {
-                if (window.monolithApi) {
-                    window.monolithApi.send_input('panel', data).catch(function () {});
-                }
-            });
-        }
-
-        _panelRunning = true;
-        var pCols = panelTerm ? panelTerm.cols : 80;
-        var pRows = panelTerm ? panelTerm.rows : 24;
-        var startPromise = window.monolithApi.start_terminal('panel', dir, false, _panelShell, pCols, pRows)
-            .then(function (result) {
-                if (!result || !result.success) {
-                    _panelRunning = false;
-                    showPanelExitBanner();
-                } else if (result.generation && window.MonolothApp && typeof window.MonolothApp.setSessionGeneration === 'function') {
-                    window.MonolothApp.setSessionGeneration('panel', result.generation);
-                }
-                if (panelFitAddon && panelTerm) {
-                    setTimeout(function () {
-                        panelFitAddon.fit();
-                        if (window.monolithApi) {
-                            window.monolithApi.resize_terminal('panel', panelTerm.cols, panelTerm.rows).catch(function () {});
-                        }
-                        try { panelTerm.refresh(0, panelTerm.rows - 1); } catch (e) {}
-                    }, 100);
-                }
-                return result;
-            })
-            .catch(function () {
-                _panelRunning = false;
-                showPanelExitBanner();
-            });
-        return startPromise;
-    }
-
-    function showPanelExitBanner() {
-        _panelRunning = false;
-        if (cmdPanelExitBanner) {
-            UI.togglePanelExitBanner(cmdPanelExitBanner, true, function () {
-                if (window.MonolothApp && window.MonolothApp.restartSession) {
-                    window.MonolothApp.restartSession('panel');
-                }
-            });
-        }
-    }
-
-    function hidePanelExitBanner() {
-        UI.togglePanelExitBanner(cmdPanelExitBanner, false);
-    }
-
-    function terminateCmdPanel(skipHide) {
-        if (skipHide) _panelClosing = true;
-        _panelRunning = false;
-        hidePanelExitBanner();
-        if (window.monolithApi) {
-            window.monolithApi.terminate_terminal('panel').catch(function () {});
-        }
-        if (panelTerm) {
-            try { panelTerm.dispose(); } catch (e) {}
-            panelTerm = null;
-            panelFitAddon = null;
-        }
-        if (cmdPanelTerminal) {
-            cmdPanelTerminal.innerHTML = '';
-        }
-        if (!skipHide) {
-            hideCmdPanel();
         }
     }
 
@@ -553,7 +849,7 @@
         if (newHeight > maxH) newHeight = maxH;
 
         applyPanelHeight(newHeight);
-        refitPanelTerminal();
+        refitActiveTab();
 
         if (_resizeDebounceTimer) clearTimeout(_resizeDebounceTimer);
         _resizeDebounceTimer = setTimeout(function () {
@@ -577,13 +873,21 @@
         if (window.MonolothApp && window.MonolothApp.refitTerminals) {
             window.MonolothApp.refitTerminals();
         }
-        refitPanelTerminal();
+        refitActiveTab();
     }
 
     // ---- CMD Panel Close ----
     if (cmdPanelClose) {
         cmdPanelClose.addEventListener('click', function () {
-            terminateCmdPanel();
+            hideCmdPanel();
+        });
+    }
+
+    // ---- CMD Panel New Tab ----
+    var cmdPanelNewTab = document.getElementById('cmd-panel-new-tab');
+    if (cmdPanelNewTab) {
+        cmdPanelNewTab.addEventListener('click', function () {
+            createTab();
         });
     }
 
@@ -1052,7 +1356,7 @@
         if (window.MonolothApp && window.MonolothApp.refitTerminals) {
             window.MonolothApp.refitTerminals();
         }
-        refitPanelTerminal();
+        refitActiveTab();
     }
 
     // ---- Init ----
@@ -1070,6 +1374,16 @@
         window.addEventListener('resize', function () {
             if (window._sidebarResizeTimer) clearTimeout(window._sidebarResizeTimer);
             window._sidebarResizeTimer = setTimeout(onWindowResize, 100);
+        });
+
+        window.addEventListener('beforeunload', function () {
+            _panelTabs.forEach(function (tab) {
+                if (tab.term) {
+                    try { tab.term.dispose(); } catch (e) {}
+                    try { tab.fitAddon.dispose(); } catch (e) {}
+                }
+            });
+            _panelTabs.clear();
         });
     }
 
@@ -1090,27 +1404,59 @@
             document.body.classList.remove('sidebar-visible-left', 'sidebar-visible-right');
         },
         isPanelOpen: function () { return _cmdPanelOpen; },
-        isPanelRunning: function () { return _panelRunning; },
-        consumePanelClosing: function () { if (_panelClosing) { _panelClosing = false; return true; } return false; },
-        handlePanelExit: showPanelExitBanner,
+
+        createTab: createTab,
+        activateTab: activateTab,
+        closeTab: closeTab,
+        getAllTabs: getAllTabs,
+        getTab: getTab,
+        getActiveTab: getActiveTab,
+        hideTabExitBanner: hideTabExitBanner,
+        getTabCount: getTabCount,
+        getActiveTabId: function () { return _activeTabId; },
+        initTabXterm: initTabXterm,
+        writeToTab: function (tabId, data, eof) {
+            var tab = _panelTabs.get(tabId);
+            if (!tab || !tab.term) return;
+            if (eof) {
+                tab.running = false;
+                tab.dirty = false;
+                updateDirtyDot(tab);
+                showTabExitBanner(tab);
+            } else {
+                tab.term.write(data);
+                if (/\r\n>/.test(data) || /[\$>]$/.test(data)) {
+                    tab.firstPromptReceived = true;
+                    tab.dirty = false;
+                    updateDirtyDot(tab);
+                }
+            }
+        },
+
         toggleCmdPanel: toggleCmdPanel,
         showCmdPanel: showCmdPanel,
         hideCmdPanel: hideCmdPanel,
-        terminateCmdPanel: terminateCmdPanel,
-        initCmdPanel: initCmdPanel,
-        applySidebar: applySidebar,
-        toggleSidebar: toggleSidebar,
-        renderSettingsTab: renderSettingsTab,
-        getPanelShell: function () { return _panelShell; },
-        writeToPanel: function (data) { if (panelTerm) { panelTerm.write(data); } },
+        refitActiveTab: refitActiveTab,
         restorePanelState: function () {
             if (typeof Terminal === 'undefined' || !window.monolithApi) return;
             if (!_panelRestoreNeeded) return;
             _panelRestoreNeeded = false;
-            var dir = getCurrentDir() || '%USERPROFILE%';
             showCmdPanel();
-            initCmdPanel(dir);
-        }
+            if (_panelTabs.size === 0) {
+                createTab(null, true, getCurrentDir() || '%USERPROFILE%');
+            } else {
+                activateTab(_activeTabId || getAllTabs()[0].id);
+            }
+        },
+        handlePanelExit: function () {
+            var tab = getActiveTab();
+            if (tab) showTabExitBanner(tab);
+        },
+
+        applySidebar: applySidebar,
+        toggleSidebar: toggleSidebar,
+        renderSettingsTab: renderSettingsTab,
+        getPanelShell: function () { return _panelShell; }
     };
 
     console.log('[Sidebar] Initialized');

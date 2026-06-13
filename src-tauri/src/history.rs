@@ -155,6 +155,31 @@ impl HistoryManager {
         }
     }
 
+    pub fn session_end_all_panel_tabs(&self) {
+        let mut inner = self.inner.lock();
+        let prefix = "panel-tab-";
+        let keys: Vec<String> = inner.active_sessions
+            .keys()
+            .filter(|k| k.starts_with(prefix))
+            .cloned()
+            .collect();
+        for key in &keys {
+            if let Some(active) = inner.active_sessions.remove(key) {
+                inner.data.sessions.push(SessionEntry {
+                    profile: active.profile,
+                    command: active.command,
+                    start_time: active.start_time,
+                    end_time: Some(iso_now()),
+                    directory: active.directory,
+                });
+            }
+        }
+        if !keys.is_empty() {
+            self.purge_inner(&mut inner);
+            save_json(&history_path(), &inner.data);
+        }
+    }
+
     fn purge_inner(&self, inner: &mut HistoryInner) {
         let retention = inner.data.retention.clone();
         apply_retention(&mut inner.data.sessions, &retention);

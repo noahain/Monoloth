@@ -25,8 +25,8 @@
     var _useCustomTitlebar = false;
     var _isMaximized = false;
     var _maximizeSyncTimer = null;
-    var _skipNextEof = { main: false, panel: false };
-    var _sessionGeneration = { main: 0, panel: 0 };
+    var _skipNextEof = {};  // Session-ID-keyed
+    var _sessionGeneration = { main: 0 };  // Session-ID-keyed; tab sessions added dynamically
     var _panelRunning = false;
     var _statusTimers = {};
     var _bgType = 'none';
@@ -1775,8 +1775,11 @@
     function backToLanding() {
         setCurrentView('landing');
         if (typeof window.SidebarManager !== 'undefined') {
-            window.SidebarManager.terminateCmdPanel(true);
-            window.SidebarManager.hide();
+            if (typeof window.SidebarManager.getAllTabs === 'function') {
+                var tabsSnap = window.SidebarManager.getAllTabs().slice();
+                tabsSnap.forEach(function (t) { window.SidebarManager.closeTab(t.id, true); });
+            }
+            window.SidebarManager.hideCmdPanel();
         }
         if (window.monolithApi) {
             window.monolithApi.terminate_terminal('main').catch(function () {});
@@ -2091,19 +2094,10 @@
                         }, 5000);
                     }
                 }
-            } else if (sessionId === 'panel') {
-                if (typeof window.SidebarManager !== 'undefined') {
-                    if (eof) {
-                        if (window.SidebarManager.consumePanelClosing()) {
-                            _panelRunning = false;
-                        } else if (typeof window.SidebarManager.handlePanelExit === 'function') {
-                            window.SidebarManager.handlePanelExit();
-                        } else {
-                            window.SidebarManager.terminateCmdPanel();
-                        }
-                    } else if (data) {
-                        window.SidebarManager.writeToPanel(data);
-                    }
+            } else if (sessionId.startsWith('panel-tab-')) {
+                var tabId = sessionId.replace('panel-', '');
+                if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.writeToTab) {
+                    window.SidebarManager.writeToTab(tabId, data, eof);
                 }
             }
         };
@@ -2393,6 +2387,15 @@
         _paletteState.selectedIndex = idx;
     }
 
+    function isTypingInMainTerminalOrInput() {
+        var el = document.activeElement;
+        if (!el) return false;
+        var isXtermHelper = el.classList && el.classList.contains('xterm-helper-textarea');
+        var inMainTerm = isXtermHelper && !el.closest('#cmd-panel');
+        var inTextField = (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && !isXtermHelper;
+        return inMainTerm || inTextField;
+    }
+
     document.addEventListener('keydown', function (e) {
         if (_editingShortcutKey && shortcutEditMode && shortcutEditMode.style.display !== 'none') return;
 
@@ -2419,6 +2422,46 @@
         if (shortcutMatches(e, getShortcut('cmd_panel'))) {
             e.preventDefault();
             if (typeof window.SidebarManager !== 'undefined') window.SidebarManager.toggleCmdPanel();
+        }
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key === 't') {
+            if (typeof window.SidebarManager !== 'undefined') {
+                if (isTypingInMainTerminalOrInput()) return;
+                e.preventDefault();
+                if (!window.SidebarManager.isPanelOpen()) window.SidebarManager.toggleCmdPanel();
+                window.SidebarManager.createTab();
+            }
+        }
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key === 'w') {
+            if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.isPanelOpen() && window.SidebarManager.getTabCount() > 0) {
+                if (isTypingInMainTerminalOrInput()) return;
+                e.preventDefault();
+                var activeTab = window.SidebarManager.getActiveTab();
+                if (activeTab) window.SidebarManager.closeTab(activeTab.id);
+            }
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Tab') {
+            if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.getTabCount() > 1) {
+                if (isTypingInMainTerminalOrInput()) return;
+                e.preventDefault();
+                var tabsA = window.SidebarManager.getAllTabs();
+                var activeTabA = window.SidebarManager.getActiveTab();
+                if (activeTabA) {
+                    var idxA = tabsA.indexOf(activeTabA);
+                    var nextIdx = e.shiftKey
+                        ? (idxA - 1 + tabsA.length) % tabsA.length
+                        : (idxA + 1) % tabsA.length;
+                    window.SidebarManager.activateTab(tabsA[nextIdx].id);
+                }
+            }
+        }
+        if (e.altKey && !e.ctrlKey && !e.shiftKey && e.key >= '1' && e.key <= '9') {
+            if (typeof window.SidebarManager !== 'undefined') {
+                if (isTypingInMainTerminalOrInput()) return;
+                e.preventDefault();
+                var tabIndex = parseInt(e.key, 10) - 1;
+                var tabsB = window.SidebarManager.getAllTabs();
+                if (tabsB[tabIndex]) window.SidebarManager.activateTab(tabsB[tabIndex].id);
+            }
         }
         if (shortcutMatches(e, getShortcut('clear_terminal'))) {
             e.preventDefault();
@@ -3888,6 +3931,7 @@
     // --- MonolothApp Facade (exposed to sidebar.js) ---
     window.MonolothApp = {
         getCurrentDir: function () { return _currentLaunchDir; },
+        showConfirm: showConfirm,
         restartSession: function (sessionId) {
             sessionId = sessionId || 'main';
             if (sessionId === 'main') {
@@ -3898,15 +3942,43 @@
                 } else {
                     initTerminal(_currentLaunchDir);
                 }
+            } else if (sessionId.startsWith('panel-tab-')) {
+                if (typeof window.SidebarManager === 'undefined' || typeof window.SidebarManager.getTab !== 'function') return;
+                var tabId = sessionId.replace('panel-', '');
+                var tab = window.SidebarManager.getTab(tabId);
+                if (!tab) return;
+                if (window.monolithApi) {
+                    window.monolithApi.terminate_terminal(sessionId).catch(function () {});
+                }
+                if (tab.term) {
+                    try { tab.term.dispose(); } catch (e) {}
+                    try { tab.fitAddon.dispose(); } catch (e) {}
+                    tab.term = null;
+                    tab.fitAddon = null;
+                }
+                tab.running = false;
+                tab.dirty = false;
+                tab.firstPromptReceived = false;
+                tab.generation = null;
+                delete _sessionGeneration[sessionId];
+                if (typeof _skipNextEof !== 'undefined' && _skipNextEof[sessionId] !== undefined) {
+                    delete _skipNextEof[sessionId];
+                }
+                var terminalDiv = tab.container.querySelector('.cmd-panel-tab-terminal');
+                if (terminalDiv) terminalDiv.innerHTML = '';
+                window.SidebarManager.hideTabExitBanner(tab);
+                if (window.SidebarManager.getActiveTabId() === tabId) {
+                    window.SidebarManager.initTabXterm(tab);
+                }
             } else if (sessionId === 'panel') {
                 if (_panelRunning) {
                     _skipNextEof['panel'] = true;
                     window.monolithApi.terminate_terminal('panel')
-                        .finally(function () { _skipNextEof['panel'] = false; _panelRunning = false; if (typeof window.SidebarManager !== 'undefined') { window.SidebarManager.showCmdPanel(); window.SidebarManager.initCmdPanel(_currentLaunchDir); } });
+                        .finally(function () { _skipNextEof['panel'] = false; _panelRunning = false; if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.createTab === 'function') { window.SidebarManager.showCmdPanel(); window.SidebarManager.createTab(null, true, _currentLaunchDir); } });
                 } else {
-                    if (typeof window.SidebarManager !== 'undefined') {
+                    if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.createTab === 'function') {
                         window.SidebarManager.showCmdPanel();
-                        window.SidebarManager.initCmdPanel(_currentLaunchDir);
+                        window.SidebarManager.createTab(null, true, _currentLaunchDir);
                     }
                 }
             }

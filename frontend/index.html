@@ -7,8 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=121">
-    <link rel="stylesheet" href="lib/xterm.css?v=12">
+    <link rel="stylesheet" href="style.css?v=126">
+    <link rel="stylesheet" href="lib/xterm.css?v=13">
     <style>
         .landing-brand, .landing-card, .landing-status-bar {
             visibility: hidden;
@@ -542,14 +542,17 @@
         <!-- CMD Panel -->
         <div id="cmd-panel" class="cmd-panel">
             <div class="cmd-panel-resize-handle" id="cmd-panel-resize-handle"></div>
-            <div class="cmd-panel-toolbar">
-                <span class="cmd-panel-title">CMD Panel</span>
-                <button id="cmd-panel-close" class="cmd-panel-close" data-tooltip="Close Panel">&times;</button>
-            </div>
+
+    <!-- Tab Bar (segmented control, matches .settings-tab) -->
+    <div class="cmd-panel-tab-bar" id="cmd-panel-tab-bar">
+        <div class="cmd-panel-tabs" id="cmd-panel-tabs">
+            <button class="cmd-panel-new-tab" id="cmd-panel-new-tab" data-tooltip="New Tab (Ctrl+T)">+</button>
+        </div>
+        <button class="cmd-panel-close" id="cmd-panel-close" data-tooltip="Close Panel">&times;</button>
+    </div>
+
+            <!-- Terminal container holds all tab containers -->
             <div id="cmd-panel-terminal" class="cmd-panel-terminal"></div>
-            <div id="cmd-panel-exit-banner" class="cmd-panel-exit-banner" style="display:none;">
-                <span>Session ended — Click to restart</span>
-            </div>
         </div>
     </div>
 
@@ -689,19 +692,19 @@
             setTimeout(fontsReady, 1500);
         })();
     </script>
-    <script src="lib/xterm.js?v=14"></script>
-    <script src="lib/xterm-addon-fit.js?v=16"></script>
-    <script src="lib/xterm-addon-webgl.js?v=15"></script>
-    <script src="tauri-bridge.js?v=23"></script>
+    <script src="lib/xterm.js?v=18"></script>
+    <script src="lib/xterm-addon-fit.js?v=20"></script>
+    <script src="lib/xterm-addon-webgl.js?v=19"></script>
+    <script src="tauri-bridge.js?v=27"></script>
 
-    <script src="lib/dom-utils.js?v=4"></script>
-    <script src="lib/plugin-updater.js?v=4"></script>
-    <script src="lib/plugin-process.js?v=3"></script>
-    <script src="lib/updater-toast.js?v=8"></script>
-    <script src="tooltip.js?v=8"></script>
+    <script src="lib/dom-utils.js?v=8"></script>
+    <script src="lib/plugin-updater.js?v=8"></script>
+    <script src="lib/plugin-process.js?v=7"></script>
+    <script src="lib/updater-toast.js?v=12"></script>
+    <script src="tooltip.js?v=12"></script>
 
-    <script src="app.js?v=73"></script>
+    <script src="app.js?v=77"></script>
 
-    <script src="sidebar.js?v=29"></script>
+    <script src="sidebar.js?v=33"></script>
 </body>
 </html>
