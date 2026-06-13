@@ -425,8 +425,7 @@
             term: null,
             fitAddon: null,
             generation: null,
-            dirty: false,
-            firstPromptReceived: false,
+            busy: false,
             exitBanner: null,
             dir: dir
         };
@@ -456,10 +455,7 @@
                 oldTab.container.classList.add('inactive');
                 var oldItem = document.querySelector('.cmd-panel-tab[data-tab-id="' + _activeTabId + '"]');
                 if (oldItem) oldItem.classList.remove('active');
-                if (oldTab.firstPromptReceived) {
-                    oldTab.dirty = true;
-                    updateDirtyDot(oldTab);
-                }
+                updateBusyDot(oldTab);
             }
         }
 
@@ -472,10 +468,7 @@
         }
         _activeTabId = tabId;
 
-        if (tab.dirty) {
-            tab.dirty = false;
-            updateDirtyDot(tab);
-        }
+        updateBusyDot(tab);
 
         if (!tab.term) {
             return initTabXterm(tab);
@@ -558,6 +551,14 @@
             if (window.monolithApi) {
                 window.monolithApi.send_input(tab.sessionId, data).catch(function () {});
             }
+            // Submitting a line (Enter) marks the tab busy until the shell
+            // returns to its prompt. ponytail: heuristic — raw PTY gives no
+            // clean "command finished" signal; prompt regex in writeToTab is
+            // the upgrade boundary (use OSC 133 shell integration to be exact).
+            if (data.indexOf('\r') !== -1) {
+                tab.busy = true;
+                updateBusyDot(tab);
+            }
         });
 
         tab.term = term;
@@ -609,7 +610,7 @@
 
         force = force || false;
 
-        if (tab.running && tab.dirty && !force) {
+        if (tab.running && tab.busy && !force) {
             if (window.MonolothApp && window.MonolothApp.showConfirm) {
                 window.MonolothApp.showConfirm('Close Tab', 'This tab has a running process. Close anyway?', 'close_dirty_tab')
                     .then(function (confirmed) {
@@ -677,11 +678,12 @@
         return _panelTabs.get(id) || null;
     }
 
-    function updateDirtyDot(tab) {
+    function updateBusyDot(tab) {
         var tabItem = document.querySelector('.cmd-panel-tab[data-tab-id="' + tab.id + '"]');
         if (!tabItem) return;
         var dot = tabItem.querySelector('.cmd-panel-tab-dirty');
-        if (dot) dot.style.display = tab.dirty ? 'inline' : 'none';
+        if (!dot) return;
+        dot.style.display = tab.busy ? '' : 'none';
     }
 
     function showTabExitBanner(tab) {
@@ -716,11 +718,18 @@
         var tab = getActiveTab();
         if (!tab || !tab.term) return;
         try {
+            var prevCols = tab.term.cols;
+            var prevRows = tab.term.rows;
             tab.fitAddon.fit();
-            if (window.monolithApi) {
-                window.monolithApi.resize_terminal(tab.sessionId, tab.term.cols, tab.term.rows).catch(function () {});
+            if (tab.term.cols !== prevCols || tab.term.rows !== prevRows) {
+                if (window.monolithApi) {
+                    window.monolithApi.resize_terminal(tab.sessionId, tab.term.cols, tab.term.rows).catch(function () {});
+                }
             }
-            tab.term.refresh(0, tab.term.rows - 1);
+            var term = tab.term;
+            requestAnimationFrame(function () {
+                try { term.refresh(0, term.rows - 1); } catch (e) {}
+            });
         } catch (e) {
             console.error('Failed to refit active tab:', e);
         }
@@ -1436,15 +1445,17 @@
             if (!tab || !tab.term) return;
             if (eof) {
                 tab.running = false;
-                tab.dirty = false;
-                updateDirtyDot(tab);
+                tab.busy = false;
+                updateBusyDot(tab);
                 showTabExitBanner(tab);
             } else {
                 tab.term.write(data);
-                if (/\r\n>/.test(data) || /[\$>]$/.test(data)) {
-                    tab.firstPromptReceived = true;
-                    tab.dirty = false;
-                    updateDirtyDot(tab);
+                // Shell returned to a prompt → command finished, clear busy.
+                // ponytail: matches cmd.exe "C:\...>" and PowerShell "PS ...>"
+                // prompts at the tail of an output chunk. Upgrade path: OSC 133.
+                if (/[A-Za-z]:\\[^\n]*>\s*$/.test(data) || /\nPS [^\n]*>\s*$/.test(data) || /\n[^\n]*\$\s*$/.test(data)) {
+                    tab.busy = false;
+                    updateBusyDot(tab);
                 }
             }
         },

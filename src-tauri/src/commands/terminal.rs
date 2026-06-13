@@ -176,6 +176,33 @@ fn resolve_custom_command(cmd_line: &str) -> Result<(String, Vec<String>), Strin
     Ok((exe.to_string(), parts[1..].to_vec()))
 }
 
+/// Pick the best spawnable executable from `where`-style output (one path per line).
+///
+/// npm global installs create three sibling files: an extensionless POSIX shell
+/// script (`opencode`), plus `opencode.cmd` and `opencode.ps1`. `where` lists the
+/// extensionless file first, but Windows `CreateProcessW` cannot execute it and
+/// fails with "%1 is not a valid Win32 application" (os error 193). Prefer a line
+/// whose extension is in the PATHEXT-style executable set; fall back to the first line.
+fn pick_windows_executable(where_output: &str) -> Option<String> {
+    let lines: Vec<String> = where_output
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+    if lines.is_empty() {
+        return None;
+    }
+    const EXEC_EXTS: [&str; 4] = [".cmd", ".exe", ".bat", ".com"];
+    lines
+        .iter()
+        .find(|l| {
+            let lower = l.to_ascii_lowercase();
+            EXEC_EXTS.iter().any(|ext| lower.ends_with(ext))
+        })
+        .or_else(|| lines.first())
+        .cloned()
+}
+
 fn find_opencode() -> Result<String, String> {
     use std::path::PathBuf;
     use std::process::Command;
@@ -190,9 +217,8 @@ fn find_opencode() -> Result<String, String> {
         if let Ok(output) = Command::new("where").arg("opencode").output() {
             if output.status.success() {
                 let path = String::from_utf8_lossy(&output.stdout);
-                if let Some(first) = path.lines().next() {
-                    let trimmed = first.trim().to_string();
-                    return Ok(trimmed);
+                if let Some(best) = pick_windows_executable(&path) {
+                    return Ok(best);
                 }
             }
         }
@@ -376,6 +402,42 @@ mod tests {
         let result = find_opencode();
         let _ = result;
         std::env::remove_var("OPENCODE_BIN_PATH");
+    }
+
+    // pick_windows_executable tests — the root-cause fix for the npm extensionless
+    // shell script. `where opencode` lists the extensionless POSIX script first;
+    // CreateProcessW can't run it (os error 193). We must prefer the .cmd/.exe sibling.
+
+    #[test]
+    fn pick_exec_prefers_cmd_over_extensionless() {
+        let output = "C:\\Users\\GamerZ\\AppData\\Roaming\\npm\\opencode\r\nC:\\Users\\GamerZ\\AppData\\Roaming\\npm\\opencode.cmd\r\n";
+        let picked = pick_windows_executable(output).unwrap();
+        assert_eq!(picked, "C:\\Users\\GamerZ\\AppData\\Roaming\\npm\\opencode.cmd");
+    }
+
+    #[test]
+    fn pick_exec_prefers_exe() {
+        let output = "C:\\bin\\opencode\r\nC:\\bin\\opencode.exe\r\n";
+        let picked = pick_windows_executable(output).unwrap();
+        assert_eq!(picked, "C:\\bin\\opencode.exe");
+    }
+
+    #[test]
+    fn pick_exec_falls_back_to_first_when_no_exec_ext() {
+        let output = "C:\\some\\opencode\r\n";
+        let picked = pick_windows_executable(output).unwrap();
+        assert_eq!(picked, "C:\\some\\opencode");
+    }
+
+    #[test]
+    fn pick_exec_empty_returns_none() {
+        assert_eq!(pick_windows_executable("   \r\n  \r\n"), None);
+    }
+
+    #[test]
+    fn pick_exec_single_cmd_line() {
+        let picked = pick_windows_executable("C:\\bin\\opencode.cmd").unwrap();
+        assert_eq!(picked, "C:\\bin\\opencode.cmd");
     }
 
     // resolve_custom_command tests — mirror the v2.0.1 fix for resolve_command:

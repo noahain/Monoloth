@@ -1140,6 +1140,23 @@ body.adaptive-light .btn-secondary:hover {
     background: rgba(224, 108, 117, 0.08);
 }
 
+/* --- Motion enhancements: tactile press feedback ---
+   Compact buttons confirm a click with a subtle scale-down. Conveys
+   state (the press registered), not decoration. The existing per-button
+   `transition` carries the transform; reduced-motion zeroes it. */
+.btn-primary:active,
+.btn-secondary:active,
+.btn-danger:active,
+.sidebar-btn:active,
+.titlebar-btn:active,
+.fp-ok-btn:active,
+.fp-cancel-btn:active,
+.profile-selector-btn:active,
+.id-btn-primary:active,
+.id-btn-cancel:active {
+    transform: scale(0.97);
+}
+
 /* Button rows */
 .config-actions,
 .update-actions {
@@ -1147,52 +1164,6 @@ body.adaptive-light .btn-secondary:hover {
     gap: 0.5rem;
     flex-wrap: wrap;
     align-items: center;
-}
-
-/* Config Tab */
-.config-editor {
-    width: 100%;
-    height: 360px;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid var(--modal-border);
-    color: rgba(255, 255, 255, 0.95);
-    padding: 1rem;
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    border-radius: 8px;
-    outline: none;
-    resize: vertical;
-    line-height: 1.5;
-    margin-bottom: 1rem;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-}
-
-body.light-mode .config-editor,
-body.adaptive-light .config-editor {
-    background: rgba(0, 0, 0, 0.02);
-    border-color: var(--modal-border);
-    color: var(--modal-text);
-}
-
-.config-editor::-webkit-scrollbar {
-    display: none;
-}
-
-.config-editor:focus {
-    border-color: rgba(255, 255, 255, 0.15);
-    background: rgba(255, 255, 255, 0.04);
-}
-
-body.light-mode .config-editor:focus,
-body.adaptive-light .config-editor:focus {
-    border-color: rgba(0, 0, 0, 0.2);
-    background: rgba(0, 0, 0, 0.04);
-}
-
-.config-editor.json-error {
-    border-color: var(--accent-red);
-    background: rgba(224, 108, 117, 0.05);
 }
 
 /* Status Messages */
@@ -4122,6 +4093,12 @@ body.adaptive-light.cta-blur .command-palette-modal {
     font-family: var(--font-mono);
     font-size: 0.8rem;
     outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.command-palette-input:focus {
+    border-bottom-color: var(--modal-border-active);
+    box-shadow: 0 1px 0 0 var(--modal-border-active);
 }
 
 .command-palette-input::placeholder {
@@ -7458,22 +7435,6 @@ body.adaptive-light .sidebar-setting-name {
     opacity: 1;
 }
 
-/* --- Skeleton Placeholder --- */
-
-.skeleton-pulse {
-    background: linear-gradient(90deg,
-        var(--bg-tertiary) 25%,
-        rgba(255, 255, 255, 0.06) 50%,
-        var(--bg-tertiary) 75%);
-    background-size: 200% 100%;
-    animation: skeletonShimmer 1.5s infinite;
-}
-
-@keyframes skeletonShimmer {
-    0%   { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-}
-
 /* --- Theme Transition on Body --- */
 
 body.theme-transitioning,
@@ -7950,10 +7911,18 @@ body.light-mode.cta-glass .update-pill {
 }
 
 .cmd-panel-tab-dirty {
-    color: var(--accent-warning);
+    color: var(--text-secondary);
     font-size: 0.55rem;
     flex-shrink: 0;
     line-height: 1;
+    display: inline-block;
+    transform-origin: center;
+    animation: cmdDotIn 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes cmdDotIn {
+    from { opacity: 0; transform: scale(0.3); }
+    to   { opacity: 1; transform: scale(1); }
 }
 
 .cmd-panel-tab-close {
@@ -8009,20 +7978,13 @@ body.light-mode.cta-glass .update-pill {
 .cmd-panel-tab-container {
     width: 100%;
     height: 100%;
-    display: flex;
+    display: none;
     flex-direction: column;
-    position: absolute;
-    top: 0;
-    left: 0;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.1s;
+    position: relative;
 }
 
 .cmd-panel-tab-container.active {
-    opacity: 1;
-    pointer-events: auto;
-    position: relative;
+    display: flex;
 }
 
 .cmd-panel-tab-terminal {

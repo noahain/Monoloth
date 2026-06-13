@@ -3840,8 +3840,7 @@
                     tab.fitAddon = null;
                 }
                 tab.running = false;
-                tab.dirty = false;
-                tab.firstPromptReceived = false;
+                tab.busy = false;
                 tab.generation = null;
                 delete _sessionGeneration[sessionId];
                 if (typeof _skipNextEof !== 'undefined' && _skipNextEof[sessionId] !== undefined) {
