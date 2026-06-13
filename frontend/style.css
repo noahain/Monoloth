@@ -7959,39 +7959,23 @@ body.light-mode.cta-glass .update-pill {
     border-color: rgba(0,0,0,0.1);
 }
 
-/* CMD Panel Tab Bar */
+/* CMD Panel Tab Bar — segmented control inside the panel surface (matches .settings-tab) */
 .cmd-panel-tab-bar {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 2px 4px;
-    border-bottom: 1px solid var(--border-dark);
-    background: rgba(255, 255, 255, 0.04);
-    min-height: 32px;
-}
-
-body.light-mode .cmd-panel-tab-bar,
-body.adaptive-light .cmd-panel-tab-bar {
-    background: rgba(0, 0, 0, 0.04);
-}
-
-.cmd-panel-tabs-group {
-    display: flex;
-    flex: 1;
-    min-width: 0;
-    align-items: center;
-    gap: 2px;
+    gap: 6px;
+    padding: 6px 8px;
+    flex-shrink: 0;
 }
 
 .cmd-panel-tabs {
     display: flex;
-    flex: 1;
+    flex: 0 1 auto;
+    min-width: 0;
+    gap: 4px;
     overflow-x: auto;
     overflow-y: hidden;
-    scroll-snap-type: x mandatory;
     scrollbar-width: none;
-    gap: 2px;
-    min-width: 0;
 }
 
 .cmd-panel-tabs::-webkit-scrollbar {
@@ -8001,37 +7985,33 @@ body.adaptive-light .cmd-panel-tab-bar {
 .cmd-panel-tab {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    min-width: 60px;
-    max-width: 140px;
+    gap: 6px;
+    padding: 0.35rem 0.85rem;
+    max-width: 180px;
     flex-shrink: 0;
     cursor: pointer;
-    border-radius: 4px 4px 0 0;
-    border: 1px solid transparent;
-    border-bottom: 2px solid transparent;
-    scroll-snap-align: start;
-    transition: background 0.15s, border-color 0.15s, color 0.15s;
-    position: relative;
     background: transparent;
     color: var(--modal-text-dim);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
 }
 
 .cmd-panel-tab:hover {
-    background: var(--modal-hover-bg);
     color: var(--modal-text);
+    background: var(--modal-hover-bg);
 }
 
 .cmd-panel-tab.active {
-    background: var(--modal-active-bg);
-    border-color: var(--modal-border-active);
-    border-bottom-color: var(--modal-border-active);
     color: var(--modal-text);
+    background: var(--modal-hover-bg);
 }
 
 .cmd-panel-tab-name {
-    font-size: 0.75rem;
-    font-family: var(--font-mono);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -8040,48 +8020,60 @@ body.adaptive-light .cmd-panel-tab-bar {
 }
 
 .cmd-panel-tab-dirty {
-    color: var(--tab-dirty-dot);
-    font-size: 0.5rem;
+    color: var(--accent-warning);
+    font-size: 0.55rem;
     flex-shrink: 0;
+    line-height: 1;
 }
 
 .cmd-panel-tab-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: none;
     border: none;
-    color: var(--text-muted);
+    color: var(--modal-close-idle);
     cursor: pointer;
     padding: 0 2px;
-    font-size: 0.9rem;
+    font-size: 1rem;
     line-height: 1;
-    opacity: 0;
-    transition: opacity 0.15s, color 0.15s;
+    transition: color 0.15s ease;
+    flex-shrink: 0;
 }
 
-.cmd-panel-tab:hover .cmd-panel-tab-close,
-.cmd-panel-tab-close:hover {
-    opacity: 1;
-    color: var(--text-primary);
+.cmd-panel-tab:hover .cmd-panel-tab-close {
+    color: var(--modal-close-hover);
 }
 
 .cmd-panel-new-tab {
-    background: none;
-    border: 1px solid transparent;
+    flex-shrink: 0;
+    order: 999;
+    background: transparent;
+    border: 0;
     color: var(--modal-text-dim);
     cursor: pointer;
-    padding: 4px 8px;
-    font-size: 1rem;
+    padding: 0.2rem 0.4rem;
+    font-size: 0.85rem;
     line-height: 1;
-    border-radius: 4px;
-    flex-shrink: 0;
-    transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
-    opacity: 0.85;
+    font-family: var(--font-mono);
+    transition: color 0.15s ease, background 0.15s ease;
 }
 
 .cmd-panel-new-tab:hover {
-    background: var(--modal-hover-bg);
-    border-color: var(--modal-border-strong);
     color: var(--modal-text);
-    opacity: 1;
+    background: var(--modal-hover-bg);
+}
+
+.cmd-panel-tab:focus-visible,
+.cmd-panel-new-tab:focus-visible,
+.cmd-panel-tab-close:focus-visible {
+    outline: 1px solid var(--modal-text);
+    outline-offset: 0;
+}
+
+.cmd-panel-tab-bar .cmd-panel-close {
+    flex-shrink: 0;
+    margin-left: auto;
 }
 
 .cmd-panel-tab-container {
@@ -8122,79 +8114,6 @@ body.adaptive-light .cmd-panel-tab-bar {
     cursor: pointer;
     z-index: 5;
     white-space: nowrap;
-}
-
-.cmd-panel-tab-scroll-left,
-.cmd-panel-tab-scroll-right {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 20px;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 2;
-    pointer-events: none;
-}
-
-.cmd-panel-tab-scroll-left {
-    left: 0;
-    background: linear-gradient(to right, var(--bg-secondary), transparent);
-}
-
-.cmd-panel-tab-scroll-right {
-    right: 0;
-    background: linear-gradient(to left, var(--bg-secondary), transparent);
-}
-
-.cmd-panel-tab-scroll-left.visible,
-.cmd-panel-tab-scroll-right.visible {
-    display: flex;
-}
-
-:root {
-    --tab-active-border: var(--modal-border);
-    --tab-dirty-dot: #ff4444;
-}
-
-body.light-mode,
-body.adaptive-light {
-    --tab-dirty-dot: #cc0000;
-}
-
-/* CTA Theme Variants for Tab Bar (matches #cmd-panel CTA style for visual consistency) */
-body.cta-blur .cmd-panel-tab-bar {
-    background: rgba(0, 0, 0, 0.4);
-    border-bottom-color: rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-}
-body.light-mode.cta-blur .cmd-panel-tab-bar,
-body.adaptive-light.cta-blur .cmd-panel-tab-bar {
-    background: rgba(0, 0, 0, 0.2);
-    border-bottom-color: rgba(0, 0, 0, 0.1);
-}
-
-body.cta-glass .cmd-panel-tab-bar {
-    background: rgba(255, 255, 255, 0.06);
-    border-bottom-color: rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-}
-body.light-mode.cta-glass .cmd-panel-tab-bar,
-body.adaptive-light.cta-glass .cmd-panel-tab-bar {
-    background: rgba(255, 255, 255, 0.4);
-    border-bottom-color: rgba(0, 0, 0, 0.1);
-}
-
-body.cta-solid .cmd-panel-tab-bar {
-    background: var(--bg-secondary);
-    border-bottom-color: var(--border-dark);
-}
-
-body.cta-outline .cmd-panel-tab-bar {
-    background: transparent;
-    border-bottom-color: var(--border-muted);
 }
 
 /* CMD Panel Tab Context Menu */
