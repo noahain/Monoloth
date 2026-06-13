@@ -41,9 +41,6 @@
       "timestampUrl": "",
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
-      },
-      "nsis": {
-        "installMode": "perMachine"
       }
     }
   },
