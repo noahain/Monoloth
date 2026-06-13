@@ -494,8 +494,13 @@
             cursorStyle: 'block',
             scrollback: 2000,
             smoothScrollDuration: 0,
-            convertEol: true,
-            windowsMode: true
+            windowsMode: true,
+            scrollOnUserInput: true,
+            scrollSensitivity: 1,
+            allowProposedApi: true,
+            minimumContrastRatio: 1,
+            fastScrollModifier: 'alt',
+            fastScrollSensitivity: 5
         });
 
         var fitAddon = new FitAddon.FitAddon();

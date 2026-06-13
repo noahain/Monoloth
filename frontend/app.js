@@ -2705,7 +2705,6 @@
     }
 
     function openFilePicker(opts) {
-        console.log('[Monoloth][Picker] openFilePicker called with opts:', JSON.stringify(opts));
         if (!fpEl) { console.error('[Monoloth][Picker] fpEl is null'); return Promise.reject(new Error('Picker element not found')); }
         if (!window.monolithApi) { console.error('[Monoloth][Picker] monolithApi not available'); return Promise.reject(new Error('Picker not available')); }
         if (fpState.resolve) { return Promise.reject(new Error('Picker already open')); }
@@ -2726,7 +2725,6 @@
         fpOk.textContent = fpState.mode === 'folder' ? 'Select Folder' : 'Open';
 
         var startPath = opts.startPath || _getLastDirectory(fpState.pickerId) || 'C:\\';
-        console.log('[Monoloth][Picker] startPath resolved to:', startPath);
         navigateToPath(startPath);
 
         return new Promise(function (resolve, reject) {
@@ -2777,14 +2775,10 @@
     }
 
     function navigateToPath(path) {
-        console.log('[Monoloth][Picker] navigateToPath called with path:', path);
         if (!path) { console.warn('[Monoloth][Picker] navigateToPath: empty path'); return; }
         showLoading(true);
-        console.log('[Monoloth][Picker] Calling get_path_info for:', path);
         window.monolithApi.get_path_info(path).then(function (info) {
-            console.log('[Monoloth][Picker] get_path_info returned:', JSON.stringify(info));
             if (!info || !info.success || !info.exists) {
-                console.log('[Monoloth][Picker] Path does not exist or error:', info ? info.exists : 'null info');
                 showLoading(false);
                 if (!info || !info.success) {
                     showError('Access denied or network error');
@@ -2794,7 +2788,6 @@
                 return;
             }
             var target = info.isDir ? info.absolute : info.parent;
-            console.log('[Monoloth][Picker] Navigating to:', target);
             doNavigate(target);
         }).catch(function (err) {
             console.error('[Monoloth][Picker] get_path_info error:', err);
@@ -2817,13 +2810,10 @@
     }
 
     function loadDirectory(path) {
-        console.log('[Monoloth][Picker] loadDirectory called for:', path);
         showLoading(true);
         window.monolithApi.list_directory(path).then(function (result) {
-            console.log('[Monoloth][Picker] list_directory returned:', JSON.stringify(result).substring(0, 300));
             showLoading(false);
             if (!result || !result.success) { console.warn('[Monoloth][Picker] list_directory failed'); showError('Access denied'); return; }
-            if (!result.entries || result.entries.length === 0) { console.log('[Monoloth][Picker] Directory empty:', path); }
             fpState._listings[path] = result.entries;
             renderEntries(result.entries);
             renderBreadcrumb(path);
@@ -2994,7 +2984,6 @@
     }
 
     function showLoading(s) {
-        console.log('[Monoloth][Picker] showLoading:', s);
         if (!fpLoading) { console.warn('[Monoloth][Picker] fpLoading element missing'); return; }
         fpLoading.style.display = s ? 'flex' : 'none';
         if (fpFileList) fpFileList.style.display = s ? 'none' : '';
@@ -3002,7 +2991,6 @@
     }
 
     function showEmpty() {
-        console.log('[Monoloth][Picker] showEmpty called');
         if (fpEmpty) fpEmpty.style.display = 'flex';
         if (fpEmpty) fpEmpty.querySelector('span').textContent = 'This folder is empty';
         if (fpFileList) fpFileList.innerHTML = '';
@@ -3012,7 +3000,6 @@
     }
 
     function showError(msg) {
-        console.log('[Monoloth][Picker] showError called:', msg);
         if (fpEmpty) fpEmpty.style.display = 'flex';
         if (fpEmpty) fpEmpty.querySelector('span').textContent = msg;
         if (fpFileList) fpFileList.innerHTML = '';
@@ -3420,8 +3407,9 @@
             _idReject = reject;
             if (idTitle) idTitle.textContent = title;
             if (idBody) {
-                idBody.innerHTML = '<input type="text" id="id-input-field" class="id-input" placeholder="' + (label || '') + '"><div id="id-input-error" class="id-error"></div>';
+                idBody.innerHTML = '<input type="text" id="id-input-field" class="id-input"><div id="id-input-error" class="id-error"></div>';
                 var inp = document.getElementById('id-input-field');
+                if (inp) inp.setAttribute('placeholder', label || '');
                 if (inp && defaultValue) inp.value = defaultValue;
                 setTimeout(function () { if (inp) { inp.focus(); inp.select(); } }, 50);
                 var onKey = function (e) {
@@ -3818,8 +3806,10 @@
                 var tabId = sessionId.replace('panel-', '');
                 var tab = window.SidebarManager.getTab(tabId);
                 if (!tab) return;
+                _skipNextEof[sessionId] = true;
                 if (window.monolithApi) {
-                    window.monolithApi.terminate_terminal(sessionId).catch(function () {});
+                    window.monolithApi.terminate_terminal(sessionId)
+                        .finally(function () { _skipNextEof[sessionId] = false; }).catch(function () {});
                 }
                 if (tab.term) {
                     try { tab.term.dispose(); } catch (e) {}
