@@ -865,7 +865,7 @@
         setTimeout(function () { refitActiveTab(); }, 50);
     }
 
-    function hideCmdPanel() {
+    function hideCmdPanel(persist) {
         _cmdPanelOpen = false;
         _panelClosing = true;
         if (cmdPanel) {
@@ -878,7 +878,7 @@
         }
         var panelBtn = sidebarButtons.querySelector('[data-btn-id="open_cmd_panel"]');
         if (panelBtn) panelBtn.classList.remove('active');
-        if (window.monolithApi) {
+        if (persist !== false && window.monolithApi) {
             window.monolithApi.set_config('cmdPanelOpen', false).catch(function () {});
         }
     }

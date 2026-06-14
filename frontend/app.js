@@ -1346,7 +1346,7 @@
                 var tabsSnap = window.SidebarManager.getAllTabs().slice();
                 tabsSnap.forEach(function (t) { window.SidebarManager.closeTab(t.id, true); });
             }
-            window.SidebarManager.hideCmdPanel();
+            window.SidebarManager.hideCmdPanel(false);
         }
         if (window.monolithApi) {
             window.monolithApi.terminate_terminal('main').catch(function () {});
