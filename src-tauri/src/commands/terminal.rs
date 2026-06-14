@@ -227,9 +227,26 @@ fn pick_windows_executable(where_output: &str) -> Option<String> {
         .cloned()
 }
 
+/// Build a `Command` that never allocates/flashes a console window.
+///
+/// In release builds the app runs under the `windows` subsystem (no console).
+/// Spawning a child console process then forces Windows to allocate a fresh
+/// conhost.exe per child, which costs ~1-2s and flashes a window. Setting
+/// CREATE_NO_WINDOW avoids that. Debug builds run under the console subsystem
+/// so the difference is invisible there — which is why this only froze release.
+fn no_window_command(program: &str) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
 fn find_opencode() -> Result<String, String> {
     use std::path::PathBuf;
-    use std::process::Command;
     if let Ok(p) = std::env::var("OPENCODE_BIN_PATH") {
         let p = p.trim();
         if !p.is_empty() {
@@ -238,7 +255,7 @@ fn find_opencode() -> Result<String, String> {
     }
 
     if cfg!(windows) {
-        if let Ok(output) = Command::new("where").arg("opencode").output() {
+        if let Ok(output) = no_window_command("where").arg("opencode").output() {
             if output.status.success() {
                 let path = String::from_utf8_lossy(&output.stdout);
                 if let Some(best) = pick_windows_executable(&path) {
@@ -257,7 +274,7 @@ fn find_opencode() -> Result<String, String> {
             }
         }
 
-        if let Ok(output) = Command::new("cmd")
+        if let Ok(output) = no_window_command("cmd")
             .args(["/C", "npm", "prefix", "-g"])
             .output()
         {
@@ -274,7 +291,7 @@ fn find_opencode() -> Result<String, String> {
             }
         }
 
-        if let Ok(output) = Command::new("cmd").args(["/C", "yarn", "global", "bin"]).output() {
+        if let Ok(output) = no_window_command("cmd").args(["/C", "yarn", "global", "bin"]).output() {
             if output.status.success() {
                 let bin_dir = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 let cmd_path = format!("{}\\opencode.cmd", bin_dir);
@@ -284,7 +301,7 @@ fn find_opencode() -> Result<String, String> {
             }
         }
     } else {
-        if let Ok(output) = Command::new("which").arg("opencode").output() {
+        if let Ok(output) = no_window_command("which").arg("opencode").output() {
             if output.status.success() {
                 let path = String::from_utf8_lossy(&output.stdout);
                 if let Some(first) = path.lines().next() {

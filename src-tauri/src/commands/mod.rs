@@ -88,11 +88,17 @@ pub(super) fn parse_path(path: &str) -> PathBuf {
 }
 
 pub(super) fn shell_command(command: &str) -> Command {
-    if cfg!(windows) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
         let mut cmd = Command::new("cmd");
         cmd.args(["/C", command]);
+        cmd.creation_flags(CREATE_NO_WINDOW);
         cmd
-    } else {
+    }
+    #[cfg(not(windows))]
+    {
         let mut cmd = Command::new("sh");
         cmd.args(["-c", command]);
         cmd
