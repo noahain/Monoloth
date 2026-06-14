@@ -89,8 +89,12 @@
 
     function handleOpenCmdProject() {
         if (!window.monolithApi) return;
-        var dir = getCurrentDir() || '%USERPROFILE%';
-        var shell = _panelShell === 'powershell' ? 'powershell' : 'cmd';
+        var dir = getCurrentDir() || (UI.isWindows() ? '%USERPROFILE%' : '');
+        // On Windows the backend opens the chosen shell via `cmd /K <shell>`.
+        // On Unix the backend launches the system terminal; passing a shell name
+        // as the "command" would try to run a nonexistent `cmd` binary, so send
+        // an empty command and just open a terminal at the directory.
+        var shell = UI.isWindows() ? (_panelShell === 'powershell' ? 'powershell' : 'cmd') : '';
         window.monolithApi.open_external_terminal(shell, dir).catch(function () {});
     }
 
@@ -99,7 +103,7 @@
         if (_cmdPanelOpen) {
             hideCmdPanel();
         } else {
-            var dir = getCurrentDir() || '%USERPROFILE%';
+            var dir = getCurrentDir() || (UI.isWindows() ? '%USERPROFILE%' : '');
             openCmdPanelAt(dir);
         }
     }
