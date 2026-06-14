@@ -10,10 +10,12 @@
 
   <p><strong>Agent-agnostic desktop shell for CLI coding tools</strong></p>
 
+  <p>Run OpenCode, Claude Code, and other CLI agents in a real desktop window instead of a bare terminal.</p>
+
   <p>
-    <img src="https://img.shields.io/badge/version-2.1.3-blue" alt="version" />
+    <img src="https://img.shields.io/badge/version-2.1.4-blue" alt="version" />
     <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
-    <img src="https://img.shields.io/badge/platform-Windows-lightgrey" alt="platform" />
+    <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey" alt="platform" />
     <img src="https://img.shields.io/badge/rust-1.77.2-orange" alt="rust" />
     <img src="https://img.shields.io/badge/tauri-2.11.1-purple" alt="tauri" />
   </p>
@@ -23,7 +25,7 @@
 
 ---
 
-Monoloth wraps CLI coding agents (like OpenCode and Claude Code) in a native Windows desktop shell. Choose a project directory to start a session with integrated terminal emulation and session history tracking.
+Monoloth wraps CLI coding agents (like OpenCode and Claude Code) in a native desktop shell on Windows, macOS, and Linux. Choose a project directory to start a session with integrated terminal emulation and session history tracking.
 
 We built the backend with Tauri 2 and Rust, and the frontend with vanilla JavaScript. The project does not use a bundler, a `package.json` file, or a Node.js build process.
 
@@ -94,9 +96,9 @@ The system serves frontend assets directly from the `frontend/` directory, requi
 
 ### Prerequisites
 
-- **Windows 10 or newer** (WebView2 bundles via the `embedBootstrapper` configuration)
 - **Rust toolchain** 1.77.2 or newer
-- **Build Tools**: [C++ Build Tools](https://learn.microsoft.com/en-us/cpp/build/vscpp-step-0-installation)
+- **Windows**: Windows 10 or newer (the installer fetches the WebView2 runtime) and [C++ Build Tools](https://learn.microsoft.com/en-us/cpp/build/vscpp-step-0-installation)
+- **macOS / Linux**: builds are supported; on Linux install the webkit2gtk development packages (see the dependency list in `.github/workflows/release.yml`)
 
 ### Project Structure
 
@@ -142,13 +144,19 @@ Monoloth/
 │   ├── icon.png
 │   ├── icon.ico
 │   └── screenshots/
-└── .github/workflows/release.yml
+├── .github/
+│   ├── ISSUE_TEMPLATE/         # Bug report + feature request forms
+│   └── workflows/release.yml   # Cross-platform build & release
+├── ARCHITECTURE.md             # How the system fits together
+├── CONTRIBUTING.md             # Build, style, and PR guide
+├── CHANGELOG.md                # Release history
+└── SECURITY.md                 # Reporting + what the app accesses
 ```
 </details>
 
 ### Configuration
 
-The application stores settings at `%APPDATA%/Monoloth/config.json` and saves user profiles in `%APPDATA%/Monoloth/profiles/`.
+The application stores settings at `%APPDATA%/Monoloth/config.json` and saves user profiles in `%APPDATA%/Monoloth/profiles/`. On macOS and Linux, config lives in the platform's standard config directory instead.
 
 | Parameter | Default Value | Description |
 | --------- | ------------- | ----------- |
@@ -171,6 +179,22 @@ The application stores settings at `%APPDATA%/Monoloth/config.json` and saves us
 ### Tech Stack
 
 Rust 1.77.2 • Tauri 2.11.1 • portable-pty • xterm.js • WebGL • Vanilla JS • HTML5 • CSS3
+
+### Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for build
+instructions and [ARCHITECTURE.md](ARCHITECTURE.md) for a tour of the codebase.
+
+### Security & Updates
+
+Monoloth checks for updates through the Tauri updater and notifies you when one
+is available. Update artifacts are signed with a minisign key, and the app
+verifies that signature before installing.
+
+As a shell for CLI agents, Monoloth spawns terminal sessions and runs the
+command you configure, and it reads the project directory you choose. Settings
+and profiles stay local in `%APPDATA%/Monoloth/`. For the full picture and how
+to report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ### License
 MIT
