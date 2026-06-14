@@ -24,17 +24,13 @@ pub fn start_terminal(
     let directory = expand_env_vars(&directory);
 
     if is_panel {
-        let shell_exe = match shell.as_deref().unwrap_or("cmd") {
-            "powershell" | "pwsh" => "powershell",
-            _ => "cmd",
-        };
-        let (cmd, args) = resolve_command(shell_exe)?;
+        let (cmd, args) = resolve_panel_shell(shell.as_deref())?;
         let args_str: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         let gen = pty.spawn(&session_id, &cmd, &args_str, &directory, cols, rows)?;
 
         let active_profile = config.get_active_profile();
         if record {
-            history.session_start_with_id(&session_id, &active_profile, &format!("[Panel] {}", shell_exe), &directory);
+            history.session_start_with_id(&session_id, &active_profile, &format!("[Panel] {}", cmd), &directory);
         }
         return Ok(gen);
     }
@@ -123,6 +119,33 @@ pub fn run_parallel_command(cmd: String, cwd: String) -> Result<bool, String> {
         .spawn()
         .map_err(|e| format!("Failed to spawn: {}", e))?;
     Ok(true)
+}
+
+/// Resolve the executable + args for the secondary CMD panel.
+///
+/// On Windows the frontend offers cmd / powershell. On Unix those executables
+/// don't exist, so we ignore the requested shell and launch the user's login
+/// shell (`$SHELL`), falling back to bash then sh.
+fn resolve_panel_shell(requested: Option<&str>) -> Result<(String, Vec<String>), String> {
+    if cfg!(windows) {
+        let shell_exe = match requested.unwrap_or("cmd") {
+            "powershell" | "pwsh" => "powershell",
+            _ => "cmd",
+        };
+        resolve_command(shell_exe)
+    } else {
+        let shell = std::env::var("SHELL")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| {
+                if std::path::Path::new("/bin/bash").exists() {
+                    "/bin/bash".to_string()
+                } else {
+                    "/bin/sh".to_string()
+                }
+            });
+        Ok((shell, vec![]))
+    }
 }
 
 fn resolve_command(preset: &str) -> Result<(String, Vec<String>), String> {

@@ -117,6 +117,23 @@
         btns.forEach(function (b) { b.classList.toggle('active', predicate(b)); });
     }
 
+    // Platform detection. The webview reports the host OS in its user-agent
+    // string (WebView2 -> "Windows NT", WKWebView -> "Mac OS X", webkit2gtk ->
+    // "Linux"). Cached on first call. No IPC needed.
+    var _platform = null;
+    function getPlatform() {
+        if (_platform) return _platform;
+        var ua = (navigator.userAgent || '');
+        if (/Windows/i.test(ua)) _platform = 'windows';
+        else if (/Mac OS X|Macintosh/i.test(ua)) _platform = 'macos';
+        else _platform = 'linux';
+        return _platform;
+    }
+
+    function isWindows() {
+        return getPlatform() === 'windows';
+    }
+
     function togglePanelExitBanner(banner, show, onClick) {
         if (!banner) return;
         if (show) {
@@ -149,6 +166,8 @@
         waitFor: waitFor,
         setActiveButtonGroup: setActiveButtonGroup,
         togglePanelExitBanner: togglePanelExitBanner,
+        getPlatform: getPlatform,
+        isWindows: isWindows,
         ANIM_EXIT_MS: ANIM_EXIT_MS,
         ANIM_COLLAPSE_MS: ANIM_COLLAPSE_MS
     };

@@ -2763,7 +2763,7 @@
         openModal(fpEl);
         fpOk.textContent = fpState.mode === 'folder' ? 'Select Folder' : 'Open';
 
-        var startPath = opts.startPath || _getLastDirectory(fpState.pickerId) || 'C:\\';
+        var startPath = opts.startPath || _getLastDirectory(fpState.pickerId) || (UI.isWindows() ? 'C:\\' : '/');
         navigateToPath(startPath);
 
         return new Promise(function (resolve, reject) {

@@ -1031,8 +1031,12 @@
 
         html += '<div class="form-group"><label>Panel Shell</label>';
         html += '<select id="panel-shell-select" class="secondary-cmd-mode" style="width:100%;">';
-        html += '<option value="cmd"' + (_panelShell === 'cmd' ? ' selected' : '') + '>cmd (Command Prompt)</option>';
-        html += '<option value="powershell"' + (_panelShell === 'powershell' ? ' selected' : '') + '>PowerShell</option>';
+        if (UI.isWindows()) {
+            html += '<option value="cmd"' + (_panelShell === 'cmd' ? ' selected' : '') + '>cmd (Command Prompt)</option>';
+            html += '<option value="powershell"' + (_panelShell === 'powershell' ? ' selected' : '') + '>PowerShell</option>';
+        } else {
+            html += '<option value="default" selected>System default ($SHELL)</option>';
+        }
         html += '</select></div>';
 
         html += '</div></div>';
