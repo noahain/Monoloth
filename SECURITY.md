@@ -14,10 +14,9 @@ before reporting a vulnerability.
 
 Please report security issues privately, not in public issues.
 
-- Preferred: open a private advisory through GitHub's
-  ["Report a vulnerability"](https://github.com/noahain/Monoloth/security/advisories/new)
-  button on the Security tab.
-- Email: `TODO@example.com` <!-- replace with a real contact address -->
+Open a private advisory through GitHub's
+["Report a vulnerability"](https://github.com/noahain/Monoloth/security/advisories/new)
+button on the Security tab.
 
 Include what you found, how to reproduce it, and the impact. Expect an
 acknowledgment within a few days.
