@@ -135,3 +135,69 @@ jobs:
             src-tauri/target/*/release/bundle/**
             portable/**
           if-no-files-found: warn
+
+  # Each matrix job above generates a latest.json containing ONLY the platform
+  # it built, and they race to upload it -> the published manifest ends up
+  # single-platform (historically Windows-only), breaking auto-updates for
+  # macOS and Linux. This job runs after the whole matrix, reads every
+  # uploaded updater .sig (whose verbatim text IS the signature value), and
+  # writes one combined latest.json that covers all platforms.
+  finalize-updater:
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Assemble cross-platform latest.json
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          BASE="https://github.com/${REPO}/releases/download/${TAG}"
+          WORK="$(mktemp -d)"
+          assets=$(gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name')
+
+          # first non-.sig asset matching the regex
+          find_asset() { echo "$assets" | grep -E "$1" | grep -v '\.sig$' | head -n1; }
+          # download <name>.sig and print its verbatim contents (the signature)
+          sig_of() {
+            gh release download "$TAG" --repo "$REPO" -p "$1.sig" -O "$WORK/$1.sig" --clobber >/dev/null
+            cat "$WORK/$1.sig"
+          }
+
+          WIN_MSI=$(find_asset '_x64_en-US\.msi$')
+          WIN_NSIS=$(find_asset '_x64-setup\.exe$')
+          MAC_ARM=$(find_asset 'aarch64\.app\.tar\.gz$')
+          MAC_X64=$(find_asset '_x64\.app\.tar\.gz$')
+          LINUX=$(find_asset 'amd64\.AppImage$')
+          for v in WIN_MSI WIN_NSIS MAC_ARM MAC_X64 LINUX; do
+            if [ -z "${!v}" ]; then echo "::error::missing updater asset for $v"; exit 1; fi
+          done
+
+          jq -n \
+            --arg version "$VERSION" \
+            --arg pubdate "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
+            --arg win_msi_url   "$BASE/$WIN_MSI"  --arg win_msi_sig  "$(sig_of "$WIN_MSI")" \
+            --arg win_nsis_url  "$BASE/$WIN_NSIS" --arg win_nsis_sig "$(sig_of "$WIN_NSIS")" \
+            --arg mac_arm_url   "$BASE/$MAC_ARM"  --arg mac_arm_sig  "$(sig_of "$MAC_ARM")" \
+            --arg mac_x64_url   "$BASE/$MAC_X64"  --arg mac_x64_sig  "$(sig_of "$MAC_X64")" \
+            --arg linux_url     "$BASE/$LINUX"    --arg linux_sig    "$(sig_of "$LINUX")" \
+            '{
+              version: $version,
+              notes: "See the assets below to download and install.",
+              pub_date: $pubdate,
+              platforms: {
+                "windows-x86_64":      { signature: $win_msi_sig,  url: $win_msi_url },
+                "windows-x86_64-msi":  { signature: $win_msi_sig,  url: $win_msi_url },
+                "windows-x86_64-nsis": { signature: $win_nsis_sig, url: $win_nsis_url },
+                "darwin-aarch64":      { signature: $mac_arm_sig,  url: $mac_arm_url },
+                "darwin-x86_64":       { signature: $mac_x64_sig,  url: $mac_x64_url },
+                "linux-x86_64":        { signature: $linux_sig,    url: $linux_url }
+              }
+            }' > "$WORK/latest.json"
+
+          echo "Assembled latest.json:"; jq '.platforms | keys' "$WORK/latest.json"
+          gh release upload "$TAG" --repo "$REPO" "$WORK/latest.json" --clobber

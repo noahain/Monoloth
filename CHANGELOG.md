@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.6] - 2026-06-14
+
+### Fixed
+- Auto-updates for macOS and Linux. Each platform's release job generated a
+  `latest.json` describing only the platform it built, and all jobs raced to
+  upload it, so the published manifest ended up Windows-only (true since
+  2.1.4). macOS and Linux clients never saw an update. A new `finalize-updater`
+  job now runs after the build matrix, collects every platform's updater
+  signature, and publishes a single `latest.json` covering Windows (msi/nsis),
+  macOS (aarch64/x86_64), and Linux (AppImage).
+
 ## [2.1.5] - 2026-06-14
 
 ### Added
