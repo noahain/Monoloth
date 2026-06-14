@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   behavior.
 
 ### Changed
+- Split the monolithic `app.js` (~3900 lines) into focused modules to improve
+  maintainability. Phase 1 extracts shortcut management (`shortcuts.js`), the
+  inline confirm/prompt dialog (`dialog.js`), the file/folder picker
+  (`file-picker.js`), the command palette (`command-palette.js`), and profile
+  management (`profiles.js`), each exposing a single `window.Monolith*` global.
+  Behavior is unchanged; `app.js` drops to ~2400 lines.
 - The CMD panel launches the user's `$SHELL` on macOS and Linux instead of
   assuming `cmd`/PowerShell. The settings shell selector adapts per platform.
 - The file picker defaults to `/` on Unix instead of `C:\`.

@@ -272,6 +272,21 @@ function createHarness(backgroundConfig) {
     const updaterToastSource = fs.readFileSync('frontend/lib/updater-toast.js', 'utf8');
     vm.runInContext(updaterToastSource, context, { filename: 'frontend/lib/updater-toast.js' });
 
+    const shortcutsSource = fs.readFileSync('frontend/shortcuts.js', 'utf8');
+    vm.runInContext(shortcutsSource, context, { filename: 'frontend/shortcuts.js' });
+
+    const dialogSource = fs.readFileSync('frontend/dialog.js', 'utf8');
+    vm.runInContext(dialogSource, context, { filename: 'frontend/dialog.js' });
+
+    const filePickerSource = fs.readFileSync('frontend/file-picker.js', 'utf8');
+    vm.runInContext(filePickerSource, context, { filename: 'frontend/file-picker.js' });
+
+    const commandPaletteSource = fs.readFileSync('frontend/command-palette.js', 'utf8');
+    vm.runInContext(commandPaletteSource, context, { filename: 'frontend/command-palette.js' });
+
+    const profilesSource = fs.readFileSync('frontend/profiles.js', 'utf8');
+    vm.runInContext(profilesSource, context, { filename: 'frontend/profiles.js' });
+
     const source = fs.readFileSync('frontend/app.js', 'utf8');
     vm.runInContext(source, context, { filename: 'frontend/app.js' });
 

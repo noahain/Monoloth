@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
     'use strict';
 
     const landing = document.getElementById('landing');
@@ -36,8 +36,6 @@
     var _currentColor = '#0a0a0a';
     var _currentGradient = '';
     var _bgLayer = 'behind';
-    var _filePickerType = 'custom';
-    var _confirmPrefs = {};
 
     function isGifUrl(url) {
         if (!url) return false;
@@ -47,15 +45,6 @@
 
     function cacheBustParam(url) {
         return (url.indexOf('?') === -1 ? '?t=' : '&t=') + Date.now();
-    }
-
-    function normalizeKeyName(key) {
-        if (key === ' ') return 'Space';
-        if (key === ',') return 'Comma';
-        if (key === '.') return 'Period';
-        if (key === '+') return 'Plus';
-        if (key.length === 1) return key.toUpperCase();
-        return key.charAt(0).toUpperCase() + key.slice(1);
     }
 
     function copyToClipboard(text) { navigator.clipboard.writeText(text).catch(function () {}); }
@@ -70,180 +59,6 @@
     var silent = UI.silent;
     var openModal = UI.openModal;
     var closeModal = UI.closeModal;
-
-    // --- Shortcut Management ---
-    var DEFAULT_SHORTCUTS = {
-        command_palette: 'Ctrl+P',
-        settings: 'Ctrl+,',
-        toggle_sidebar: 'Ctrl+B',
-        cmd_panel: 'Ctrl+J',
-        clear_terminal: 'Ctrl+K',
-        switch_profile: 'Ctrl+Shift+P',
-        back_to_launcher: 'Ctrl+Shift+W'
-    };
-
-    var _shortcuts = {};
-
-    function loadShortcuts(callback) {
-        if (!window.monolithApi) {
-            if (callback) callback({});
-            return;
-        }
-        if (typeof window.monolithApi.get_shortcuts !== 'function') {
-            if (callback) callback({});
-            return;
-        }
-        window.monolithApi.get_shortcuts()
-            .then(function (result) {
-                try {
-                    _shortcuts = (result && result.shortcuts) || {};
-                } catch (e) {
-                    _shortcuts = {};
-                }
-                // Fill in defaults for missing keys
-                for (var key in DEFAULT_SHORTCUTS) {
-                    if (!_shortcuts[key]) {
-                        _shortcuts[key] = DEFAULT_SHORTCUTS[key];
-                    }
-                }
-                if (callback) callback(_shortcuts);
-            })
-            .catch(function (e) {
-                _shortcuts = {};
-                for (var key in DEFAULT_SHORTCUTS) {
-                    if (!_shortcuts[key]) {
-                        _shortcuts[key] = DEFAULT_SHORTCUTS[key];
-                    }
-                }
-                if (callback) callback(_shortcuts);
-            });
-    }
-
-    function saveShortcuts(callback) {
-        if (!window.monolithApi) {
-            if (callback) callback();
-            return;
-        }
-        if (typeof window.monolithApi.save_shortcuts !== 'function') {
-            if (callback) callback();
-            return;
-        }
-        window.monolithApi.save_shortcuts(_shortcuts)
-            .then(function () {
-                if (callback) callback();
-            })
-            .catch(function (e) {
-                console.error('Failed to save shortcuts:', e);
-                if (callback) callback();
-            });
-    }
-
-    function getShortcut(name) {
-        return _shortcuts[name] || DEFAULT_SHORTCUTS[name] || '';
-    }
-
-    function resetShortcut(name, callback) {
-        if (DEFAULT_SHORTCUTS[name]) {
-            _shortcuts[name] = DEFAULT_SHORTCUTS[name];
-            saveShortcuts(callback);
-        }
-    }
-
-    function parseShortcutString(str) {
-        var keyOverride = '';
-        if (str.indexOf('++') !== -1) {
-            keyOverride = 'Plus';
-            str = str.replace(/\+\+/g, '+');
-        }
-        var parts = str.split('+');
-        var result = { ctrl: false, shift: false, alt: false, meta: false, key: keyOverride };
-        for (var i = 0; i < parts.length; i++) {
-            var p = parts[i].trim().toLowerCase();
-            if (!p) continue;
-            if (p === 'ctrl' || p === 'control') result.ctrl = true;
-            else if (p === 'shift') result.shift = true;
-            else if (p === 'alt') result.alt = true;
-            else if (p === 'meta' || p === 'cmd' || p === 'command') result.meta = true;
-            else if (p === ',') result.key = 'Comma';
-            else if (p === '.') result.key = 'Period';
-            else if (p === ' ') result.key = 'Space';
-            else if (p === '+' || p === 'plus') result.key = 'Plus';
-            else result.key = p.toUpperCase();
-        }
-        return result;
-    }
-
-    function shortcutMatches(e, shortcutStr) {
-        var s = parseShortcutString(shortcutStr);
-        var eventKey = normalizeKeyName(e.key);
-
-        return e.ctrlKey === s.ctrl &&
-               e.shiftKey === s.shift &&
-               e.altKey === s.alt &&
-               (e.metaKey || false) === s.meta &&
-               eventKey.toLowerCase() === s.key.toLowerCase();
-    }
-
-    function renderShortcutUI() {
-        for (var key in DEFAULT_SHORTCUTS) {
-            var el = document.getElementById('shortcut-' + key);
-            if (el) el.textContent = getShortcut(key).replace(/\+/g, ' + ');
-        }
-    }
-
-    function renderShortcutHint(el, shortcut, suffix) {
-        if (!el) return;
-        el.textContent = '';
-        var parts = shortcut.split('+');
-        for (var i = 0; i < parts.length; i++) {
-            if (i > 0) el.appendChild(document.createTextNode('+'));
-            var kbd = document.createElement('kbd');
-            kbd.textContent = parts[i].trim();
-            el.appendChild(kbd);
-        }
-        if (suffix) el.appendChild(document.createTextNode(' ' + suffix));
-    }
-
-    function updateKbdHint() {
-        var cmds = getShortcut('command_palette');
-        var settings = getShortcut('settings');
-
-        var cmdsEl = document.getElementById('landing-shortcut-commands');
-        if (cmdsEl) {
-            renderShortcutHint(cmdsEl, cmds, 'Commands');
-        }
-
-        var settingsEl = document.getElementById('landing-shortcut-settings');
-        if (settingsEl) {
-            renderShortcutHint(settingsEl, settings, 'Settings');
-        }
-
-        var settingsBtn = document.getElementById('settings-btn');
-        if (settingsBtn) {
-            if (window.MonolothTooltip) {
-                window.MonolothTooltip.detach(settingsBtn);
-            }
-            var newTip = 'Settings (' + settings.replace(/\+/g, ' + ') + ')';
-            settingsBtn.setAttribute('data-tooltip', newTip);
-            settingsBtn.setAttribute('aria-label', 'Open ' + newTip);
-            if (window.MonolothTooltip) {
-                window.MonolothTooltip.attach(settingsBtn, newTip);
-            }
-        }
-
-        var tbMenu = document.getElementById('tb-menu');
-        if (tbMenu) {
-            if (window.MonolothTooltip) {
-                window.MonolothTooltip.detach(tbMenu);
-            }
-            var menuTip = 'Command Palette (' + cmds.replace(/\+/g, ' + ') + ')';
-            tbMenu.setAttribute('data-tooltip', menuTip);
-            tbMenu.setAttribute('aria-label', menuTip);
-            if (window.MonolothTooltip) {
-                window.MonolothTooltip.attach(tbMenu, menuTip);
-            }
-        }
-    }
 
     // --- Theme & CTA Style Management ---
     var _themeMode = 'dark';
@@ -443,11 +258,11 @@
         chooseBtn.addEventListener('click', () => {
             waitForBridge(3000, (ready) => {
                 if (!ready) {
-                    chooseBtn.querySelector('span').textContent = 'Failed to initialize — please restart the app';
+                    chooseBtn.querySelector('span').textContent = 'Failed to initialize â€” please restart the app';
                     chooseBtn.style.color = 'var(--accent-red)';
                     return;
                 }
-                pickPath({ id: 'opencode_dir', title: 'Choose Directory', mode: 'folder' })
+                window.MonolithFilePicker.pickPath({ id: 'opencode_dir', title: 'Choose Directory', mode: 'folder' })
                     .then(function (path) {
                         if (!path) return;
                         addToRecentDirectories(path);
@@ -461,24 +276,19 @@
     waitForBridge(5000, function (ready) {
         if (ready) {
             _bridgeReady = true;
-            loadConfirmPrefs();
+            window.MonolithDialog.loadConfirmPrefs();
             updateStatusBar('Ready');
-            loadShortcuts(function () {
-                updateKbdHint();
+            window.MonolithShortcuts.loadShortcuts(function () {
+                window.MonolithShortcuts.updateKbdHint();
             });
             var bgPromise = loadBackgroundConfig();
-            var profilesPromise = loadProfiles();
+            var profilesPromise = window.MonolithProfiles.loadProfiles();
             var startupPromise = loadStartupConfig();
             loadRecentDirectories();
             loadCustomTitlebarConfig();
             setupMaximizeSyncListener();
             setupTitlebarEventHandlers();
             updateMainUILabels();
-            window.monolithApi.get_file_picker_type()
-                .then(function (res) {
-                    _filePickerType = res || 'custom';
-                })
-                .catch(function () {});
             window.monolithApi.get_windows_pty_info()
                 .then(function (info) {
                     _windowsPtyInfo = info || null;
@@ -650,15 +460,15 @@
             loadBackgroundConfig();
             syncTitlebarToggleState();
         } else if (tabName === 'keybinds') {
-            loadShortcuts(function () {
-                renderShortcutUI();
+            window.MonolithShortcuts.loadShortcuts(function () {
+                window.MonolithShortcuts.renderShortcutUI();
             });
         } else if (tabName === 'startup') {
-            loadFilePickerConfig();
+            window.MonolithFilePicker.loadFilePickerConfig();
             loadStartupConfig();
             loadSecondaryCommands();
         } else if (tabName === 'profiles') {
-            loadProfiles();
+            window.MonolithProfiles.loadProfiles();
         } else if (tabName === 'history') {
             loadHistoryTab();
         } else if (tabName === 'sidebar') {
@@ -689,6 +499,10 @@
                 el.classList.remove('error', 'success', 'dismissible', 'anim-exit');
             }, 300);
         }, 6000);
+    }
+
+    if (window.MonolithFilePicker && window.MonolithFilePicker.setStatusReporter) {
+        window.MonolithFilePicker.setStatusReporter(showStatus);
     }
 
     // Click status to dismiss immediately
@@ -1239,7 +1053,7 @@
     var bgPickBtn = document.getElementById('bg-pick-btn');
     if (bgPickBtn) {
         bgPickBtn.addEventListener('click', function () {
-            pickPath({ id: 'bg', title: 'Choose Background Image', mode: 'file', filter: null })
+            window.MonolithFilePicker.pickPath({ id: 'bg', title: 'Choose Background Image', mode: 'file', filter: null })
                 .then(function (filePath) {
                     if (!filePath) return;
                     saveBackground('image', { image: filePath, color: null, gradient: null }, 'Background image set.');
@@ -1304,46 +1118,6 @@
             saveAppearanceSettings('Transparency updated.');
         });
     }
-
-    // --- File Picker ---
-
-    function loadFilePickerConfig() {
-        if (!window.monolithApi) return;
-        window.monolithApi.get_file_picker_type()
-            .then(function (res) {
-                _filePickerType = res || 'custom';
-                updatePickerTypeUI(_filePickerType);
-            })
-            .catch(function () {});
-    }
-
-    function updatePickerTypeUI(type) {
-        var btns = document.querySelectorAll('.picker-type-btn');
-        btns.forEach(function (b) {
-            b.classList.toggle('active', b.dataset.type === type);
-        });
-    }
-
-    function savePickerType(type) {
-        if (!window.monolithApi) return;
-        _filePickerType = type;
-        window.monolithApi.set_file_picker_type(type)
-            .then(function () {
-                showStatus('file-picker-status', 'File picker type saved.', false);
-            })
-            .catch(function () {
-                showStatus('file-picker-status', 'Failed to save.', true);
-            });
-    }
-
-    var pickerTypeBtns = document.querySelectorAll('.picker-type-btn');
-    pickerTypeBtns.forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var type = this.dataset.type;
-            updatePickerTypeUI(type);
-            savePickerType(type);
-        });
-    });
 
     // --- Startup Command ---
     var _startupConfig = { command: 'opencode', type: 'preset' };
@@ -1571,9 +1345,9 @@
     resetBtns.forEach(function (btn) {
         btn.addEventListener('click', function () {
             var key = btn.dataset.key;
-            resetShortcut(key, function () {
-                renderShortcutUI();
-                updateKbdHint();
+            window.MonolithShortcuts.resetShortcut(key, function () {
+                window.MonolithShortcuts.renderShortcutUI();
+                window.MonolithShortcuts.updateKbdHint();
                 showShortcutsStatus('Reset to default', false);
             });
         });
@@ -1615,16 +1389,16 @@
             }
             var newShortcut = parts.join('+');
             // Check for conflicts
-            for (var k in _shortcuts) {
-                if (k !== _editingShortcutKey && _shortcuts[k] === newShortcut) {
+            var allShortcuts = window.MonolithShortcuts.getAllShortcuts();
+            for (var k in allShortcuts) {
+                if (k !== _editingShortcutKey && allShortcuts[k] === newShortcut) {
                     if (shortcutEditError) shortcutEditError.textContent = 'Conflicts with ' + k.replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
                     return;
                 }
             }
-            _shortcuts[_editingShortcutKey] = newShortcut;
-            saveShortcuts(function () {
-                renderShortcutUI();
-                updateKbdHint();
+            window.MonolithShortcuts.setShortcut(_editingShortcutKey, newShortcut, function () {
+                window.MonolithShortcuts.renderShortcutUI();
+                window.MonolithShortcuts.updateKbdHint();
                 stopEditingShortcut();
                 showShortcutsStatus('Shortcut updated', false);
             });
@@ -1648,7 +1422,7 @@
         if (key === 'Control' || key === 'Shift' || key === 'Alt' || key === 'Meta') {
             // Modifier only, don't set key yet
         } else {
-            _editingShortcutKeys.key = normalizeKeyName(key);
+            _editingShortcutKeys.key = window.MonolithShortcuts.normalizeKeyName(key);
         }
 
         // Build display string
@@ -1761,7 +1535,7 @@
     if (terminalBackBtn) {
         terminalBackBtn.addEventListener('click', function () {
             if (_terminalRunning) {
-                confirmBackToLauncher()
+                window.MonolithDialog.confirmBackToLauncher()
                     .then(function () { backToLanding(); })
                     .catch(function () {});
             } else {
@@ -1888,25 +1662,25 @@
             if (e.ctrlKey && e.shiftKey && e.code === 'KeyW') {
                 return false;
             }
-            if (shortcutMatches(e, getShortcut('command_palette'))) {
+            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('command_palette'))) {
                 return false;
             }
-            if (shortcutMatches(e, getShortcut('settings'))) {
+            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('settings'))) {
                 return false;
             }
-            if (shortcutMatches(e, getShortcut('toggle_sidebar'))) {
+            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('toggle_sidebar'))) {
                 return false;
             }
-            if (shortcutMatches(e, getShortcut('cmd_panel'))) {
+            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('cmd_panel'))) {
                 return false;
             }
-            if (shortcutMatches(e, getShortcut('clear_terminal'))) {
+            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('clear_terminal'))) {
                 return false;
             }
-            if (shortcutMatches(e, getShortcut('switch_profile'))) {
+            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('switch_profile'))) {
                 return false;
             }
-            if (shortcutMatches(e, getShortcut('back_to_launcher'))) {
+            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('back_to_launcher'))) {
                 return false;
             }
             return true;
@@ -2070,268 +1844,6 @@
         }
     }
 
-    // --- Command Palette (Ctrl+P) ---
-    var _paletteState = { subPalette: null, parentCommands: null, selectedIndex: 0 };
-
-    var _paletteIcons = {
-        folder: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
-        'folder-open': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><path d="M2 10h20"/></svg>',
-        'arrow-left': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>',
-        copy: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
-        menu: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
-        terminal: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
-        trash: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>',
-        gear: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
-        palette: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>',
-        clock: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
-        user: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
-        'chevron-left': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>'
-    };
-
-    var commands = [
-        { id: 'open-dir', icon: 'folder-open', label: 'Open Directory', group: 'nav', action: { type: 'sub-palette', id: 'directory-search' } },
-        { id: 'last-dir', icon: 'folder', label: 'Open Last Directory', group: 'nav', action: function () {
-            backToLanding();
-            setTimeout(function () {
-                if (window.monolithApi) {
-                    window.monolithApi.get_last_directory().then(function (res) {
-                        if (res && res.success && res.path) showTerminal(res.path);
-                    });
-                }
-            }, 200);
-        }},
-        { id: 'back', icon: 'arrow-left', label: 'Back to Launcher', group: 'nav', shortcutKey: 'back_to_launcher', action: function () { backToLanding(); } },
-        { id: 'copy-path', icon: 'copy', label: 'Copy Current Path', group: 'nav', action: function () {
-            if (window.SidebarManager) {
-                var dir = (window.MonolothApp && window.MonolothApp.getCurrentDir) ? window.MonolothApp.getCurrentDir() : '';
-                if (dir) copyToClipboard(dir);
-            }
-        }},
-        { id: 'toggle-sidebar', icon: 'menu', label: 'Toggle Sidebar', group: 'actions', shortcutKey: 'toggle_sidebar', action: function () {
-            if (typeof window.SidebarManager !== 'undefined') window.SidebarManager.toggleSidebar();
-        }},
-        { id: 'cmd-panel', icon: 'terminal', label: 'CMD Panel', group: 'actions', shortcutKey: 'cmd_panel', action: function () {
-            if (typeof window.SidebarManager !== 'undefined') window.SidebarManager.toggleCmdPanel();
-        }},
-        { id: 'clear-term', icon: 'trash', label: 'Clear Terminal', group: 'actions', shortcutKey: 'clear_terminal', action: function () { if (term) term.clear(); }},
-        { id: 'settings', icon: 'gear', label: 'Settings', group: 'config', shortcutKey: 'settings', action: function () { showSettings(); } },
-        { id: 'appearance', icon: 'palette', label: 'Appearance Settings', group: 'config', action: function () { showSettings(); switchTab('appearance'); } },
-        { id: 'history', icon: 'clock', label: 'History', group: 'config', action: function () { showSettings(); switchTab('history'); } },
-        { id: 'profiles', icon: 'user', label: 'Switch Profile', group: 'config', shortcutKey: 'switch_profile', action: function () { openProfileSwitcher(); } },
-    ];
-
-    var _subPalettes = {
-        'directory-search': {
-            render: function (query) {
-                var items = [];
-                if (window.monolithApi && window.monolithApi.get_last_directory) {
-                    items.push({ id: 'open-last', icon: 'folder', label: 'Open Last Directory', action: function () {
-                        window.monolithApi.get_last_directory().then(function (res) {
-                            if (res && res.success && res.path) showTerminal(res.path);
-                        });
-                    }});
-                }
-                items.push({ id: 'browse', icon: 'folder-open', label: 'Browse...', action: function () {
-                    backToLanding();
-                    setTimeout(function () {
-                        var chooseBtn = document.getElementById('choose-dir-btn');
-                        if (chooseBtn) chooseBtn.click();
-                    }, 200);
-                }});
-                if (query) {
-                    items = items.filter(function (item) {
-                        return item.label.toLowerCase().indexOf(query.toLowerCase()) !== -1;
-                    });
-                }
-                return items;
-            },
-            placeholder: 'Open directory...',
-            backLabel: 'Back'
-        }
-    };
-
-    var paletteEl = document.createElement('div');
-    paletteEl.id = 'command-palette';
-    paletteEl.className = 'command-palette';
-    paletteEl.innerHTML = '<div class="command-palette-overlay"></div>' +
-        '<div class="command-palette-modal" role="dialog" aria-modal="true" aria-label="Command palette">' +
-        '<input type="text" id="command-palette-input" class="command-palette-input" placeholder="Type a command..." spellcheck="false" aria-label="Search commands" autocomplete="off">' +
-        '<div id="command-palette-list" class="command-palette-list" role="listbox"></div>' +
-        '<div class="command-palette-hint">Press <kbd>Esc</kbd> to close</div>' +
-        '</div>';
-    document.body.appendChild(paletteEl);
-
-    var paletteInput = document.getElementById('command-palette-input');
-    var paletteList = document.getElementById('command-palette-list');
-
-    function openPalette() {
-        if (!paletteEl || !paletteInput || !paletteList) return;
-        paletteInput.value = '';
-        _paletteState.subPalette = null;
-        _paletteState.parentCommands = null;
-        paletteInput.placeholder = 'Type a command...';
-        renderPaletteCommands(commands);
-        openModal(paletteEl);
-        paletteInput.focus();
-    }
-
-    function closePalette() {
-        if (!paletteEl) return;
-        _paletteState.subPalette = null;
-        _paletteState.parentCommands = null;
-        closeModal(paletteEl);
-    }
-
-    function enterSubPalette(subId, query) {
-        var sub = _subPalettes[subId];
-        if (!sub) return;
-        _paletteState.subPalette = subId;
-        _paletteState.parentCommands = commands;
-        paletteInput.placeholder = sub.placeholder || 'Type to search...';
-        paletteInput.value = '';
-        var items = sub.render(query || '');
-        renderPaletteCommands(items, true);
-        paletteInput.focus();
-    }
-
-    function exitSubPalette() {
-        if (!_paletteState.subPalette) return false;
-        _paletteState.subPalette = null;
-        paletteInput.placeholder = 'Type a command...';
-        paletteInput.value = '';
-        renderPaletteCommands(commands);
-        return true;
-    }
-
-    function renderPaletteCommands(list, isSub) {
-        if (!paletteList) return;
-        paletteList.innerHTML = '';
-        if (list.length === 0) {
-            var emptyItem = document.createElement('div');
-            emptyItem.className = 'command-palette-item command-palette-empty';
-            emptyItem.textContent = 'No matching commands';
-            paletteList.appendChild(emptyItem);
-            return;
-        }
-
-        var groupLabels = { nav: 'NAVIGATION', actions: 'ACTIONS', config: 'CONFIGURATION' };
-        var lastGroup = null;
-        var cmdIdx = 0;
-
-        if (isSub && _subPalettes[_paletteState.subPalette]) {
-            var backItem = document.createElement('div');
-            backItem.className = 'command-palette-item command-palette-back';
-            backItem.dataset.cmdIndex = 'back';
-            var backIcon = document.createElement('span');
-            backIcon.className = 'command-palette-icon';
-            backIcon.innerHTML = _paletteIcons['chevron-left'] || '';
-            backItem.appendChild(backIcon);
-            var backLabel = document.createElement('span');
-            backLabel.className = 'command-palette-label';
-            backLabel.textContent = _subPalettes[_paletteState.subPalette].backLabel || 'Back';
-            backItem.appendChild(backLabel);
-            backItem.addEventListener('click', function () {
-                exitSubPalette();
-            });
-            paletteList.appendChild(backItem);
-            var sep = document.createElement('div');
-            sep.className = 'command-palette-separator';
-            paletteList.appendChild(sep);
-        }
-
-        list.forEach(function (cmd) {
-            if (!isSub && cmd.group !== lastGroup) {
-                if (lastGroup !== null) {
-                    var sep = document.createElement('div');
-                    sep.className = 'command-palette-separator';
-                    paletteList.appendChild(sep);
-                }
-                var header = document.createElement('div');
-                header.className = 'command-palette-category';
-                header.textContent = groupLabels[cmd.group] || (cmd.group || '').toUpperCase();
-                paletteList.appendChild(header);
-                lastGroup = cmd.group;
-            }
-
-            var item = document.createElement('div');
-            item.className = 'command-palette-item' + (cmdIdx === 0 ? ' selected' : '');
-            item.dataset.cmdIndex = cmdIdx;
-            item.id = 'palette-item-' + cmdIdx;
-            item.setAttribute('role', 'option');
-            item.setAttribute('aria-selected', cmdIdx === 0 ? 'true' : 'false');
-
-            var iconSpan = document.createElement('span');
-            iconSpan.className = 'command-palette-icon';
-            iconSpan.innerHTML = _paletteIcons[cmd.icon] || '';
-            item.appendChild(iconSpan);
-
-            var labelSpan = document.createElement('span');
-            labelSpan.className = 'command-palette-label';
-            labelSpan.textContent = cmd.label;
-            item.appendChild(labelSpan);
-
-            if (cmd.shortcutKey) {
-                var shortcutStr = getShortcut(cmd.shortcutKey).replace(/\+/g, ' + ');
-                if (shortcutStr) {
-                    var shortcutSpan = document.createElement('span');
-                    shortcutSpan.className = 'command-palette-shortcut';
-                    shortcutSpan.textContent = shortcutStr;
-                    item.appendChild(shortcutSpan);
-                }
-            }
-
-            var cmdData = cmd;
-            item.addEventListener('click', function () {
-                executePaletteItem(cmdData);
-            });
-            paletteList.appendChild(item);
-            cmdIdx++;
-        });
-    }
-
-    function executePaletteItem(cmd) {
-        if (!cmd) return;
-        if (cmd.action && cmd.action.type === 'sub-palette') {
-            enterSubPalette(cmd.action.id, '');
-            return;
-        }
-        closePalette();
-        if (typeof cmd.action === 'function') cmd.action();
-    }
-
-    function filterPaletteCommands(query) {
-        if (_paletteState.subPalette) {
-            var sub = _subPalettes[_paletteState.subPalette];
-            if (sub) {
-                var items = sub.render(query);
-                renderPaletteCommands(items, true);
-                return;
-            }
-        }
-        if (!query) {
-            renderPaletteCommands(commands);
-            return;
-        }
-        var filtered = commands.filter(function (cmd) {
-            return cmd.label.toLowerCase().indexOf(query.toLowerCase()) !== -1;
-        });
-        renderPaletteCommands(filtered);
-    }
-
-    function updatePaletteSelection(items, idx) {
-        if (!items || !items.length) return;
-        items.forEach(function (it) {
-            it.classList.remove('selected');
-            it.setAttribute('aria-selected', 'false');
-        });
-        if (items[idx]) {
-            items[idx].classList.add('selected');
-            items[idx].setAttribute('aria-selected', 'true');
-            items[idx].scrollIntoView({ block: 'nearest' });
-        }
-        _paletteState.selectedIndex = idx;
-    }
-
     function isTypingInMainTerminalOrInput() {
         var el = document.activeElement;
         if (!el) return false;
@@ -2344,15 +1856,15 @@
     document.addEventListener('keydown', function (e) {
         if (_editingShortcutKey && shortcutEditMode && shortcutEditMode.style.display !== 'none') return;
 
-        if (shortcutMatches(e, getShortcut('command_palette'))) {
+        if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('command_palette'))) {
             e.preventDefault();
-            if (paletteEl && paletteEl.classList.contains('active')) {
-                closePalette();
+            if (window.MonolithPalette.isActive()) {
+                window.MonolithPalette.close();
             } else {
-                openPalette();
+                window.MonolithPalette.open();
             }
         }
-        if (shortcutMatches(e, getShortcut('settings'))) {
+        if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('settings'))) {
             e.preventDefault();
             if (settingsPage && settingsPage.classList.contains('active')) {
                 hideSettings();
@@ -2360,11 +1872,11 @@
                 showSettings();
             }
         }
-        if (shortcutMatches(e, getShortcut('toggle_sidebar'))) {
+        if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('toggle_sidebar'))) {
             e.preventDefault();
             if (typeof window.SidebarManager !== 'undefined') window.SidebarManager.toggleSidebar();
         }
-        if (shortcutMatches(e, getShortcut('cmd_panel'))) {
+        if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('cmd_panel'))) {
             e.preventDefault();
             if (typeof window.SidebarManager !== 'undefined') window.SidebarManager.toggleCmdPanel();
         }
@@ -2408,37 +1920,37 @@
                 if (tabsB[tabIndex]) window.SidebarManager.activateTab(tabsB[tabIndex].id);
             }
         }
-        if (shortcutMatches(e, getShortcut('clear_terminal'))) {
+        if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('clear_terminal'))) {
             e.preventDefault();
             if (term) term.clear();
         }
-        if (shortcutMatches(e, getShortcut('switch_profile'))) {
+        if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('switch_profile'))) {
             e.preventDefault();
-            openProfileSwitcher();
+            window.MonolithProfiles.openProfileSwitcher();
         }
-        if (shortcutMatches(e, getShortcut('back_to_launcher'))) {
+        if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('back_to_launcher'))) {
             e.preventDefault();
             if (_terminalRunning) {
-                confirmBackToLauncher()
+                window.MonolithDialog.confirmBackToLauncher()
                     .then(function() { backToLanding(); })
                     .catch(function() {});
             } else {
                 backToLanding();
             }
         }
-        if (e.code === 'Escape' && idEl && idEl.classList.contains('active')) {
-            closeDialog();
+        if (e.code === 'Escape' && window.MonolithDialog.isDialogActive()) {
+            window.MonolithDialog.closeDialog();
             return;
         }
-        if (e.code === 'Escape' && profileSwitcher && profileSwitcher.classList.contains('active')) {
-            closeProfileSwitcher();
+        if (e.code === 'Escape' && window.MonolithProfiles.isSwitcherActive()) {
+            window.MonolithProfiles.closeProfileSwitcher();
             return;
         }
-        if (e.code === 'Escape' && paletteEl && paletteEl.classList.contains('active')) {
-            if (_paletteState.subPalette) {
-                exitSubPalette();
+        if (e.code === 'Escape' && window.MonolithPalette.isActive()) {
+            if (window.MonolithPalette.isSubActive()) {
+                window.MonolithPalette.exitSub();
             } else {
-                closePalette();
+                window.MonolithPalette.close();
             }
             return;
         }
@@ -2447,25 +1959,8 @@
             hideSettings();
             return;
         }
-        if (paletteEl && paletteEl.classList.contains('active')) {
-            if (e.code === 'ArrowDown' || e.code === 'ArrowUp') {
-                e.preventDefault();
-                var items = paletteList.querySelectorAll('.command-palette-item');
-                var sel = paletteList.querySelector('.command-palette-item.selected');
-                var idx = Array.prototype.indexOf.call(items, sel);
-                if (e.code === 'ArrowDown') idx = Math.min(idx + 1, items.length - 1);
-                if (e.code === 'ArrowUp') idx = Math.max(idx - 1, 0);
-                updatePaletteSelection(items, idx);
-            }
-            if (e.code === 'Enter') {
-                e.preventDefault();
-                var sel = paletteList.querySelector('.command-palette-item.selected');
-                if (sel) sel.click();
-            }
-            if (e.code === 'Backspace' && !paletteInput.value && _paletteState.subPalette) {
-                e.preventDefault();
-                exitSubPalette();
-            }
+        if (window.MonolithPalette.isActive()) {
+            window.MonolithPalette.handleNav(e);
         }
         if (e.code === 'ArrowRight' || e.code === 'ArrowLeft') {
             if (settingsPage && settingsPage.classList.contains('active') && !_editingShortcutKey) {
@@ -2480,18 +1975,6 @@
             }
         }
     });
-
-    if (paletteInput) {
-        paletteInput.addEventListener('input', function () { filterPaletteCommands(this.value); });
-    }
-
-    if (paletteEl) {
-        paletteEl.addEventListener('click', function (e) {
-            if (e.target === paletteEl || e.target.classList.contains('command-palette-overlay')) {
-                closePalette();
-            }
-        });
-    }
 
     function switchTab(name) {
         var tabs = document.querySelectorAll('.settings-tab');
@@ -2636,858 +2119,6 @@
         return d + 'd ' + h + 'h ' + m + 'm';
     }
 
-    // ================================================================
-    // Custom File / Folder Picker
-    // ================================================================
-
-    var fpEl = document.getElementById('file-picker');
-    var fpTitle = document.getElementById('fp-title');
-    var fpClose = document.getElementById('fp-close');
-    var fpBack = document.getElementById('fp-back-btn');
-    var fpForward = document.getElementById('fp-forward-btn');
-    var fpUp = document.getElementById('fp-up-btn');
-    var fpRefresh = document.getElementById('fp-refresh-btn');
-    var fpPathBar = document.getElementById('fp-path-bar');
-    var fpPathInput = document.getElementById('fp-path-input');
-    var fpBreadcrumb = document.getElementById('fp-breadcrumb');
-    var fpFileList = document.getElementById('fp-file-list');
-    var fpEmpty = document.getElementById('fp-empty');
-    var fpLoading = document.getElementById('fp-loading');
-    var fpFilename = document.getElementById('fp-filename');
-    var fpFilter = document.getElementById('fp-filter');
-    var fpOk = document.getElementById('fp-ok-btn');
-    var fpCancel = document.getElementById('fp-cancel-btn');
-    var fpPreviewPane = document.getElementById('fp-preview-pane');
-    var fpPreviewImg = document.getElementById('fp-preview-img');
-    var fpPreviewInfo = document.getElementById('fp-preview-info');
-    var fpDrivesList = document.getElementById('fp-drives-list');
-
-    var fpState = {
-        mode: 'file',
-        currentPath: '',
-        history: [],
-        historyIndex: -1,
-        selectedPath: '',
-        resolve: null,
-        reject: null,
-        filter: '*.*',
-        filterExts: [],
-        _listings: {},
-        pickerId: '',
-    };
-
-    var QUICK_PATHS = {
-        desktop:   '%USERPROFILE%\\Desktop',
-        documents: '%USERPROFILE%\\Documents',
-        downloads: '%USERPROFILE%\\Downloads',
-        pictures:  '%USERPROFILE%\\Pictures',
-    };
-
-    var _lastDirectories = {};
-    var _pickerLastDirsLoaded = false;
-
-    function _loadPickerLastDirs() {
-        if (!window.monolithApi) return;
-        if (_pickerLastDirsLoaded) return;
-        _pickerLastDirsLoaded = true;
-        ['bg', 'choose'].forEach(function (id) {
-            window.monolithApi.get_picker_last_dir(id)
-                .then(function (res) {
-                    if (res && res.success && res.path) _lastDirectories[id] = res.path;
-                })
-                .catch(function () {});
-        });
-    }
-
-    function _getLastDirectory(pickerId) {
-        return _lastDirectories[pickerId] || '';
-    }
-
-    function _setLastDirectory(pickerId, path) {
-        if (!path) return;
-        var dir = path;
-        if (path.indexOf('\\') !== -1) {
-            dir = path.substring(0, path.lastIndexOf('\\'));
-        } else if (path.indexOf('/') !== -1) {
-            dir = path.substring(0, path.lastIndexOf('/'));
-        }
-        if (dir) {
-            _lastDirectories[pickerId] = dir;
-            if (window.monolithApi) {
-                window.monolithApi.set_picker_last_dir(pickerId, dir).catch(function () {});
-            }
-        }
-    }
-
-    function pickPath(opts) {
-        if (!window.monolithApi) return Promise.resolve(null);
-        var customPicker = function () {
-            return openFilePicker({
-                id: opts.id,
-                title: opts.title,
-                mode: opts.mode,
-                filter: opts.filter
-            }).catch(function () { return null; });
-        };
-        return window.monolithApi.get_file_picker_type()
-            .then(function (pickerType) {
-                _filePickerType = pickerType || 'custom';
-                if (_filePickerType === 'native') {
-                    var nativeMethod = opts.mode === 'file' ? 'native_pick_file' : 'native_pick_directory';
-                    return window.monolithApi[nativeMethod](opts.filter)
-                        .then(function (res) { return (res && res.success && res.path) ? res.path : null; })
-                        .catch(function () { return null; });
-                }
-                return customPicker();
-            })
-            .catch(customPicker);
-    }
-
-    function openFilePicker(opts) {
-        if (!fpEl) { console.error('[Monoloth][Picker] fpEl is null'); return Promise.reject(new Error('Picker element not found')); }
-        if (!window.monolithApi) { console.error('[Monoloth][Picker] monolithApi not available'); return Promise.reject(new Error('Picker not available')); }
-        if (fpState.resolve) { return Promise.reject(new Error('Picker already open')); }
-
-        _loadPickerLastDirs();
-
-        fpState.mode = opts.mode || 'file';
-        fpState.history = [];
-        fpState.historyIndex = -1;
-        fpState.selectedPath = '';
-        fpState.filterExts = [];
-        fpState._listings = {};
-        fpState.pickerId = opts.id || '';
-
-        fpTitle.textContent = opts.title || (fpState.mode === 'folder' ? 'Choose Directory' : 'Choose File');
-        buildFilterSelect(opts.filter || '*.*');
-        openModal(fpEl);
-        fpOk.textContent = fpState.mode === 'folder' ? 'Select Folder' : 'Open';
-
-        var startPath = opts.startPath || _getLastDirectory(fpState.pickerId) || (UI.isWindows() ? 'C:\\' : '/');
-        navigateToPath(startPath);
-
-        return new Promise(function (resolve, reject) {
-            fpState.resolve = resolve;
-            fpState.reject = reject;
-        });
-    }
-
-    function buildFilterSelect(filterStr) {
-        if (!fpFilter) return;
-        fpFilter.innerHTML = '';
-        fpFilter.style.display = '';
-        if (filterStr === '*.*' || !filterStr) {
-            var opt = document.createElement('option');
-            opt.value = '*.*';
-            opt.textContent = 'All Files (*.*)';
-            fpFilter.appendChild(opt);
-            fpFilter.value = '*.*';
-            fpState.filter = '*.*';
-            fpState.filterExts = [];
-            return;
-        }
-        var parts = filterStr.split('|');
-        for (var i = 0; i < parts.length; i += 2) {
-            var label = parts[i] || 'Files';
-            var pattern = parts[i + 1] || '*.*';
-            var opt = document.createElement('option');
-            opt.value = pattern;
-            opt.textContent = label + ' (' + pattern + ')';
-            fpFilter.appendChild(opt);
-        }
-        if (fpFilter.options.length > 0) {
-            fpFilter.selectedIndex = 0;
-        } else {
-            var def = document.createElement('option');
-            def.value = '*.*';
-            def.textContent = 'All Files (*.*)';
-            fpFilter.appendChild(def);
-            fpFilter.value = '*.*';
-        }
-        updateFilterExts();
-    }
-
-    function updateFilterExts() {
-        var val = fpFilter ? fpFilter.value : '*.*';
-        fpState.filter = val;
-        fpState.filterExts = val === '*.*' ? [] : val.split(';').map(function (p) { return p.trim().toLowerCase(); });
-    }
-
-    function navigateToPath(path) {
-        if (!path) { console.warn('[Monoloth][Picker] navigateToPath: empty path'); return; }
-        showLoading(true);
-        window.monolithApi.get_path_info(path).then(function (info) {
-            if (!info || !info.success || !info.exists) {
-                showLoading(false);
-                if (!info || !info.success) {
-                    showError('Access denied or network error');
-                } else {
-                    showError('Path not found');
-                }
-                return;
-            }
-            var target = info.isDir ? info.absolute : info.parent;
-            doNavigate(target);
-        }).catch(function (err) {
-            console.error('[Monoloth][Picker] get_path_info error:', err);
-            showLoading(false);
-            showEmpty();
-        });
-    }
-
-    function doNavigate(absPath) {
-        if (!absPath) return;
-        fpState.currentPath = absPath;
-
-        if (fpState.historyIndex < fpState.history.length - 1) {
-            fpState.history = fpState.history.slice(0, fpState.historyIndex + 1);
-        }
-        fpState.history.push(absPath);
-        fpState.historyIndex = fpState.history.length - 1;
-        updateNavButtons();
-        loadDirectory(absPath);
-    }
-
-    function loadDirectory(path) {
-        showLoading(true);
-        window.monolithApi.list_directory(path).then(function (result) {
-            showLoading(false);
-            if (!result || !result.success) { console.warn('[Monoloth][Picker] list_directory failed'); showError('Access denied'); return; }
-            fpState._listings[path] = result.entries;
-            renderEntries(result.entries);
-            renderBreadcrumb(path);
-            clearPreview();
-            fpState.selectedPath = '';
-            fpFilename.value = '';
-            fpOk.disabled = (fpState.mode !== 'folder');
-        }).catch(function (err) {
-            console.error('[Monoloth][Picker] list_directory error:', err);
-            showLoading(false);
-            showError('Access denied or network error');
-        });
-    }
-
-    function renderEntries(entries) {
-        if (!fpFileList) return;
-        fpFileList.innerHTML = '';
-        fpEmpty.style.display = 'none';
-
-        var fe = fpState.filterExts;
-        var displayed = [];
-        for (var i = 0; i < entries.length; i++) {
-            var e = entries[i];
-            if (!e.isDir && fe.length > 0) {
-                var match = false;
-                for (var f = 0; f < fe.length; f++) {
-                    if (e.name.toLowerCase().endsWith(fe[f].replace('*', ''))) { match = true; break; }
-                }
-                if (!match) continue;
-            }
-            displayed.push(e);
-        }
-        if (displayed.length === 0) { fpEmpty.style.display = 'flex'; return; }
-
-        displayed.forEach(function (entry) {
-            var item = document.createElement('div');
-            item.className = 'fp-file-item';
-            item.dataset.name = entry.name;
-            item.dataset.isDir = entry.isDir ? 'true' : 'false';
-
-            var ico = getItemIcon(entry);
-            var iconDiv = document.createElement('div');
-            iconDiv.className = 'fp-item-icon ' + ico.cls;
-            iconDiv.innerHTML = ico.svg;
-            item.appendChild(iconDiv);
-
-            var ns = document.createElement('span');
-            ns.className = 'fp-item-name';
-            ns.textContent = entry.name;
-            item.appendChild(ns);
-
-            var ds = document.createElement('span');
-            ds.className = 'fp-item-date';
-            ds.textContent = formatDate(entry.modified);
-            item.appendChild(ds);
-
-            var ss = document.createElement('span');
-            ss.className = 'fp-item-size';
-            ss.textContent = entry.isDir ? '\u2014' : formatSize(entry.size);
-            item.appendChild(ss);
-
-            item.addEventListener('click', function () { onItemClick(entry); });
-            item.addEventListener('dblclick', function () {
-                if (entry.isDir) {
-                    doNavigate(joinPath(fpState.currentPath, entry.name));
-                } else if (fpState.mode === 'file') {
-                    onItemClick(entry);
-                    if (fpOk && !fpOk.disabled) fpOk.click();
-                }
-            });
-            fpFileList.appendChild(item);
-        });
-        loadDrives();
-    }
-
-    var FILE_IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.ico'];
-    var FILE_CODE_EXTS = ['.js', '.py', '.html', '.css', '.json', '.xml', '.ts', '.jsx', '.tsx', '.yaml', '.yml', '.md', '.sh', '.bat', '.ps1', '.lua', '.rb', '.go', '.rs', '.c', '.cpp', '.h', '.java', '.kt', '.swift'];
-    var FILE_ARCHIVE_EXTS = ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.zst'];
-
-    function getItemIcon(entry) {
-        if (entry.isDir) return { cls: 'folder', svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' };
-        var ext = (entry.extension || '').toLowerCase();
-        if (FILE_IMAGE_EXTS.indexOf(ext) !== -1) return { cls: 'file-image', svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' };
-        if (FILE_CODE_EXTS.indexOf(ext) !== -1) return { cls: 'file-code', svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>' };
-        if (FILE_ARCHIVE_EXTS.indexOf(ext) !== -1) return { cls: 'file-archive', svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><line x1="10" y1="12" x2="14" y2="12"/></svg>' };
-        return { cls: 'file', svg: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' };
-    }
-
-    function joinPath(base, name) {
-        return base.replace(/\\+$/, '') + '\\' + name;
-    }
-
-    function onItemClick(entry) {
-        var items = fpFileList.querySelectorAll('.fp-file-item');
-        var fullPath = joinPath(fpState.currentPath, entry.name);
-        fpState.selectedPath = fullPath;
-        for (var i = 0; i < items.length; i++) {
-            items[i].classList.toggle('selected', items[i].dataset.name === entry.name);
-        }
-        if (entry.isDir && fpState.mode === 'folder') {
-            fpFilename.value = entry.name;
-            fpOk.disabled = false;
-            clearPreview();
-        } else if (!entry.isDir) {
-            fpFilename.value = entry.name;
-            fpOk.disabled = (fpState.mode === 'folder');
-            if (fpState.mode === 'file') showPreview(fullPath, entry); else clearPreview();
-        } else {
-            fpFilename.value = '';
-            fpOk.disabled = (fpState.mode !== 'folder');
-            clearPreview();
-        }
-    }
-
-    function showPreview(filePath, entry) {
-        if (!fpPreviewPane) return;
-        var ext = (entry.extension || '').toLowerCase();
-        if ('.png.jpg.jpeg.gif.bmp.webp.svg.ico'.indexOf(ext) === -1) {
-            fpPreviewPane.style.display = 'none';
-            fpPreviewPane.classList.remove('anim-enter');
-            return;
-        }
-        fpPreviewPane.style.display = 'flex';
-        fpPreviewPane.classList.remove('anim-enter');
-        void fpPreviewPane.offsetWidth;
-        fpPreviewPane.classList.add('anim-enter');
-        // Reset image opacity for fade-in
-        if (fpPreviewImg) fpPreviewImg.classList.remove('loaded');
-        window.monolithApi.get_file_preview(filePath).then(function (res) {
-            if (res && res.success && res.dataUrl) {
-                fpPreviewImg.src = res.dataUrl;
-                fpPreviewImg.style.display = 'block';
-                // Fade in image after load
-                fpPreviewImg.onload = function () { fpPreviewImg.classList.add('loaded'); };
-                fpPreviewInfo.textContent = formatSize(entry.size) + ' | ' + ext.toUpperCase();
-            } else { noPreview(); }
-        }).catch(function () { noPreview(); });
-        function noPreview() { fpPreviewImg.src = ''; fpPreviewImg.style.display = 'none'; fpPreviewInfo.textContent = 'Preview not available'; }
-    }
-
-    function clearPreview() {
-        if (!fpPreviewPane) return;
-        fpPreviewPane.style.display = 'none';
-        fpPreviewPane.classList.remove('anim-enter');
-        if (fpPreviewImg) { fpPreviewImg.src = ''; fpPreviewImg.classList.remove('loaded'); }
-        if (fpPreviewInfo) fpPreviewInfo.textContent = '';
-    }
-
-    // Breadcrumb uses backslash separator to match path input
-    function renderBreadcrumb(path) {
-        if (!fpBreadcrumb) return;
-        fpBreadcrumb.innerHTML = '';
-        if (!path) return;
-        if (fpPathInput) fpPathInput.value = path;
-        var parts = path.split('\\').filter(Boolean);
-        var acc = '';
-        parts.forEach(function (p, i) {
-            if (i > 0) { var sp = document.createElement('span'); sp.className = 'fp-bc-sep'; sp.textContent = '\u203A'; fpBreadcrumb.appendChild(sp); }
-            var seg = document.createElement('span');
-            seg.className = 'fp-bc-segment' + (i === parts.length - 1 ? ' fp-bc-last' : '');
-            seg.textContent = p;
-            if (i < parts.length - 1) { var clickPath = acc + p + '\\'; seg.addEventListener('click', function (e) { e.stopPropagation(); doNavigate(clickPath); }); }
-            acc += p + '\\';
-            fpBreadcrumb.appendChild(seg);
-        });
-    }
-
-    function updateNavButtons() {
-        if (fpBack) fpBack.disabled = fpState.historyIndex <= 0;
-        if (fpForward) fpForward.disabled = fpState.historyIndex >= fpState.history.length - 1;
-        if (fpUp) { fpUp.disabled = !fpState.currentPath || fpState.currentPath.replace(/\\+$/, '').length <= 2; }
-    }
-
-    function showLoading(s) {
-        if (!fpLoading) { console.warn('[Monoloth][Picker] fpLoading element missing'); return; }
-        fpLoading.style.display = s ? 'flex' : 'none';
-        if (fpFileList) fpFileList.style.display = s ? 'none' : '';
-        if (fpEmpty) fpEmpty.style.display = 'none';
-    }
-
-    function showEmpty() {
-        if (fpEmpty) fpEmpty.style.display = 'flex';
-        if (fpEmpty) fpEmpty.querySelector('span').textContent = 'This folder is empty';
-        if (fpFileList) fpFileList.innerHTML = '';
-        if (fpLoading) fpLoading.style.display = 'none';
-        if (fpBreadcrumb) fpBreadcrumb.innerHTML = '';
-        clearPreview();
-    }
-
-    function showError(msg) {
-        if (fpEmpty) fpEmpty.style.display = 'flex';
-        if (fpEmpty) fpEmpty.querySelector('span').textContent = msg;
-        if (fpFileList) fpFileList.innerHTML = '';
-        if (fpLoading) fpLoading.style.display = 'none';
-        if (fpBreadcrumb) fpBreadcrumb.innerHTML = '';
-        clearPreview();
-    }
-
-    function formatDate(ts) {
-        if (!ts || ts <= 0) return '\u2014';
-        return new Date(ts * 1000).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' });
-    }
-
-    function formatSize(bytes) {
-        if (!bytes || bytes === 0) return '\u2014';
-        var u = ['B','KB','MB','GB','TB'];
-        var i = 0;
-        var s = bytes;
-        while (s >= 1024 && i < u.length - 1) { s /= 1024; i++; }
-        return (i === 0 ? s : s.toFixed(1)) + ' ' + u[i];
-    }
-
-    function loadDrives() {
-        if (!fpDrivesList || fpDrivesList.dataset.loaded) return;
-        window.monolithApi.get_drives().then(function (drives) {
-            if (!drives || drives.length === 0) return;
-            fpDrivesList.innerHTML = '';
-            drives.forEach(function (d) {
-                var item = document.createElement('div');
-                item.className = 'fp-drive-item';
-                item.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> ' + d.letter + (d.label ? ' \u2014 ' + d.label : '');
-                item.addEventListener('click', function () { doNavigate(d.letter + '\\'); });
-                fpDrivesList.appendChild(item);
-            });
-            fpDrivesList.dataset.loaded = '1';
-        }).catch(function () {});
-    }
-
-    // --- Event handlers ---
-
-    if (fpClose) fpClose.addEventListener('click', function () { closePicker(null); });
-    if (fpCancel) fpCancel.addEventListener('click', function () { closePicker(null); });
-
-    if (fpOk) {
-        fpOk.addEventListener('click', function () {
-            var path = fpState.selectedPath;
-            if (!path && fpFilename.value) path = joinPath(fpState.currentPath, fpFilename.value);
-            if (!path && fpState.mode === 'folder') path = fpState.currentPath;
-            if (path) closePicker(path);
-        });
-    }
-
-    if (fpBack) fpBack.addEventListener('click', function () {
-        if (fpState.historyIndex > 0) { fpState.historyIndex--; fpState.currentPath = fpState.history[fpState.historyIndex]; updateNavButtons(); loadDirectory(fpState.currentPath); }
-    });
-
-    if (fpForward) fpForward.addEventListener('click', function () {
-        if (fpState.historyIndex < fpState.history.length - 1) { fpState.historyIndex++; fpState.currentPath = fpState.history[fpState.historyIndex]; updateNavButtons(); loadDirectory(fpState.currentPath); }
-    });
-
-    if (fpUp) fpUp.addEventListener('click', function () {
-        if (!fpState.currentPath) return;
-        var parent = fpState.currentPath;
-        if (parent.endsWith(':')) parent += '\\';
-        var p = parent.replace(/\\+$/, '');
-        var idx = p.lastIndexOf('\\');
-        var result;
-        if (idx > 0) result = p.substring(0, idx);
-        else if (idx === 0) result = p.substring(0, idx + 1);
-        if (result && result.endsWith(':')) result += '\\';
-        doNavigate(result);
-    });
-
-    if (fpRefresh) fpRefresh.addEventListener('click', function () { if (fpState.currentPath) loadDirectory(fpState.currentPath); });
-    if (fpFilter) fpFilter.addEventListener('change', function () { updateFilterExts(); if (fpState.currentPath) loadDirectory(fpState.currentPath); });
-
-    // Path input: click on breadcrumb to edit
-    if (fpPathBar && fpBreadcrumb) {
-        fpBreadcrumb.addEventListener('click', function () {
-            fpPathBar.classList.add('editing');
-            if (fpPathInput) {
-                fpPathInput.focus();
-                fpPathInput.select();
-            }
-        });
-    }
-
-    // Path input: handle Enter key to navigate
-    if (fpPathInput) {
-        fpPathInput.addEventListener('keydown', function (e) {
-            if (e.code === 'Enter') {
-                e.preventDefault();
-                var path = fpPathInput.value.trim();
-                if (path) {
-                    fpPathBar.classList.remove('editing');
-                    navigateToPath(path);
-                }
-            }
-            if (e.code === 'Escape') {
-                e.preventDefault();
-                fpPathBar.classList.remove('editing');
-                if (fpState.currentPath) {
-                    fpPathInput.value = fpState.currentPath;
-                }
-            }
-        });
-
-        fpPathInput.addEventListener('blur', function () {
-            fpPathBar.classList.remove('editing');
-            if (fpState.currentPath) {
-                fpPathInput.value = fpState.currentPath;
-            }
-        });
-    }
-
-    // Filename input: Enter to navigate if absolute path, otherwise OK
-    if (fpFilename) {
-        fpFilename.addEventListener('keydown', function (e) {
-            if (e.code === 'Enter') {
-                e.preventDefault();
-                var val = fpFilename.value.trim();
-                if (!val) return;
-                if (val.indexOf(':') !== -1 && val.indexOf('\\') !== -1) {
-                    navigateToPath(val);
-                } else if (fpOk && !fpOk.disabled) {
-                    fpOk.click();
-                }
-            }
-        });
-    }
-
-    // Sidebar clicks
-    var sidebarItems = fpEl.querySelectorAll('.fp-sidebar-item');
-    sidebarItems.forEach(function (item) {
-        item.addEventListener('click', function () {
-            var p = item.dataset.path;
-            var sidebarItems = fpEl.querySelectorAll('.fp-sidebar-item');
-            for (var si2 = 0; si2 < sidebarItems.length; si2++) {
-                sidebarItems[si2].classList.remove('active');
-            }
-            item.classList.add('active');
-            if (QUICK_PATHS[p]) {
-                window.monolithApi.get_path_info(QUICK_PATHS[p]).then(function (info) {
-                    if (info && info.success && info.isDir) doNavigate(info.absolute);
-                });
-            }
-        });
-    });
-
-    if (fpEl) fpEl.addEventListener('click', function (e) {
-        if (e.target === fpEl || e.target.classList.contains('fp-overlay')) closePicker(null);
-    });
-
-    // Keyboard
-    document.addEventListener('keydown', function (e) {
-        if (!fpEl || !fpEl.classList.contains('active')) return;
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
-            if (e.code === 'Escape') { e.preventDefault(); closePicker(null); }
-            return;
-        }
-        if (e.code === 'Escape') { e.preventDefault(); closePicker(null); return; }
-        if (e.code === 'Enter') { e.preventDefault(); if (fpOk && !fpOk.disabled) fpOk.click(); return; }
-        if (e.code === 'Backspace') { e.preventDefault(); if (fpUp && !fpUp.disabled) fpUp.click(); return; }
-        if (e.code === 'ArrowDown' || e.code === 'ArrowUp') {
-            e.preventDefault();
-            var items = fpFileList.querySelectorAll('.fp-file-item');
-            if (items.length === 0) return;
-            var sel = fpFileList.querySelector('.fp-file-item.selected');
-            var idx = -1;
-            if (sel) { for (var k = 0; k < items.length; k++) { if (items[k] === sel) { idx = k; break; } } }
-            idx = e.code === 'ArrowDown' ? Math.min(idx + 1, items.length - 1) : Math.max(idx === -1 ? 0 : idx - 1, 0);
-            items.forEach(function (it) { it.classList.remove('selected'); });
-            items[idx].classList.add('selected');
-            var en = items[idx].dataset.name;
-            var entries = fpState._listings[fpState.currentPath] || [];
-            for (var ek = 0; ek < entries.length; ek++) { if (entries[ek].name === en) { onItemClick(entries[ek]); break; } }
-            items[idx].scrollIntoView({ block: 'nearest' });
-        }
-    });
-
-    function closePicker(result) {
-        if (!fpEl) return;
-        closeModal(fpEl);
-        fpState.selectedPath = '';
-        if (fpFilename) fpFilename.value = '';
-        if (fpOk) fpOk.disabled = true;
-        clearPreview();
-        if (fpDrivesList) delete fpDrivesList.dataset.loaded;
-
-        if (result && fpState.pickerId) {
-            _setLastDirectory(fpState.pickerId, result);
-        }
-
-        if (fpState.resolve) {
-            fpState.resolve(result);
-            fpState.resolve = null;
-            fpState.reject = null;
-        }
-    }
-
-    // ================================================================
-    // Profile Management
-    // ================================================================
-
-    var _profiles = [];
-    var _activeProfile = 'Default';
-
-    function loadProfiles() {
-        if (!window.monolithApi) return Promise.resolve();
-        return window.monolithApi.get_profiles()
-            .then(function (res) {
-                if (res && res.success) {
-                    _profiles = res.profiles || [];
-                    _activeProfile = res.active || 'Default';
-                    updateProfileUI();
-                }
-            })
-            .catch(function () {});
-    }
-
-    function updateProfileUI() {
-        var nameEl = document.getElementById('current-profile-name');
-        if (nameEl) nameEl.textContent = _activeProfile;
-        renderProfilesList();
-        renderProfileSwitcher();
-    }
-
-    function renderProfilesList() {
-        var list = document.getElementById('profiles-list');
-        if (!list) return;
-        list.innerHTML = '';
-        _profiles.forEach(function (profile, idx) {
-            var item = document.createElement('div');
-            item.className = 'profile-item' + (profile.name === _activeProfile ? ' active' : '') + (profile.isDefault ? ' is-default' : '');
-
-            var info = document.createElement('div');
-            info.className = 'profile-item-info';
-
-            var nameSpan = document.createElement('span');
-            nameSpan.className = 'profile-item-name';
-            nameSpan.textContent = profile.name;
-            info.appendChild(nameSpan);
-
-            var badge = document.createElement('span');
-            badge.className = 'profile-item-badge';
-            if (profile.isDefault) {
-                badge.textContent = 'Default';
-                badge.classList.add('badge-default');
-            }
-            if (profile.name === _activeProfile) {
-                badge.textContent = 'Active';
-                badge.classList.add('badge-active');
-            }
-            info.appendChild(badge);
-
-            item.appendChild(info);
-
-            var actions = document.createElement('div');
-            actions.className = 'profile-item-actions';
-
-            if (profile.isDefault) {
-                var defaultLabel = document.createElement('span');
-                defaultLabel.className = 'profile-default-label';
-                defaultLabel.textContent = 'Built-in';
-                actions.appendChild(defaultLabel);
-            } else if (profile.name === _activeProfile) {
-                var activeLabel = document.createElement('span');
-                activeLabel.className = 'profile-default-label';
-                activeLabel.textContent = 'Active';
-                actions.appendChild(activeLabel);
-            } else {
-                var switchBtn = document.createElement('button');
-                switchBtn.className = 'profile-action-btn profile-switch-btn';
-                switchBtn.textContent = 'Switch';
-                switchBtn.addEventListener('click', function () {
-                    switchToProfile(profile.name);
-                });
-                actions.appendChild(switchBtn);
-
-                var renameBtn = document.createElement('button');
-                renameBtn.className = 'profile-action-btn profile-rename-btn';
-                renameBtn.textContent = 'Rename';
-                renameBtn.addEventListener('click', function () {
-                    renameProfileInline(profile.name);
-                });
-                actions.appendChild(renameBtn);
-
-                var deleteBtn = document.createElement('button');
-                deleteBtn.className = 'profile-action-btn profile-delete-btn';
-                deleteBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-                if (window.MonolothTooltip) {
-                    window.MonolothTooltip.attach(deleteBtn, 'Delete this profile');
-                }
-                deleteBtn.addEventListener('click', function () {
-                    deleteProfileConfirm(profile.name);
-                });
-                actions.appendChild(deleteBtn);
-            }
-
-            item.appendChild(actions);
-            list.appendChild(item);
-        });
-    }
-
-    function switchToProfile(name) {
-        if (!window.monolithApi) return;
-        window.monolithApi.switch_profile(name)
-            .then(function (res) {
-                if (res && res.success) {
-                    _activeProfile = name;
-                    updateProfileUI();
-                    if (_terminalRunning) {
-                        showStatus('profiles-status', 'Profile switched \u2014 changes apply on next launch.', false);
-                    } else {
-                        showStatus('profiles-status', 'Switched to ' + name, false);
-                    }
-                    // Reload all settings from new profile
-                    loadAllSettingsForProfile();
-                } else {
-                    showStatus('profiles-status', res.error || 'Failed to switch', true);
-                }
-            })
-            .catch(function (err) {
-                showStatus('profiles-status', 'Error: ' + err, true);
-            });
-    }
-
-    function deleteProfileConfirm(name) {
-        showConfirm('Delete Profile', 'Delete profile "' + name + '"? This cannot be undone.', 'delete_profile').then(function () {
-            if (!window.monolithApi) return;
-            window.monolithApi.delete_profile(name)
-                .then(function (res) {
-                    if (res && res.success) {
-                        loadProfiles();
-                        showStatus('profiles-status', 'Profile deleted', false);
-                    } else {
-                        showStatus('profiles-status', res.error || 'Failed to delete', true);
-                    }
-                })
-                .catch(function (err) {
-                    showStatus('profiles-status', 'Error: ' + err, true);
-                });
-        }).catch(function () {});
-    }
-
-    function renameProfileInline(oldName) {
-        showPrompt('Rename Profile', 'Enter new name...', oldName).then(function (newName) {
-            if (newName === oldName) return;
-            if (!window.monolithApi) return;
-            window.monolithApi.rename_profile(oldName, newName)
-                .then(function (res) {
-                    if (res && res.success) {
-                        loadProfiles();
-                        showStatus('profiles-status', 'Profile renamed to ' + newName, false);
-                    } else {
-                        showStatus('profiles-status', res.error || 'Failed to rename profile', true);
-                    }
-                })
-                .catch(function (err) {
-                    showStatus('profiles-status', 'Error: ' + err, true);
-                });
-        }).catch(function () {});
-    }
-
-    function loadAllSettingsForProfile() {
-        // Reload appearance, shortcuts, startup config, etc. from the new profile
-        loadBackgroundConfig();
-        loadStartupConfig();
-        loadSecondaryCommands();
-        loadShortcuts(function () { renderShortcutUI(); updateKbdHint(); });
-    }
-
-
-
-    // --- Inline Dialog (replaces prompt/confirm) ---
-    var idEl = document.getElementById('inline-dialog');
-    var idTitle = document.getElementById('id-title');
-    var idBody = document.getElementById('id-body');
-    var idFooter = document.getElementById('id-footer');
-    var idClose = document.getElementById('id-close');
-
-    function _idResolve(v) { /* set by showers */ }
-    function _idReject(e) { /* set by showers */ }
-
-    function closeDialog(result) {
-        if (!idEl) return;
-        closeModal(idEl);
-        if (result !== undefined) {
-            _idResolve(result);
-        } else {
-            _idReject(new Error('cancelled'));
-        }
-    }
-
-    if (idClose) {
-        idClose.addEventListener('click', function () { closeDialog(); });
-    }
-
-    if (idEl) {
-        idEl.addEventListener('click', function (e) {
-            if (e.target === idEl || e.target.classList.contains('id-overlay')) closeDialog();
-        });
-    }
-
-    function showPrompt(title, label, defaultValue) {
-        return new Promise(function (resolve, reject) {
-            _idResolve = resolve;
-            _idReject = reject;
-            if (idTitle) idTitle.textContent = title;
-            if (idBody) {
-                idBody.innerHTML = '<input type="text" id="id-input-field" class="id-input"><div id="id-input-error" class="id-error"></div>';
-                var inp = document.getElementById('id-input-field');
-                if (inp) inp.setAttribute('placeholder', label || '');
-                if (inp && defaultValue) inp.value = defaultValue;
-                setTimeout(function () { if (inp) { inp.focus(); inp.select(); } }, 50);
-                var onKey = function (e) {
-                    if (e.code === 'Enter') {
-                        var val = inp.value.trim();
-                        if (!val) return;
-                        closeDialog(val);
-                    }
-                    if (e.code === 'Escape') closeDialog();
-                };
-                if (inp) inp.addEventListener('keydown', onKey);
-            }
-            if (idFooter) {
-                idFooter.innerHTML = '<button id="id-btn-cancel-el" class="id-btn-cancel">Cancel</button><button id="id-btn-ok-el" class="id-btn-primary">OK</button>';
-                var cancelBtn = document.getElementById('id-btn-cancel-el');
-                var okBtn = document.getElementById('id-btn-ok-el');
-                if (cancelBtn) cancelBtn.addEventListener('click', function () { closeDialog(); });
-                if (okBtn) okBtn.addEventListener('click', function () {
-                    var inp = document.getElementById('id-input-field');
-                    var val = inp ? inp.value.trim() : '';
-                    var errEl = document.getElementById('id-input-error');
-                    if (!val) {
-                        if (errEl) errEl.textContent = 'Please enter a value.';
-                        return;
-                    }
-                    closeDialog(val);
-                });
-            }
-            openModal(idEl);
-        });
-    }
-
     // ============================================
     // CUSTOM TITLEBAR
     // ============================================
@@ -3561,7 +2192,7 @@
         if (tbBack) {
             tbBack.addEventListener('click', function() {
                 if (_terminalRunning) {
-                    confirmBackToLauncher()
+                    window.MonolithDialog.confirmBackToLauncher()
                         .then(function() { backToLanding(); })
                         .catch(function() {});
                 } else {
@@ -3592,7 +2223,7 @@
         var tbMenu = document.getElementById('tb-menu');
         if (tbMenu) {
             tbMenu.addEventListener('click', function() {
-                openPalette();
+                window.MonolithPalette.open();
             });
         }
 
@@ -3618,7 +2249,7 @@
         if (tbClose) {
             tbClose.addEventListener('click', function() {
                 if (_terminalRunning) {
-                    showConfirm('Exit Monoloth', 'A terminal session is running. Exit anyway?', 'exit_monoloth')
+                    window.MonolithDialog.showConfirm('Exit Monoloth', 'A terminal session is running. Exit anyway?', 'exit_monoloth')
                         .then(function() { if (window.monolithApi) window.monolithApi.close_window(); })
                         .catch(function() {});
                 } else {
@@ -3638,150 +2269,10 @@
         }
     }
 
-    function showConfirm(title, message, skipKey) {
-        if (skipKey && _confirmPrefs && _confirmPrefs[skipKey] === true) {
-            return Promise.resolve(true);
-        }
-        return new Promise(function (resolve, reject) {
-            _idResolve = resolve;
-            _idReject = reject;
-            if (idTitle) idTitle.textContent = title;
-            if (idBody) {
-                if (skipKey) {
-                    idBody.innerHTML = '<p>' + escapeHtml(message) + '</p>' +
-                        '<label class="id-skip">' +
-                        '<input type="checkbox" id="id-skip-cb-el">' +
-                        '<span class="id-skip-label">Don\'t ask again</span>' +
-                        '</label>';
-                } else {
-                    idBody.innerHTML = '<p>' + escapeHtml(message) + '</p>';
-                }
-            }
-            if (idFooter) {
-                idFooter.innerHTML = '<button id="id-btn-cancel-el" class="id-btn-cancel">Cancel</button><button id="id-btn-ok-el" class="id-btn-primary">OK</button>';
-                var cancelBtn = document.getElementById('id-btn-cancel-el');
-                var okBtn = document.getElementById('id-btn-ok-el');
-                if (cancelBtn) cancelBtn.addEventListener('click', function () { closeDialog(); });
-                if (okBtn) okBtn.addEventListener('click', function () {
-                    if (skipKey) {
-                        var cb = document.getElementById('id-skip-cb-el');
-                        if (cb && cb.checked) setConfirmPref(skipKey, true);
-                    }
-                    closeDialog(true);
-                });
-            }
-            openModal(idEl);
-        });
-    }
-
-    function confirmBackToLauncher() {
-        return showConfirm('Return to Launcher', 'Return to launcher? The current session will be terminated.', 'return_to_launcher');
-    }
-
-    function loadConfirmPrefs() {
-        if (!window.monolithApi) { _confirmPrefs = {}; return; }
-        window.monolithApi.get_config('confirm_dialog_prefs')
-            .then(function (val) { _confirmPrefs = (val && typeof val === 'object') ? val : {}; })
-            .catch(function () { _confirmPrefs = {}; });
-    }
-
-    function setConfirmPref(key, value) {
-        if (!_confirmPrefs || typeof _confirmPrefs !== 'object') _confirmPrefs = {};
-        _confirmPrefs[key] = value;
-        if (window.monolithApi) {
-            window.monolithApi.set_config('confirm_dialog_prefs', _confirmPrefs).catch(function () {});
-        }
-    }
-
-    // Add profile button
-    var addProfileBtn = document.getElementById('add-profile-btn');
-    if (addProfileBtn) {
-        addProfileBtn.addEventListener('click', function () {
-            showPrompt('New Profile', 'Enter profile name...', '').then(function (name) {
-                if (!window.monolithApi) return;
-                var filenameRegex = /^[^\\/:\*\?"<>\|]+$/;
-                if (!filenameRegex.test(name)) {
-                    showStatus('profiles-status', 'Invalid characters: \\ / : * ? " < > |', true);
-                    return;
-                }
-                window.monolithApi.create_profile(name)
-                    .then(function (res) {
-                        if (res && res.success) {
-                            loadProfiles();
-                            showStatus('profiles-status', 'Profile created', false);
-                        } else {
-                            showStatus('profiles-status', res.error || 'Failed to create', true);
-                        }
-                    })
-                    .catch(function (err) {
-                        showStatus('profiles-status', 'Error: ' + err, true);
-                    });
-            }).catch(function () {});
-        });
-    }
-
-    // ================================================================
-    // Profile Switcher Modal
-    // ================================================================
-
-    var profileSwitcher = document.getElementById('profile-switcher');
-    var profileSelectorBtn = document.getElementById('profile-selector-btn');
-    var psClose = document.getElementById('ps-close');
-    var psBody = document.getElementById('ps-body');
-
-    function renderProfileSwitcher() {
-        if (!psBody) return;
-        psBody.innerHTML = '';
-        _profiles.forEach(function (profile) {
-            var item = document.createElement('div');
-            item.className = 'ps-item' + (profile.name === _activeProfile ? ' active' : '');
-            var nameSpan = document.createElement('span');
-            nameSpan.className = 'ps-item-name';
-            nameSpan.textContent = profile.name;
-            item.appendChild(nameSpan);
-            if (profile.name === _activeProfile) {
-                var checkSpan = document.createElement('span');
-                checkSpan.className = 'ps-item-check';
-                checkSpan.innerHTML = '&#10003;';
-                item.appendChild(checkSpan);
-            }
-            item.addEventListener('click', function () {
-                switchToProfile(profile.name);
-                closeProfileSwitcher();
-            });
-            psBody.appendChild(item);
-        });
-    }
-
-    function openProfileSwitcher() {
-        if (!profileSwitcher) return;
-        renderProfileSwitcher();
-        openModal(profileSwitcher);
-    }
-
-    function closeProfileSwitcher() {
-        if (!profileSwitcher) return;
-        closeModal(profileSwitcher);
-    }
-
-    if (profileSelectorBtn) {
-        profileSelectorBtn.addEventListener('click', openProfileSwitcher);
-    }
-
-    if (psClose) {
-        psClose.addEventListener('click', closeProfileSwitcher);
-    }
-
-    if (profileSwitcher) {
-        profileSwitcher.addEventListener('click', function (e) {
-            if (e.target === profileSwitcher || e.target.classList.contains('ps-overlay')) {
-                closeProfileSwitcher();
-            }
-        });
-    }
+    // Add profile button — moved to profiles.js (window.MonolithProfiles)
 
     // Load profiles on init
-    loadProfiles();
+    window.MonolithProfiles.loadProfiles();
 
     // --- History event handlers ---
     var historyToggle = document.getElementById('history-toggle');
@@ -3820,7 +2311,7 @@
     var clearHistoryBtn = document.getElementById('clear-history-btn');
     if (clearHistoryBtn) {
         clearHistoryBtn.addEventListener('click', function() {
-            showConfirm('Clear History', 'Delete all history data? This cannot be undone.', 'clear_history')
+            window.MonolithDialog.showConfirm('Clear History', 'Delete all history data? This cannot be undone.', 'clear_history')
                 .then(function() {
                     if (window.monolithApi) {
                         window.monolithApi.clear_history().then(function() {
@@ -3836,7 +2327,7 @@
     // --- MonolothApp Facade (exposed to sidebar.js) ---
     window.MonolothApp = {
         getCurrentDir: function () { return _currentLaunchDir; },
-        showConfirm: showConfirm,
+        showConfirm: function (t, m, k) { return window.MonolithDialog.showConfirm(t, m, k); },
         restartSession: function (sessionId) {
             sessionId = sessionId || 'main';
             if (sessionId === 'main') {
@@ -3903,7 +2394,20 @@
             }
         },
         isMainActive: function () { return _terminalRunning; },
-        switchTab: switchTab
+        switchTab: switchTab,
+        backToLanding: function () { backToLanding(); },
+        showTerminal: function (dir) { showTerminal(dir); },
+        showSettings: function () { showSettings(); },
+        clearTerminal: function () { if (term) term.clear(); },
+        copyToClipboard: function (t) { copyToClipboard(t); },
+        openProfileSwitcher: function () { window.MonolithProfiles.openProfileSwitcher(); },
+        showStatus: function (id, msg, isError) { showStatus(id, msg, isError); },
+        reloadProfileSettings: function () {
+            loadBackgroundConfig();
+            loadStartupConfig();
+            loadSecondaryCommands();
+            window.MonolithShortcuts.loadShortcuts(function () { window.MonolithShortcuts.renderShortcutUI(); window.MonolithShortcuts.updateKbdHint(); });
+        }
     };
 
     // Auto-check for updates (silent on failure, see MonolothUpdater.init)
