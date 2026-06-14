@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
     'use strict';
 
     const landing = document.getElementById('landing');
@@ -9,27 +9,14 @@
     const settingsClose = document.getElementById('settings-close');
     const terminalContainer = document.getElementById('terminal');
 
-    let term = null;
-    let fitAddon = null;
-    let webglAddon = null;
-    // Windows PTY compat info ({ backend, buildNumber }) fetched once at startup.
-    // Drives xterm.js's windowsPty option so reflow heuristics match the real
-    // ConPTY build. null until loaded or on non-Windows.
-    var _windowsPtyInfo = null;
     let _bgImagePath = '';
     let _bgTransparency = 75;
     let _currentLaunchDir = '';
-    let _terminalRunning = false;
-    var _resizeObserver = null;
-    var _resizeHandler = null;
-    var _contextMenuHandler = null;
     var _keyDownHandler = null;
     var _mouseDownHandler = null;
     var _useCustomTitlebar = false;
     var _isMaximized = false;
     var _maximizeSyncTimer = null;
-    var _skipNextEof = {};  // Session-ID-keyed
-    var _sessionGeneration = { main: 0 };  // Session-ID-keyed; tab sessions added dynamically
     var _panelRunning = false;
     var _statusTimers = {};
     var _bgType = 'none';
@@ -60,90 +47,7 @@
     var openModal = UI.openModal;
     var closeModal = UI.closeModal;
 
-    // --- Theme & CTA Style Management ---
-    var _themeMode = 'dark';
-    var _ctaButtonStyle = 'blur';
-    var _wallpaperBrightness = null;
-
-    function hexToLuminance(hex) {
-        if (!hex) return 0;
-        hex = String(hex).replace('#', '');
-        if (hex.length === 3) {
-            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-        }
-        if (!/^[0-9a-fA-F]{6}$/.test(hex)) return 0;
-        var r = parseInt(hex.substring(0, 2), 16);
-        var g = parseInt(hex.substring(2, 4), 16);
-        var b = parseInt(hex.substring(4, 6), 16);
-        return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-    }
-
-    function extractColorsFromGradient(gradient) {
-        return gradient.match(/#[0-9a-fA-F]{3,8}/g) || [];
-    }
-
-    function computeAverageBrightnessFromGradient(gradient) {
-        var colors = extractColorsFromGradient(gradient);
-        if (colors.length === 0) return null;
-        var total = 0;
-        for (var i = 0; i < colors.length; i++) {
-            total += hexToLuminance(colors[i]);
-        }
-        return total / colors.length;
-    }
-
-    function applyTheme(mode) {
-        _themeMode = mode;
-        document.body.classList.add('theme-transitioning');
-        document.body.classList.remove('light-mode', 'adaptive-light');
-        if (mode === 'light') {
-            document.body.classList.add('light-mode');
-        } else if (mode === 'auto' && _wallpaperBrightness !== null) {
-            if (_wallpaperBrightness > 0.5) {
-                document.body.classList.add('adaptive-light');
-            }
-        }
-        syncOutlineOnLightClass();
-        setTimeout(function () {
-            document.body.classList.remove('theme-transitioning');
-        }, 350);
-    }
-
-    function applyCtaStyle(style) {
-        _ctaButtonStyle = style;
-        document.body.classList.add('theme-transitioning');
-        document.body.classList.remove('cta-blur', 'cta-glass', 'cta-solid', 'cta-outline');
-        document.body.classList.add('cta-' + style);
-        syncOutlineOnLightClass();
-        setTimeout(function () {
-            document.body.classList.remove('theme-transitioning');
-        }, 350);
-    }
-
-    function syncOutlineOnLightClass() {
-        var isOutline = _ctaButtonStyle === 'outline';
-        var isLight = document.body.classList.contains('light-mode') ||
-                      document.body.classList.contains('adaptive-light');
-        document.body.classList.toggle('outline-on-light', isOutline && isLight);
-    }
-
-    function analyzeWallpaperBrightness(imagePath) {
-        if (!imagePath) return;
-        if (!window.monolithApi) return;
-        if (typeof window.monolithApi.analyze_image_brightness !== 'function') return;
-        window.monolithApi.analyze_image_brightness(imagePath)
-            .then(function (result) {
-                _wallpaperBrightness = result && result.success && typeof result.brightness === 'number'
-                    ? result.brightness
-                    : 0;
-                if (_themeMode === 'auto') {
-                    applyTheme('auto');
-                }
-            })
-            .catch(function () {
-                _wallpaperBrightness = 0;
-            });
-    }
+    // Theme & CTA Style Management moved to theme.js (window.MonolithTheme)
 
     // --- Wait for API bridge ---
     function waitForBridge(timeoutMs, callback) {
@@ -291,8 +195,8 @@
             updateMainUILabels();
             window.monolithApi.get_windows_pty_info()
                 .then(function (info) {
-                    _windowsPtyInfo = info || null;
-                    window.__monolithWindowsPty = _windowsPtyInfo;
+                    if (window.MonolithTerminal) window.MonolithTerminal.setWindowsPtyInfo(info);
+                    window.__monolithWindowsPty = info || null;
                 })
                 .catch(function () {});
             Promise.all([bgPromise, profilesPromise, startupPromise]).then(function () {
@@ -638,54 +542,10 @@
         applyTerminalOverlay(config);
     }
 
-    function getTerminalLightTheme() {
-        return {
-            foreground: '#2d2d2d',
-            cursor: '#333333',
-            selectionBackground: '#c0c0c0',
-            black: '#000000',
-            red: '#6e3030',
-            green: '#306030',
-            yellow: '#6e6e30',
-            blue: '#30306e',
-            magenta: '#6e306e',
-            cyan: '#306e6e',
-            white: '#808080',
-            brightBlack: '#505050',
-            brightRed: '#904040',
-            brightGreen: '#408040',
-            brightYellow: '#909040',
-            brightBlue: '#404090',
-            brightMagenta: '#904090',
-            brightCyan: '#409090',
-            brightWhite: '#b0b0b0'
-        };
-    }
-
-    function getTerminalDarkTheme() {
-        return {
-            foreground: '#b8b8b8',
-            cursor: '#c0c0c0',
-            selectionBackground: '#4a4a4a',
-            red: '#cd3131',
-            green: '#0dbc79',
-            yellow: '#e5e510',
-            blue: '#2472c8',
-            magenta: '#bc3fbc',
-            cyan: '#11a8cd',
-            white: '#e5e5e5',
-            brightBlack: '#666666',
-            brightRed: '#f14c4c',
-            brightGreen: '#23d18b',
-            brightYellow: '#f5f543',
-            brightBlue: '#3b8eea',
-            brightMagenta: '#d670d6',
-            brightCyan: '#29b8db',
-            brightWhite: '#ffffff'
-        };
-    }
+    // getTerminalLightTheme / getTerminalDarkTheme moved to theme.js (window.MonolithTheme)
 
     function applyTerminalBg(config) {
+        var term = window.MonolithTerminal && window.MonolithTerminal.getTerm();
         if (!term || !term.setOption) return;
         if (!config) {
             config = {
@@ -702,7 +562,7 @@
             try { existing = Object.assign({}, term.getOption('theme')); } catch (e) {}
             existing.background = themeBg;
 
-            var textTheme = isLight ? getTerminalLightTheme() : getTerminalDarkTheme();
+            var textTheme = isLight ? window.MonolithTheme.getTerminalLightTheme() : window.MonolithTheme.getTerminalDarkTheme();
             Object.assign(existing, textTheme);
 
             if (layer === 'overlay') {
@@ -888,12 +748,12 @@
 
                 // Theme mode
                 var themeMode = config.themeMode || 'dark';
-                applyTheme(themeMode);
+                window.MonolithTheme.applyTheme(themeMode);
                 updateThemeUI(themeMode);
 
                 // CTA button style
                 var ctaStyle = config.ctaButtonStyle || 'blur';
-                applyCtaStyle(ctaStyle);
+                window.MonolithTheme.applyCtaStyle(ctaStyle);
                 updateCtaStyleUI(ctaStyle);
 
                 // Background layer
@@ -902,20 +762,20 @@
 
                 // Analyze background brightness for auto theme
                 if (config.type === 'image' && config.image) {
-                    analyzeWallpaperBrightness(config.image);
+                    window.MonolithTheme.analyzeWallpaperBrightness(config.image);
                 } else if (config.type === 'color' && config.color) {
-                    _wallpaperBrightness = hexToLuminance(config.color);
-                    if (_themeMode === 'auto') {
-                        applyTheme('auto');
+                    window.MonolithTheme.setWallpaperBrightness(window.MonolithTheme.hexToLuminance(config.color));
+                    if (window.MonolithTheme.getThemeMode() === 'auto') {
+                        window.MonolithTheme.applyTheme('auto');
                     }
                 } else if (config.type === 'gradient' && config.gradient) {
-                    _wallpaperBrightness = computeAverageBrightnessFromGradient(config.gradient);
-                    if (_themeMode === 'auto') {
-                        applyTheme('auto');
+                    window.MonolithTheme.setWallpaperBrightness(window.MonolithTheme.computeAverageBrightnessFromGradient(config.gradient));
+                    if (window.MonolithTheme.getThemeMode() === 'auto') {
+                        window.MonolithTheme.applyTheme('auto');
                     }
                 } else {
-                    _wallpaperBrightness = null;
-                    if (_themeMode === 'auto') {
+                    window.MonolithTheme.setWallpaperBrightness(null);
+                    if (window.MonolithTheme.getThemeMode() === 'auto') {
                         document.body.classList.remove('light-mode', 'adaptive-light');
                     }
                 }
@@ -983,7 +843,7 @@
         if (!window.monolithApi) return;
         var slider = document.getElementById('bg-transparency-slider');
         var transparency = slider ? parseInt(slider.value, 10) : 75;
-        var args = [type, extras.image, extras.color, extras.gradient, transparency, _themeMode, _ctaButtonStyle, _bgLayer];
+        var args = [type, extras.image, extras.color, extras.gradient, transparency, window.MonolithTheme.getThemeMode(), window.MonolithTheme.getCtaStyle(), _bgLayer];
         window.monolithApi.set_background_config.apply(null, args)
             .then(function () {
                 loadBackgroundConfig();
@@ -1002,7 +862,7 @@
     themeBtns.forEach(function (btn) {
         btn.addEventListener('click', function () {
             var mode = this.dataset.theme;
-            applyTheme(mode);
+            window.MonolithTheme.applyTheme(mode);
             updateThemeUI(mode);
             saveAppearanceSettings('Theme changed.');
         });
@@ -1013,7 +873,7 @@
     ctaStyleBtns.forEach(function (btn) {
         btn.addEventListener('click', function () {
             var style = this.dataset.style;
-            applyCtaStyle(style);
+            window.MonolithTheme.applyCtaStyle(style);
             updateCtaStyleUI(style);
             saveAppearanceSettings('Button style changed.');
         });
@@ -1447,11 +1307,11 @@
     function showTerminal(dir) {
         setCurrentView('terminal');
         _currentLaunchDir = dir;
-        if (_terminalRunning && window.monolithApi) {
+        if (window.MonolithTerminal.isRunning() && window.monolithApi) {
             window.monolithApi.terminate_terminal('main');
         }
-        _terminalRunning = false;
-        _sessionGeneration['main'] = (_sessionGeneration['main'] || 0) + 1;
+        window.MonolithTerminal.setRunning(false);
+        window.MonolithTerminal.incrementSessionGeneration('main');
         if (landing) {
             landing.classList.add('hidden');
         }
@@ -1468,7 +1328,7 @@
                 terminalView.removeEventListener('animationend', handler);
             });
         }
-        initTerminal(dir);
+        window.MonolithTerminal.initTerminal(dir);
         loadBackgroundConfig();
         if (typeof window.SidebarManager !== 'undefined') {
             window.SidebarManager.show();
@@ -1479,12 +1339,6 @@
     }
 
     // --- Back to Landing ---
-    function cleanupTerminalDomHandlers() {
-        if (_resizeObserver) { _resizeObserver.disconnect(); _resizeObserver = null; }
-        if (_resizeHandler) { window.removeEventListener('resize', _resizeHandler); _resizeHandler = null; }
-        if (_contextMenuHandler) { terminalContainer.removeEventListener('contextmenu', _contextMenuHandler); _contextMenuHandler = null; }
-    }
-
     function backToLanding() {
         setCurrentView('landing');
         if (typeof window.SidebarManager !== 'undefined') {
@@ -1515,26 +1369,19 @@
                 landing.removeEventListener('animationend', handler);
             });
         }
-        if (term) {
-            try { term.dispose(); } catch (e) {}
-            term = null;
-            fitAddon = null;
-            webglAddon = null;
-        }
-        terminalContainer.innerHTML = '';
-        cleanupTerminalDomHandlers();
+        window.MonolithTerminal.dispose();
         var existingGif = document.getElementById('bg-gif-img');
         if (existingGif) existingGif.remove();
         var terminalGif = document.getElementById('terminal-bg-gif-img');
         if (terminalGif) terminalGif.remove();
-        _terminalRunning = false;
+        window.MonolithTerminal.setRunning(false);
         _panelRunning = false;
     }
 
     var terminalBackBtn = document.getElementById('terminal-back-btn');
     if (terminalBackBtn) {
         terminalBackBtn.addEventListener('click', function () {
-            if (_terminalRunning) {
+            if (window.MonolithTerminal.isRunning()) {
                 window.MonolithDialog.confirmBackToLauncher()
                     .then(function () { backToLanding(); })
                     .catch(function () {});
@@ -1545,304 +1392,8 @@
     }
 
 
+    // buildTerminalWindowsOptions + initTerminal moved to terminal.js (window.MonolithTerminal)
 
-
-    // Builds the xterm.js windows option from cached PTY info. Prefers the modern
-    // windowsPty descriptor (correct reflow heuristics per ConPTY build); falls
-    // back to nothing when info is unavailable. Returns an object to spread into
-    // the Terminal config. Shared with sidebar.js via window.__monolithTermWinOpts.
-    function buildTerminalWindowsOptions() {
-        var info = window.__monolithWindowsPty || _windowsPtyInfo;
-        if (info && info.backend && typeof info.buildNumber === 'number') {
-            return { windowsPty: { backend: info.backend, buildNumber: info.buildNumber } };
-        }
-        return {};
-    }
-    window.__monolithTermWinOpts = buildTerminalWindowsOptions;
-
-    // --- Terminal Setup ---
-    function initTerminal(dir) {
-        if (!terminalContainer) return;
-
-        cleanupTerminalDomHandlers();
-
-        // Dispose existing terminal and listeners before creating a new one
-        if (term) {
-            try { term.dispose(); } catch (e) { console.error('Error disposing term:', e); }
-            term = null;
-            webglAddon = null;
-        }
-        if (fitAddon) {
-            fitAddon = null;
-        }
-        terminalContainer.innerHTML = '';
-
-        if (typeof Terminal === 'undefined') {
-            terminalContainer.innerHTML = '<div style="color:#c0c0c0;padding:20px;font-family:monospace;">Error: Terminal library failed to load.</div>';
-            return;
-        }
-
-        var initBgConfig = { type: _bgType, bgLayer: _bgLayer };
-        var terminalBg = _bgLayer === 'overlay' ? '#000000' : computeTerminalBg(initBgConfig);
-        var terminalBlack = _bgLayer === 'overlay' ? '#000000' : (_bgType !== 'none' ? 'rgba(10, 10, 10, 0)' : '#0a0a0a');
-        var isLight = document.body.classList.contains('light-mode') || document.body.classList.contains('adaptive-light');
-        var initTheme = isLight ? getTerminalLightTheme() : getTerminalDarkTheme();
-        initTheme.background = terminalBg;
-        initTheme.black = terminalBlack;
-        var termOptions = {
-            allowTransparency: true,
-            theme: initTheme,
-            fontFamily: '"Cascadia Mono", "Consolas", "Lucida Console", "Courier New", monospace',
-            fontSize: 14,
-            letterSpacing: 0,
-            lineHeight: 1.0,
-            cursorBlink: true,
-            cursorStyle: 'block',
-            scrollback: 2000,
-            smoothScrollDuration: 0,
-            scrollSensitivity: 1,
-            allowProposedApi: true,
-            macOptionIsMeta: true,
-            macOptionClickForcesSelection: true,
-            minimumContrastRatio: 1,
-            fastScrollModifier: 'alt',
-            fastScrollSensitivity: 5,
-            scrollOnUserInput: true
-        };
-        Object.assign(termOptions, buildTerminalWindowsOptions());
-        term = new Terminal(termOptions);
-
-        term.open(terminalContainer);
-        term.focus();
-
-        if (typeof FitAddon !== 'undefined') {
-            fitAddon = new FitAddon.FitAddon();
-            term.loadAddon(fitAddon);
-        }
-
-        requestAnimationFrame(function() {
-            if (fitAddon) fitAddon.fit();
-            if (window.monolithApi) {
-                window.monolithApi.start_terminal('main', dir, true, null, term.cols, term.rows)
-                    .then((result) => {
-                        if (!result || !result.success) {
-                            term.writeln('');
-                            term.writeln('Failed to start ' + getStartupLabel() + '. ' + (result && result.error ? result.error : 'Check that it is installed and in your PATH.'));
-                        } else {
-                            _terminalRunning = true;
-                            if (result.generation) {
-                                _sessionGeneration['main'] = result.generation;
-                            }
-                        }
-                    })
-                    .catch((err) => {
-                        term.writeln('');
-                        term.writeln('Error starting ' + getStartupLabel() + ': ' + err);
-                    });
-            }
-        });
-
-        // --- Keyboard copy/paste shortcuts ---
-        term.attachCustomKeyEventHandler((e) => {
-            if (e.ctrlKey && !e.shiftKey && e.code === 'KeyC' && term.hasSelection()) {
-                copyToClipboard(term.getSelection());
-                term.clearSelection();
-                return false;
-            }
-            if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
-                if (term.hasSelection()) {
-                    copyToClipboard(term.getSelection());
-                    term.clearSelection();
-                }
-                return false;
-            }
-            if ((e.ctrlKey && e.code === 'KeyV') || (e.shiftKey && e.code === 'Insert')) {
-                return false;
-            }
-            if (e.ctrlKey && e.shiftKey && e.code === 'KeyW') {
-                return false;
-            }
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('command_palette'))) {
-                return false;
-            }
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('settings'))) {
-                return false;
-            }
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('toggle_sidebar'))) {
-                return false;
-            }
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('cmd_panel'))) {
-                return false;
-            }
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('clear_terminal'))) {
-                return false;
-            }
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('switch_profile'))) {
-                return false;
-            }
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('back_to_launcher'))) {
-                return false;
-            }
-            return true;
-        });
-
-        // --- Paste: DOM event avoids clipboard permission prompt & double-paste ---
-        term.element.addEventListener('paste', (e) => {
-            const text = e.clipboardData.getData('text');
-            if (text && window.monolithApi) {
-                e.preventDefault();
-                e.stopPropagation();
-                try { window.monolithApi.send_input('main', text); } catch (err) {}
-            }
-        });
-
-        // --- Right-click copy context menu ---
-        _contextMenuHandler = function (e) {
-            e.preventDefault();
-            var selection = term.getSelection();
-            if (selection) {
-                copyToClipboard(selection);
-                var indicator = document.createElement('div');
-                indicator.className = 'copied-toast';
-                indicator.textContent = 'Copied!';
-                indicator.style.cssText = 'position:fixed;top:' + e.clientY + 'px;left:' + e.clientX + 'px;background:#4a4a4a;color:#e0e0e0;padding:4px 8px;border-radius:4px;font-size:12px;font-family:monospace;pointer-events:none;z-index:9999;';
-                document.body.appendChild(indicator);
-                setTimeout(function () {
-                    indicator.classList.add('anim-exit');
-                    setTimeout(function () { indicator.remove(); }, 300);
-                }, 500);
-            } else {
-                navigator.clipboard.readText().then(function (text) {
-                    if (window.monolithApi && text) {
-                        window.monolithApi.send_input('main', text).catch(function () {});
-                    }
-                }).catch(function () {});
-            }
-        };
-        terminalContainer.addEventListener('contextmenu', _contextMenuHandler);
-
-        function syncSize() {
-            if (!term || !fitAddon) return;
-            var el = term.element || terminalContainer;
-            if (!el || el.offsetParent === null) return;
-            var prevCols = term.cols;
-            var prevRows = term.rows;
-            fitAddon.fit();
-            if (window.monolithApi && (term.cols !== prevCols || term.rows !== prevRows)) {
-                try {
-                    window.monolithApi.resize_terminal('main', term.cols, term.rows);
-                } catch (e) {}
-            }
-            try { term.refresh(0, term.rows - 1); } catch (e) {}
-        }
-
-        var resizeDebounceTimer;
-        var _resizeListener = function () {
-            clearTimeout(resizeDebounceTimer);
-            resizeDebounceTimer = setTimeout(syncSize, 100);
-        };
-        window.addEventListener('resize', _resizeListener);
-        _resizeHandler = _resizeListener;
-
-        var resizeObserverTimeout;
-        _resizeObserver = new ResizeObserver(function () {
-            clearTimeout(resizeObserverTimeout);
-            resizeObserverTimeout = setTimeout(syncSize, 100);
-        });
-        _resizeObserver.observe(terminalContainer);
-
-        var firstOutput = true;
-        var _exitCountdownInterval = null;
-        var _exitBanner = null;
-
-        function startSessionExitCountdown() {
-            _terminalRunning = false;
-            if (_exitCountdownInterval) { clearInterval(_exitCountdownInterval); _exitCountdownInterval = null; }
-            if (_exitBanner && _exitBanner.parentNode) _exitBanner.remove();
-            var exitBanner = document.createElement('div');
-            exitBanner.className = 'session-exit-banner';
-            exitBanner.style.cssText = 'position:absolute;bottom:40px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,0.9);color:#c0c0c0;padding:8px 16px;border-radius:6px;font-family:monospace;font-size:13px;z-index:101;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(4px);pointer-events:auto;cursor:pointer;';
-            exitBanner.textContent = 'Session ended \u2014 returning to launcher in 5s (click to stay)';
-            if (terminalView) terminalView.appendChild(exitBanner);
-            _exitBanner = exitBanner;
-            var countdown = 5;
-            exitBanner.addEventListener('click', function () {
-                if (_exitCountdownInterval) { clearInterval(_exitCountdownInterval); _exitCountdownInterval = null; }
-                if (exitBanner.parentNode) exitBanner.remove();
-            });
-            _exitCountdownInterval = setInterval(function () {
-                countdown--;
-                if (countdown <= 0) {
-                    clearInterval(_exitCountdownInterval);
-                    _exitCountdownInterval = null;
-                    if (exitBanner.parentNode) exitBanner.remove();
-                    backToLanding();
-                } else {
-                    exitBanner.textContent = 'Session ended \u2014 returning to launcher in ' + countdown + 's (click to stay)';
-                }
-            }, 1000);
-        }
-
-        window.writeToTerm = (data, eof, sessionId, generation) => {
-            sessionId = sessionId || 'main';
-            generation = generation || 0;
-            if (generation > 0 && _sessionGeneration[sessionId] > 0 &&
-                generation < _sessionGeneration[sessionId]) {
-                return;
-            }
-            if (eof && _skipNextEof[sessionId]) {
-                _skipNextEof[sessionId] = false;
-                return;
-            }
-            if (sessionId === 'main') {
-                if (term) {
-                    if (eof) {
-                        term.write(data);
-                        startSessionExitCountdown();
-                        return;
-                    }
-                    term.write(data);
-                    if (firstOutput) {
-                        firstOutput = false;
-                        setTimeout(syncSize, 1500);
-                    }
-                    if (typeof data === 'string' && data.indexOf('[session ended]') !== -1) {
-                        startSessionExitCountdown();
-                    }
-                }
-            } else if (sessionId.startsWith('panel-tab-')) {
-                var tabId = sessionId.replace('panel-', '');
-                if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.writeToTab) {
-                    window.SidebarManager.writeToTab(tabId, data, eof);
-                }
-            } else if (sessionId === 'panel') {
-                if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.writeToPanel) {
-                    window.SidebarManager.writeToPanel(data, eof);
-                }
-            }
-        };
-
-        term.onData((data) => {
-            if (window.monolithApi) {
-                try {
-                    window.monolithApi.send_input('main', data);
-                } catch (e) {}
-            }
-        });
-
-        applyTerminalBg();
-
-        term.writeln('');
-        term.writeln('Monoloth Terminal');
-        term.writeln('Directory: ' + dir);
-        term.writeln('Starting ' + getStartupLabel() + '...');
-        term.writeln('');
-
-        if (!window.monolithApi) {
-            term.writeln('Error: Bridge not available.');
-            return;
-        }
-    }
 
     function isTypingInMainTerminalOrInput() {
         var el = document.activeElement;
@@ -1922,7 +1473,8 @@
         }
         if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('clear_terminal'))) {
             e.preventDefault();
-            if (term) term.clear();
+            var _ct = window.MonolithTerminal.getTerm();
+            if (_ct) _ct.clear();
         }
         if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('switch_profile'))) {
             e.preventDefault();
@@ -1930,7 +1482,7 @@
         }
         if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('back_to_launcher'))) {
             e.preventDefault();
-            if (_terminalRunning) {
+            if (window.MonolithTerminal.isRunning()) {
                 window.MonolithDialog.confirmBackToLauncher()
                     .then(function() { backToLanding(); })
                     .catch(function() {});
@@ -2191,7 +1743,7 @@
         var tbBack = document.getElementById('tb-back');
         if (tbBack) {
             tbBack.addEventListener('click', function() {
-                if (_terminalRunning) {
+                if (window.MonolithTerminal.isRunning()) {
                     window.MonolithDialog.confirmBackToLauncher()
                         .then(function() { backToLanding(); })
                         .catch(function() {});
@@ -2205,15 +1757,15 @@
         if (tbRefresh) {
             tbRefresh.addEventListener('click', function() {
                 if (_currentLaunchDir) {
-                    _skipNextEof['main'] = true;
-                    var terminatePromise = _terminalRunning && window.monolithApi
+                    window.MonolithTerminal.setSkipNextEof('main', true);
+                    var terminatePromise = window.MonolithTerminal.isRunning() && window.monolithApi
                         ? window.monolithApi.terminate()
                         : Promise.resolve();
 
                     terminatePromise.finally(function () {
-                        _skipNextEof['main'] = false;
-                        _terminalRunning = false;
-                        initTerminal(_currentLaunchDir);
+                        window.MonolithTerminal.setSkipNextEof('main', false);
+                        window.MonolithTerminal.setRunning(false);
+                        window.MonolithTerminal.initTerminal(_currentLaunchDir);
                         loadBackgroundConfig();
                     });
                 }
@@ -2248,7 +1800,7 @@
         var tbClose = document.getElementById('tb-close');
         if (tbClose) {
             tbClose.addEventListener('click', function() {
-                if (_terminalRunning) {
+                if (window.MonolithTerminal.isRunning()) {
                     window.MonolithDialog.showConfirm('Exit Monoloth', 'A terminal session is running. Exit anyway?', 'exit_monoloth')
                         .then(function() { if (window.monolithApi) window.monolithApi.close_window(); })
                         .catch(function() {});
@@ -2327,26 +1879,30 @@
     // --- MonolothApp Facade (exposed to sidebar.js) ---
     window.MonolothApp = {
         getCurrentDir: function () { return _currentLaunchDir; },
+        getStartupLabel: function () { return getStartupLabel(); },
+        getBgState: function () { return { type: _bgType, layer: _bgLayer, transparency: _bgTransparency }; },
+        computeTerminalBg: function (cfg) { return computeTerminalBg(cfg); },
+        applyTerminalBg: function (cfg) { applyTerminalBg(cfg); },
         showConfirm: function (t, m, k) { return window.MonolithDialog.showConfirm(t, m, k); },
         restartSession: function (sessionId) {
             sessionId = sessionId || 'main';
             if (sessionId === 'main') {
-                if (_terminalRunning) {
-                    _skipNextEof['main'] = true;
+                if (window.MonolithTerminal.isRunning()) {
+                    window.MonolithTerminal.setSkipNextEof('main', true);
                     window.monolithApi.terminate_terminal('main')
-                        .finally(function () { _skipNextEof['main'] = false; _terminalRunning = false; initTerminal(_currentLaunchDir); });
+                        .finally(function () { window.MonolithTerminal.setSkipNextEof('main', false); window.MonolithTerminal.setRunning(false); window.MonolithTerminal.initTerminal(_currentLaunchDir); });
                 } else {
-                    initTerminal(_currentLaunchDir);
+                    window.MonolithTerminal.initTerminal(_currentLaunchDir);
                 }
             } else if (sessionId.startsWith('panel-tab-')) {
                 if (typeof window.SidebarManager === 'undefined' || typeof window.SidebarManager.getTab !== 'function') return;
                 var tabId = sessionId.replace('panel-', '');
                 var tab = window.SidebarManager.getTab(tabId);
                 if (!tab) return;
-                _skipNextEof[sessionId] = true;
+                window.MonolithTerminal.setSkipNextEof(sessionId, true);
                 if (window.monolithApi) {
                     window.monolithApi.terminate_terminal(sessionId)
-                        .finally(function () { _skipNextEof[sessionId] = false; }).catch(function () {});
+                        .finally(function () { window.MonolithTerminal.setSkipNextEof(sessionId, false); }).catch(function () {});
                 }
                 if (tab.term) {
                     try { tab.term.dispose(); } catch (e) {}
@@ -2357,9 +1913,9 @@
                 tab.running = false;
                 tab.busy = false;
                 tab.generation = null;
-                delete _sessionGeneration[sessionId];
-                if (typeof _skipNextEof !== 'undefined' && _skipNextEof[sessionId] !== undefined) {
-                    delete _skipNextEof[sessionId];
+                window.MonolithTerminal.deleteSessionGeneration(sessionId);
+                if (window.MonolithTerminal.hasSkipNextEof(sessionId)) {
+                    window.MonolithTerminal.deleteSkipNextEof(sessionId);
                 }
                 var terminalDiv = tab.container.querySelector('.cmd-panel-tab-terminal');
                 if (terminalDiv) terminalDiv.innerHTML = '';
@@ -2369,9 +1925,9 @@
                 }
             } else if (sessionId === 'panel') {
                 if (_panelRunning) {
-                    _skipNextEof['panel'] = true;
+                    window.MonolithTerminal.setSkipNextEof('panel', true);
                     window.monolithApi.terminate_terminal('panel')
-                        .finally(function () { _skipNextEof['panel'] = false; _panelRunning = false; if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.createTab === 'function') { window.SidebarManager.showCmdPanel(); window.SidebarManager.createTab(null, true, _currentLaunchDir); } });
+                        .finally(function () { window.MonolithTerminal.setSkipNextEof('panel', false); _panelRunning = false; if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.createTab === 'function') { window.SidebarManager.showCmdPanel(); window.SidebarManager.createTab(null, true, _currentLaunchDir); } });
                 } else {
                     if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.createTab === 'function') {
                         window.SidebarManager.showCmdPanel();
@@ -2381,24 +1937,20 @@
             }
         },
         setSkipNextEof: function (sessionId, val) {
-            _skipNextEof[sessionId] = val;
+            window.MonolithTerminal.setSkipNextEof(sessionId, val);
         },
         setSessionGeneration: function (sessionId, gen) {
-            _sessionGeneration[sessionId] = gen;
+            window.MonolithTerminal.setSessionGeneration(sessionId, gen);
         },
         refitTerminals: function () {
-            if (term && fitAddon) {
-                fitAddon.fit();
-                if (window.monolithApi) window.monolithApi.resize_terminal('main', term.cols, term.rows);
-                try { term.refresh(0, term.rows - 1); } catch (e) {}
-            }
+            window.MonolithTerminal.refit();
         },
-        isMainActive: function () { return _terminalRunning; },
+        isMainActive: function () { return window.MonolithTerminal.isRunning(); },
         switchTab: switchTab,
         backToLanding: function () { backToLanding(); },
         showTerminal: function (dir) { showTerminal(dir); },
         showSettings: function () { showSettings(); },
-        clearTerminal: function () { if (term) term.clear(); },
+        clearTerminal: function () { var t = window.MonolithTerminal.getTerm(); if (t) t.clear(); },
         copyToClipboard: function (t) { copyToClipboard(t); },
         openProfileSwitcher: function () { window.MonolithProfiles.openProfileSwitcher(); },
         showStatus: function (id, msg, isError) { showStatus(id, msg, isError); },

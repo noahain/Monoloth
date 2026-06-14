@@ -4,28 +4,13 @@ const test = require('node:test');
 const vm = require('node:vm');
 
 class FakeClassList {
-    constructor() {
-        this.classes = new Set();
-    }
-
-    add(...classes) {
-        classes.forEach((cls) => this.classes.add(cls));
-    }
-
-    remove(...classes) {
-        classes.forEach((cls) => this.classes.delete(cls));
-    }
-
-    contains(cls) {
-        return this.classes.has(cls);
-    }
-
+    constructor() { this.classes = new Set(); }
+    add(...classes) { classes.forEach((cls) => this.classes.add(cls)); }
+    remove(...classes) { classes.forEach((cls) => this.classes.delete(cls)); }
+    contains(cls) { return this.classes.has(cls); }
     toggle(cls, force) {
-        if (force === undefined) {
-            force = !this.classes.has(cls);
-        }
-        if (force) this.classes.add(cls);
-        else this.classes.delete(cls);
+        if (force === undefined) force = !this.classes.has(cls);
+        if (force) this.classes.add(cls); else this.classes.delete(cls);
         return force;
     }
 }
@@ -48,45 +33,24 @@ class FakeElement {
         this.textContent = '';
         this.value = '';
     }
-
     addEventListener(type, handler) {
         if (!this.eventListeners[type]) this.eventListeners[type] = [];
         this.eventListeners[type].push(handler);
     }
-
     removeEventListener(type, handler) {
         if (!this.eventListeners[type]) return;
         this.eventListeners[type] = this.eventListeners[type].filter((fn) => fn !== handler);
     }
-
-    appendChild(child) {
-        child.parentNode = this;
-        this.children.push(child);
-        return child;
-    }
-
+    appendChild(child) { child.parentNode = this; this.children.push(child); return child; }
     removeChild(child) {
         this.children = this.children.filter((item) => item !== child);
         child.parentNode = null;
         return child;
     }
-
-    remove() {
-        if (this.parentNode) this.parentNode.removeChild(this);
-    }
-
-    querySelector() {
-        return new FakeElement('nested');
-    }
-
-    querySelectorAll() {
-        return [];
-    }
-
-    setAttribute(name, value) {
-        this[name] = value;
-    }
-
+    remove() { if (this.parentNode) this.parentNode.removeChild(this); }
+    querySelector() { return new FakeElement('nested'); }
+    querySelectorAll() { return []; }
+    setAttribute(name, value) { this[name] = value; }
     focus() {}
     select() {}
     click() {}
@@ -100,9 +64,7 @@ function createDocument() {
         activeElement: null,
         addEventListener() {},
         removeEventListener() {},
-        createElement(tag) {
-            return new FakeElement(tag);
-        },
+        createElement(tag) { return new FakeElement(tag); },
         createTextNode(text) {
             const el = new FakeElement('text');
             el.textContent = String(text);
@@ -112,18 +74,14 @@ function createDocument() {
             if (!elements.has(id)) elements.set(id, new FakeElement(id));
             return elements.get(id);
         },
-        querySelector(selector) {
-            return this.getElementById(`selector:${selector}`);
-        },
-        querySelectorAll() {
-            return [];
-        }
+        querySelector(selector) { return this.getElementById(`selector:${selector}`); },
+        querySelectorAll() { return []; }
     };
     document.body.appendChild = FakeElement.prototype.appendChild.bind(document.body);
     return document;
 }
 
-function createHarness(backgroundConfig) {
+function createHarness(bgState) {
     const document = createDocument();
     let webglLoadCount = 0;
 
@@ -133,67 +91,40 @@ function createHarness(backgroundConfig) {
             this.rows = 24;
             this.cols = 80;
             this.element = new FakeElement('xterm');
+            this.writeCount = 0;
+            this.lastWrite = null;
         }
-
-        open(container) {
-            container.appendChild(this.element);
-        }
-
+        open(container) { container.appendChild(this.element); }
         loadAddon(addon) {
             if (addon && addon.__isWebglAddon) webglLoadCount += 1;
             if (addon && typeof addon.activate === 'function') addon.activate(this);
         }
-
         focus() {}
         attachCustomKeyEventHandler() {}
         getSelection() { return ''; }
         hasSelection() { return false; }
         clearSelection() {}
-        write() {}
+        write(data) { this.writeCount += 1; this.lastWrite = data; }
         writeln() {}
         onData() {}
         dispose() {}
         onScroll() {}
         refresh() {}
-        resize(cols, rows) {
-            this.cols = cols;
-            this.rows = rows;
-        }
-
-        getOption(name) {
-            return this.options[name];
-        }
-
-        setOption(name, value) {
-            this.options[name] = value;
-        }
+        resize(cols, rows) { this.cols = cols; this.rows = rows; }
+        getOption(name) { return this.options[name]; }
+        setOption(name, value) { this.options[name] = value; }
     }
 
     class FakeWebglAddon {
-        constructor() {
-            this.__isWebglAddon = true;
-        }
-
+        constructor() { this.__isWebglAddon = true; }
         dispose() {}
     }
 
     const monolithApi = new Proxy({
-        get_background_config: () => Promise.resolve(backgroundConfig),
-        get_shortcuts: () => Promise.resolve({}),
-        get_profiles: () => Promise.resolve({ success: true, profiles: [], active: 'Default' }),
-        get_startup_config: () => Promise.resolve({ command: 'opencode', type: 'preset' }),
-        get_secondary_commands: () => Promise.resolve([]),
-        get_recent_directories: () => Promise.resolve([]),
-        get_last_directory: () => Promise.resolve({ success: false }),
-        get_file_picker_type: () => Promise.resolve('custom'),
-        get_config: () => Promise.resolve(false),
-        set_recent_directories: () => Promise.resolve(),
-        save_last_directory: () => Promise.resolve(),
         start_terminal: () => Promise.resolve({ success: true, generation: 1 }),
         resize_terminal: () => Promise.resolve(),
         send_input: () => Promise.resolve(),
-        terminate_terminal: () => Promise.resolve(),
-        is_window_maximized: () => Promise.resolve({ maximized: false })
+        terminate_terminal: () => Promise.resolve()
     }, {
         get(target, prop) {
             if (prop in target) return target[prop];
@@ -208,6 +139,17 @@ function createHarness(backgroundConfig) {
         __TAURI__: null
     };
     window.window = window;
+
+    // Stub MonolothApp BEFORE loading terminal.js. terminal.js references these
+    // only inside functions, but set them up front so initTerminal works.
+    window.MonolothApp = {
+        getStartupLabel: () => 'opencode',
+        getBgState: () => bgState,
+        computeTerminalBg: () => '#0a0a0a',
+        applyTerminalBg: () => {},
+        backToLanding: () => {},
+        copyToClipboard: () => {}
+    };
 
     const context = {
         console,
@@ -236,27 +178,12 @@ function createHarness(backgroundConfig) {
         } },
         WebglAddon: { WebglAddon: FakeWebglAddon },
         Image: class {
-            constructor() {
-                this.width = 100;
-                this.height = 100;
-                this.onload = null;
-                this.onerror = null;
-            }
-
-            set src(value) {
-                this._src = value;
-                if (this.onload) setTimeout(() => this.onload(), 0);
-            }
-
-            get src() {
-                return this._src;
-            }
+            constructor() { this.width = 100; this.height = 100; this.onload = null; this.onerror = null; }
+            set src(value) { this._src = value; if (this.onload) setTimeout(() => this.onload(), 0); }
+            get src() { return this._src; }
         },
         ResizeObserver: class { observe() {} disconnect() {} },
-        requestAnimationFrame: (fn) => {
-            fn();
-            return 1;
-        },
+        requestAnimationFrame: (fn) => { fn(); return 1; },
         setTimeout,
         clearTimeout,
         setInterval,
@@ -266,35 +193,14 @@ function createHarness(backgroundConfig) {
     context.globalThis = context;
     vm.createContext(context);
 
-    const domUtilsSource = fs.readFileSync('frontend/lib/dom-utils.js', 'utf8');
-    vm.runInContext(domUtilsSource, context, { filename: 'frontend/lib/dom-utils.js' });
-
-    const updaterToastSource = fs.readFileSync('frontend/lib/updater-toast.js', 'utf8');
-    vm.runInContext(updaterToastSource, context, { filename: 'frontend/lib/updater-toast.js' });
-
     const shortcutsSource = fs.readFileSync('frontend/shortcuts.js', 'utf8');
     vm.runInContext(shortcutsSource, context, { filename: 'frontend/shortcuts.js' });
 
     const themeSource = fs.readFileSync('frontend/theme.js', 'utf8');
     vm.runInContext(themeSource, context, { filename: 'frontend/theme.js' });
 
-    const dialogSource = fs.readFileSync('frontend/dialog.js', 'utf8');
-    vm.runInContext(dialogSource, context, { filename: 'frontend/dialog.js' });
-
-    const filePickerSource = fs.readFileSync('frontend/file-picker.js', 'utf8');
-    vm.runInContext(filePickerSource, context, { filename: 'frontend/file-picker.js' });
-
-    const commandPaletteSource = fs.readFileSync('frontend/command-palette.js', 'utf8');
-    vm.runInContext(commandPaletteSource, context, { filename: 'frontend/command-palette.js' });
-
-    const profilesSource = fs.readFileSync('frontend/profiles.js', 'utf8');
-    vm.runInContext(profilesSource, context, { filename: 'frontend/profiles.js' });
-
     const terminalSource = fs.readFileSync('frontend/terminal.js', 'utf8');
     vm.runInContext(terminalSource, context, { filename: 'frontend/terminal.js' });
-
-    const source = fs.readFileSync('frontend/app.js', 'utf8');
-    vm.runInContext(source, context, { filename: 'frontend/app.js' });
 
     return {
         context,
@@ -306,20 +212,40 @@ function flushAsync() {
     return new Promise((resolve) => setTimeout(resolve, 20));
 }
 
-test('does not load WebGL when the terminal background is transparent', async () => {
-    const harness = createHarness({
-        type: 'image',
-        image: 'C:\\wallpaper.png',
-        imageUrl: 'file:///C:/wallpaper.png',
-        transparency: 75,
-        bgLayer: 'behind',
-        themeMode: 'dark',
-        ctaButtonStyle: 'blur'
-    });
-
+test('does not load WebGL when terminal background is transparent', async () => {
+    const harness = createHarness({ type: 'image', layer: 'behind', transparency: 75 });
+    harness.context.window.MonolithTerminal.initTerminal('C:\\dir');
     await flushAsync();
-    harness.context.window.MonolothApp.restartSession('main');
-    await flushAsync();
-
     assert.equal(harness.getWebglLoadCount(), 0);
+});
+
+test('writeToTerm drops stale generation', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 0 });
+    const T = harness.context.window.MonolithTerminal;
+    T.initTerminal('C:\\dir');
+    await flushAsync();
+    T.setSessionGeneration('main', 2);
+    const term = T.getTerm();
+    const before = term.writeCount;
+    harness.context.window.writeToTerm('x', false, 'main', 1); // older gen -> dropped
+    assert.equal(term.writeCount, before, 'stale-generation write must be dropped');
+    harness.context.window.writeToTerm('y', false, 'main', 2); // current gen -> written
+    assert.equal(term.writeCount, before + 1, 'current-generation write must go through');
+    assert.equal(term.lastWrite, 'y');
+});
+
+test('writeToTerm honors skipNextEof', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 0 });
+    const T = harness.context.window.MonolithTerminal;
+    T.initTerminal('C:\\dir');
+    await flushAsync();
+    T.setSessionGeneration('main', 0);
+    T.setSkipNextEof('main', true);
+    const term = T.getTerm();
+    const before = term.writeCount;
+    harness.context.window.writeToTerm('', true, 'main', 0); // eof skipped once
+    assert.equal(term.writeCount, before, 'skipped eof must not write');
+    // skip flag cleared: a subsequent eof now writes (and starts countdown)
+    harness.context.window.writeToTerm('z', true, 'main', 0);
+    assert.equal(term.writeCount, before + 1, 'skip flag must clear after one eof');
 });
