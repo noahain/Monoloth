@@ -79,7 +79,14 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Monoloth ${{ github.ref_name }}'
-          releaseBody: 'See the assets below to download and install.'
+          releaseBody: |
+            ### Which file do I download?
+
+            - **Windows**: `x64-setup.exe` to install, or `x64_portable.exe` to run without installing.
+            - **macOS**: `aarch64.dmg` for Apple Silicon (M1 and newer), `x64.dmg` for Intel.
+            - **Linux**: `.AppImage` runs on any distro; grab the `.deb` or `.rpm` for your package manager.
+
+            Ignore the `.sig` and `.app.tar.gz` files. The auto-updater uses those.
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
@@ -106,17 +113,19 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path portable | Out-Null
-          Copy-Item "src-tauri/target/release/monoloth.exe" "portable/Monoloth_x64_portable.exe"
+          $ver = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          Copy-Item "src-tauri/target/release/monoloth.exe" "portable/Monoloth_${ver}_x64_portable.exe"
 
       - name: Prepare macOS portable
         if: matrix.platform == 'macos-latest'
         run: |
           mkdir -p portable
+          VER=$(grep '"version"' src-tauri/tauri.conf.json | head -1 | sed 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
           ARCH=x64
           echo "${{ matrix.args }}" | grep -q aarch64 && ARCH=aarch64
           APP=$(find src-tauri/target -path "*/release/bundle/macos/Monoloth.app" | head -n1)
           if [ -z "$APP" ]; then echo "Monoloth.app not found"; exit 1; fi
-          ditto -c -k --keepParent "$APP" "portable/Monoloth_${ARCH}_portable.app.zip"
+          ditto -c -k --keepParent "$APP" "portable/Monoloth_${VER}_${ARCH}_portable.app.zip"
 
       - name: Upload portable artifacts to release
         if: startsWith(github.ref, 'refs/tags/v') && matrix.platform != 'ubuntu-22.04'

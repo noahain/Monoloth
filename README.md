@@ -33,10 +33,18 @@ We built the backend with Tauri 2 and Rust, and the frontend with vanilla JavaSc
 
 Grab a prebuilt binary from the [latest release](https://github.com/noahain/Monoloth/releases/latest). No toolchain required.
 
+**Which file?**
+
+- **Windows**: `x64-setup.exe` to install, or `x64_portable.exe` to run without installing.
+- **macOS**: `aarch64.dmg` for Apple Silicon (M1 and newer), `x64.dmg` for Intel.
+- **Linux**: `.AppImage` runs on any distro; grab the `.deb` or `.rpm` if you prefer your package manager.
+
+Ignore the `.sig` and `.app.tar.gz` files. The auto-updater uses those, and you don't need them for a manual download.
+
 | Platform | Download | Notes |
 | -------- | -------- | ----- |
 | Windows | `.msi` or `-setup.exe` installer | WebView2 installs on first run |
-| Windows (portable) | `Monoloth_x64_portable.exe` | Single file, no install |
+| Windows (portable) | `_x64_portable.exe` | Single file, no install |
 | macOS | `.dmg` (Apple Silicon or Intel) | Pick the build that matches your chip |
 | Linux | `.AppImage` | Mark it executable and run; `.deb` and `.rpm` also ship |
 

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Portable artifact filenames now include the version
+  (`Monoloth_<version>_x64_portable.exe`, `Monoloth_<version>_<arch>_portable.app.zip`),
+  so a downloaded file identifies itself like every other artifact.
+- Release pages now open with a "Which file do I download?" guide that maps each
+  platform to the right artifact and tells users to ignore the updater-only
+  `.sig` and `.app.tar.gz` files.
+
 ## [2.1.6] - 2026-06-14
 
 ### Fixed
