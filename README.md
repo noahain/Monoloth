@@ -13,7 +13,7 @@
   <p>Run OpenCode, Claude Code, and other CLI agents in a real desktop window instead of a bare terminal.</p>
 
   <p>
-    <img src="https://img.shields.io/badge/version-2.1.4-blue" alt="version" />
+    <img src="https://img.shields.io/badge/version-2.1.6-blue" alt="version" />
     <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
     <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey" alt="platform" />
     <img src="https://img.shields.io/badge/rust-1.77.2-orange" alt="rust" />
@@ -28,6 +28,19 @@
 Monoloth wraps CLI coding agents (like OpenCode and Claude Code) in a native desktop shell on Windows, macOS, and Linux. Choose a project directory to start a session with integrated terminal emulation and session history tracking.
 
 We built the backend with Tauri 2 and Rust, and the frontend with vanilla JavaScript. The project does not use a bundler, a `package.json` file, or a Node.js build process.
+
+### Download
+
+Grab a prebuilt binary from the [latest release](https://github.com/noahain/Monoloth/releases/latest). No toolchain required.
+
+| Platform | Download | Notes |
+| -------- | -------- | ----- |
+| Windows | `.msi` or `-setup.exe` installer | WebView2 installs on first run |
+| Windows (portable) | `Monoloth_x64_portable.exe` | Single file, no install |
+| macOS | `.dmg` (Apple Silicon or Intel) | Pick the build that matches your chip |
+| Linux | `.AppImage` | Mark it executable and run; `.deb` and `.rpm` also ship |
+
+The app updates itself after that: it checks the release feed, verifies the minisign signature, and installs the new version on your confirmation.
 
 ### Build & Run
 
@@ -156,7 +169,13 @@ Monoloth/
 
 ### Configuration
 
-The application stores settings at `%APPDATA%/Monoloth/config.json` and saves user profiles in `%APPDATA%/Monoloth/profiles/`. On macOS and Linux, config lives in the platform's standard config directory instead.
+The application stores settings in `config.json` and saves user profiles in a `profiles/` folder, both under the platform's standard config location:
+
+| Platform | Location |
+| -------- | -------- |
+| Windows | `%APPDATA%\Monoloth\` |
+| macOS | `~/Library/Application Support/Monoloth/` |
+| Linux | `~/.config/Monoloth/` |
 
 | Parameter | Default Value | Description |
 | --------- | ------------- | ----------- |
@@ -193,8 +212,8 @@ verifies that signature before installing.
 
 As a shell for CLI agents, Monoloth spawns terminal sessions and runs the
 command you configure, and it reads the project directory you choose. Settings
-and profiles stay local in `%APPDATA%/Monoloth/`. For the full picture and how
-to report a vulnerability, see [SECURITY.md](SECURITY.md).
+and profiles stay local in your platform's config directory. For the full
+picture and how to report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ### License
 MIT
