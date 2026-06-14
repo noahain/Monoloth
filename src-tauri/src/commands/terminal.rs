@@ -110,7 +110,8 @@ pub fn terminate_terminal(pty: State<PtyManager>, history: State<HistoryManager>
 pub fn run_parallel_command(cmd: String, cwd: String) -> Result<bool, String> {
     let mut command = shell_command(&cmd);
     command.current_dir(&cwd);
-    if cfg!(windows) {
+    #[cfg(windows)]
+    {
         use std::os::windows::process::CommandExt;
         const CREATE_NEW_CONSOLE: u32 = 0x00000010;
         command.creation_flags(CREATE_NEW_CONSOLE);
