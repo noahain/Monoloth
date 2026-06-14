@@ -21,7 +21,7 @@
   </p>
 </div>
 
-[![Monoloth Main Window](assets/screenshots/main.gif)](https://github.com/noahain/Monoloth)
+[![Monoloth Main Window](assets/screenshots/main.gif?v=2)](https://github.com/noahain/Monoloth)
 
 ---
 
