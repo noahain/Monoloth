@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.5] - 2026-06-14
+
 ### Added
 - macOS and Linux builds alongside Windows. The release workflow now builds a
   four-target matrix (Windows, Linux, macOS arm64, macOS x64).
@@ -32,6 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `cmd /K` behavior.
 
 ### Fixed
+- Terminal resize corruption with full-screen TUI apps (opencode, vim, etc.).
+  Frozen edges and stray characters on resize are gone: all resize triggers are
+  coalesced into one debounce, the PTY is resized before xterm, and the forced
+  refresh that painted transitional reflow cells was removed. The CMD panel uses
+  the same contract.
 - `run_parallel_command` no longer fails to compile on Unix. The Windows-only
   `creation_flags` call is gated behind `#[cfg(windows)]`.
 
