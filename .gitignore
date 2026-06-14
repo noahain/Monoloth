@@ -15,6 +15,7 @@ Thumbs.db
 # Backups and scratch dirs
 /backup_*/
 /bkp_*/
+/.backups/
 /new/
 /testing/
 /legacy/
