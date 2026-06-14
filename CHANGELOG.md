@@ -7,7 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.7] - 2026-06-15
+
+### Fixed
+- The whole app froze for ~2 seconds (with a console flash) when the main
+  terminal started in release builds, but not in `cargo tauri dev`. Release
+  builds run under the Windows `windows` subsystem with no console, so each
+  helper process spawned during startup — the `where`/`npm`/`yarn` lookups that
+  locate `opencode`, plus any "before" secondary command — forced Windows to
+  allocate a fresh `conhost.exe`. Those spawns now set `CREATE_NO_WINDOW`, so
+  startup is instant and silent. Dev builds (console subsystem) never hit this.
+- Returning to the launcher no longer loses the CMD panel's open/closed state;
+  `cmdPanelOpen` is preserved across navigation.
+
 ### Changed
+- The landing status bar hides its idle "Ready" label and trailing separator,
+  showing text only for meaningful states (initializing, errors), and gains a
+  little breathing room below the hero cluster.
+- Recent-project rows drop the left accent border for a cleaner list.
 - Portable artifact filenames now include the version
   (`Monoloth_<version>_x64_portable.exe`, `Monoloth_<version>_<arch>_portable.app.zip`),
   so a downloaded file identifies itself like every other artifact.
@@ -155,6 +172,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release.
 
 [Unreleased]: https://github.com/noahain/Monoloth/compare/main...beta
+[2.1.7]: https://github.com/noahain/Monoloth/compare/v2.1.6...v2.1.7
 [2.1.6]: https://github.com/noahain/Monoloth/compare/v2.1.5...v2.1.6
 [2.1.5]: https://github.com/noahain/Monoloth/compare/v2.1.4...v2.1.5
 [2.1.4]: https://github.com/noahain/Monoloth/compare/v2.1.3...v2.1.4

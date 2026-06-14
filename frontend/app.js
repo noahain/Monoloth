@@ -73,8 +73,15 @@
     var _bridgeReady = false;
 
     function updateStatusBar(text) {
-        if (landingStatusText) {
-            landingStatusText.textContent = text || 'Ready';
+        if (!landingStatusText) return;
+        // Idle ("Ready") shows nothing: hide the label and its trailing
+        // separator so only meaningful states (Initializing, errors) appear.
+        var idle = !text || text === 'Ready';
+        landingStatusText.textContent = idle ? '' : text;
+        landingStatusText.style.display = idle ? 'none' : '';
+        var sep = landingStatusText.nextElementSibling;
+        if (sep && sep.classList.contains('landing-status-sep')) {
+            sep.style.display = idle ? 'none' : '';
         }
     }
 

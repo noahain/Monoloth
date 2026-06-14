@@ -453,12 +453,10 @@ body.adaptive-light .recent-section-label {
     cursor: pointer;
     transition: all 0.15s ease;
     gap: 0.55rem;
-    border-left: 2px solid transparent;
 }
 
 .recent-project-item:hover {
     background: rgba(255, 255, 255, 0.04);
-    border-left-color: rgba(255, 255, 255, 0.15);
 }
 
 body.light-mode .recent-project-item:hover,
@@ -559,6 +557,9 @@ body.adaptive-light .bridge-loading-overlay {
     user-select: none;
     text-align: center;
     text-shadow: 0 0 28px rgba(0, 0, 0, 0.28);
+    /* Ambient footer meta: extra separation from the brand+card hero
+       cluster so the vertical rhythm reads tight-then-loose, not a flat stack. */
+    margin-top: 1.25rem;
 }
 
 body.light-mode .landing-status-bar,
