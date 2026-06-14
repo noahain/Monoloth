@@ -719,23 +719,33 @@
 
     function refitActiveTab() {
         var tab = getActiveTab();
-        if (!tab || !tab.term) return;
+        if (!tab || !tab.term || !tab.fitAddon) return;
         try {
-            var prevCols = tab.term.cols;
-            var prevRows = tab.term.rows;
-            tab.fitAddon.fit();
-            if (tab.term.cols !== prevCols || tab.term.rows !== prevRows) {
-                if (window.monolithApi) {
-                    window.monolithApi.resize_terminal(tab.sessionId, tab.term.cols, tab.term.rows).catch(function () {});
-                }
+            // Same ordering contract as the main terminal: resize the PTY first
+            // so the child app's redraw targets the final size, then xterm. No
+            // forced term.refresh() — xterm re-renders on resize, and forcing a
+            // refresh paints the transitional reflow buffer which diff-based TUI
+            // apps never overwrite (the edge-freeze / random-char corruption).
+            var dims;
+            try { dims = tab.fitAddon.proposeDimensions(); } catch (e) { return; }
+            if (!dims || isNaN(dims.cols) || isNaN(dims.rows)) return;
+            if (dims.cols === tab.term.cols && dims.rows === tab.term.rows) return;
+            if (window.monolithApi) {
+                window.monolithApi.resize_terminal(tab.sessionId, dims.cols, dims.rows).catch(function () {});
             }
-            var term = tab.term;
-            requestAnimationFrame(function () {
-                try { term.refresh(0, term.rows - 1); } catch (e) {}
-            });
+            tab.term.resize(dims.cols, dims.rows);
         } catch (e) {
             console.error('Failed to refit active tab:', e);
         }
+    }
+
+    // Debounced refit for high-frequency triggers (drag-resize). Coalesces a
+    // storm of mousemove events into a single resize once motion settles, so
+    // ConPTY can acknowledge before the next resize arrives.
+    var _refitTabTimer = null;
+    function scheduleRefitActiveTab() {
+        clearTimeout(_refitTabTimer);
+        _refitTabTimer = setTimeout(refitActiveTab, 120);
     }
 
     function startRenameTab(tabId) {
@@ -898,8 +908,13 @@
         var maxH = window.innerHeight * 0.6;
         if (newHeight > maxH) newHeight = maxH;
 
+        // Only the CSS height tracks the pointer in real time. The actual PTY/
+        // xterm resizes are debounced so a drag doesn't fire a per-pixel resize
+        // storm at ConPTY (which corrupts the buffer while the child app is
+        // mid-redraw). Both the panel tab and the main terminal shrink during a
+        // drag, so coalesce both.
         applyPanelHeight(newHeight);
-        refitActiveTab();
+        scheduleRefitActiveTab();
 
         if (_resizeDebounceTimer) clearTimeout(_resizeDebounceTimer);
         _resizeDebounceTimer = setTimeout(function () {
@@ -909,7 +924,7 @@
             if (window.MonolothApp && window.MonolothApp.refitTerminals) {
                 window.MonolothApp.refitTerminals();
             }
-        }, 100);
+        }, 120);
     }
 
     function onResizeMouseUp() {
@@ -920,6 +935,7 @@
         if (window.monolithApi) {
             window.monolithApi.set_config('cmdPanelHeight', _panelHeight).catch(function () {});
         }
+        // Final settle: one resize each at the committed height.
         if (window.MonolothApp && window.MonolothApp.refitTerminals) {
             window.MonolothApp.refitTerminals();
         }

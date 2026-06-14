@@ -37,6 +37,7 @@
     window.__monolithTermWinOpts = buildTerminalWindowsOptions;
 
     function cleanupTerminalDomHandlers() {
+        if (_resizeTimer) { clearTimeout(_resizeTimer); _resizeTimer = null; }
         if (_resizeObserver) { _resizeObserver.disconnect(); _resizeObserver = null; }
         if (_resizeHandler) { window.removeEventListener('resize', _resizeHandler); _resizeHandler = null; }
         if (_contextMenuHandler) { terminalContainer.removeEventListener('contextmenu', _contextMenuHandler); _contextMenuHandler = null; }
@@ -54,13 +55,48 @@
         cleanupTerminalDomHandlers();
     }
 
-    // Refit the main terminal (extracted from the refitTerminals facade body).
-    function refit() {
-        if (term && fitAddon) {
-            fitAddon.fit();
-            if (window.monolithApi) window.monolithApi.resize_terminal('main', term.cols, term.rows);
-            try { term.refresh(0, term.rows - 1); } catch (e) {}
+    // Coalesced resize machinery (shared by window-resize, ResizeObserver, the
+    // refitTerminals facade, and the first-output settle). Hoisted to module
+    // level so every trigger funnels through ONE debounce timer — multiple
+    // separate timers previously let resize events race and push mismatched
+    // sizes to ConPTY faster than the child app could repaint.
+    var _resizeTimer = null;
+
+    // Apply a single resize. Order matters: resize the PTY FIRST so the child
+    // app's SIGWINCH-driven redraw targets the final dimensions, THEN resize
+    // xterm to match. We deliberately do NOT force term.refresh() afterwards:
+    // xterm re-renders on resize, and forcing a refresh paints the transitional
+    // (half-reflowed) buffer. Diff-based TUI apps (opencode, vim) in the
+    // alternate-screen buffer only repaint the cells they think changed, so any
+    // garbage painted into the transitional frame is never overwritten — that
+    // is the source of the "frozen edges + random middle characters" corruption.
+    function applyResize() {
+        if (!term || !fitAddon) return;
+        var el = term.element || terminalContainer;
+        if (!el || el.offsetParent === null) return;
+        var dims;
+        try { dims = fitAddon.proposeDimensions(); } catch (e) { return; }
+        if (!dims || isNaN(dims.cols) || isNaN(dims.rows)) return;
+        if (dims.cols === term.cols && dims.rows === term.rows) return;
+        if (window.monolithApi) {
+            try { window.monolithApi.resize_terminal('main', dims.cols, dims.rows); } catch (e) {}
         }
+        try { term.resize(dims.cols, dims.rows); } catch (e) {}
+    }
+
+    // Debounced entry point for high-frequency triggers. The delay gives ConPTY
+    // time to acknowledge and the child app time to repaint before the next one.
+    function scheduleResize() {
+        clearTimeout(_resizeTimer);
+        _resizeTimer = setTimeout(applyResize, 120);
+    }
+
+    // Public "fit now" used by the refitTerminals facade (view-enter, panel
+    // toggle). applyResize is idempotent (early-returns when dimensions are
+    // unchanged), so an immediate call here cannot conflict with a debounced
+    // observer call that lands later with the same target size.
+    function refit() {
+        applyResize();
     }
 
     // --- Terminal Setup ---
@@ -226,32 +262,17 @@
         terminalContainer.addEventListener('contextmenu', _contextMenuHandler);
 
         function syncSize() {
-            if (!term || !fitAddon) return;
-            var el = term.element || terminalContainer;
-            if (!el || el.offsetParent === null) return;
-            var prevCols = term.cols;
-            var prevRows = term.rows;
-            fitAddon.fit();
-            if (window.monolithApi && (term.cols !== prevCols || term.rows !== prevRows)) {
-                try {
-                    window.monolithApi.resize_terminal('main', term.cols, term.rows);
-                } catch (e) {}
-            }
-            try { term.refresh(0, term.rows - 1); } catch (e) {}
+            applyResize();
         }
 
-        var resizeDebounceTimer;
         var _resizeListener = function () {
-            clearTimeout(resizeDebounceTimer);
-            resizeDebounceTimer = setTimeout(syncSize, 100);
+            scheduleResize();
         };
         window.addEventListener('resize', _resizeListener);
         _resizeHandler = _resizeListener;
 
-        var resizeObserverTimeout;
         _resizeObserver = new ResizeObserver(function () {
-            clearTimeout(resizeObserverTimeout);
-            resizeObserverTimeout = setTimeout(syncSize, 100);
+            scheduleResize();
         });
         _resizeObserver.observe(terminalContainer);
 

@@ -109,8 +109,8 @@ function createHarness(bgState) {
         onData() {}
         dispose() {}
         onScroll() {}
-        refresh() {}
-        resize(cols, rows) { this.cols = cols; this.rows = rows; }
+        refresh() { this.refreshCount = (this.refreshCount || 0) + 1; }
+        resize(cols, rows) { this.cols = cols; this.rows = rows; this.resizeCount = (this.resizeCount || 0) + 1; }
         getOption(name) { return this.options[name]; }
         setOption(name, value) { this.options[name] = value; }
     }
@@ -164,15 +164,21 @@ function createHarness(bgState) {
         Terminal: FakeTerminal,
         FitAddon: { FitAddon: class FakeFitAddon {
             activate(terminal) { this._terminal = terminal; }
-            fit() {
-                if (!this._terminal) return;
+            proposeDimensions() {
+                if (!this._terminal) return undefined;
                 var el = this._terminal.element;
                 var parent = el && el.parentNode;
-                if (!parent) return;
-                var cols = Math.max(2, Math.floor(parent.clientWidth / 9));
-                var rows = Math.max(1, Math.floor(parent.clientHeight / 17));
-                if (this._terminal.cols !== cols || this._terminal.rows !== rows) {
-                    this._terminal.resize(cols, rows);
+                if (!parent) return undefined;
+                return {
+                    cols: Math.max(2, Math.floor(parent.clientWidth / 9)),
+                    rows: Math.max(1, Math.floor(parent.clientHeight / 17))
+                };
+            }
+            fit() {
+                var dims = this.proposeDimensions();
+                if (!dims) return;
+                if (this._terminal.cols !== dims.cols || this._terminal.rows !== dims.rows) {
+                    this._terminal.resize(dims.cols, dims.rows);
                 }
             }
         } },
@@ -248,4 +254,72 @@ test('writeToTerm honors skipNextEof', async () => {
     // skip flag cleared: a subsequent eof now writes (and starts countdown)
     harness.context.window.writeToTerm('z', true, 'main', 0);
     assert.equal(term.writeCount, before + 1, 'skip flag must clear after one eof');
+});
+
+// --- Resize-corruption regression tests ---
+// These pin the fix for terminal corruption on repaint/resize: the PTY must be
+// resized before xterm, and refit must NOT force a synchronous term.refresh()
+// (which paints the transitional reflow buffer that diff-based TUI apps never
+// overwrite -> frozen edges + random middle characters).
+
+function createResizeHarness() {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 0 });
+    const order = [];
+    // Wrap resize_terminal to record call order relative to term.resize.
+    harness.context.window.monolithApi.resize_terminal = function (id, cols, rows) {
+        order.push('pty:' + cols + 'x' + rows);
+        return Promise.resolve();
+    };
+    return { harness, order };
+}
+
+test('refit resizes the PTY before xterm', async () => {
+    const { harness, order } = createResizeHarness();
+    const T = harness.context.window.MonolithTerminal;
+    T.initTerminal('C:\\dir');
+    await flushAsync();
+    const term = T.getTerm();
+    const origResize = term.resize.bind(term);
+    term.resize = function (cols, rows) { order.push('term:' + cols + 'x' + rows); origResize(cols, rows); };
+
+    // Force a size change: shrink the container, then refit.
+    const container = harness.context.document.getElementById('terminal');
+    container.clientWidth = 360;   // 360/9 = 40 cols
+    container.clientHeight = 170;  // 170/17 = 10 rows
+    order.length = 0;
+    T.refit();
+
+    assert.deepEqual(order, ['pty:40x10', 'term:40x10'],
+        'PTY resize must precede xterm resize, both at the final dimensions');
+});
+
+test('refit does not force a synchronous refresh', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 0 });
+    const T = harness.context.window.MonolithTerminal;
+    T.initTerminal('C:\\dir');
+    await flushAsync();
+    const term = T.getTerm();
+
+    const container = harness.context.document.getElementById('terminal');
+    container.clientWidth = 360;
+    container.clientHeight = 170;
+    term.refreshCount = 0;
+    T.refit();
+
+    assert.equal(term.refreshCount || 0, 0,
+        'refit must not call term.refresh() — that paints the transitional reflow buffer');
+});
+
+test('refit is a no-op when dimensions are unchanged', async () => {
+    const { harness, order } = createResizeHarness();
+    const T = harness.context.window.MonolithTerminal;
+    T.initTerminal('C:\\dir');
+    await flushAsync();
+    const term = T.getTerm();
+    // Container unchanged since init -> proposeDimensions equals current size.
+    order.length = 0;
+    const resizeBefore = term.resizeCount || 0;
+    T.refit();
+    assert.equal(order.length, 0, 'no PTY resize when dimensions are unchanged');
+    assert.equal(term.resizeCount || 0, resizeBefore, 'no xterm resize when dimensions are unchanged');
 });
