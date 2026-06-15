@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- macOS and Linux portability issues found in the platform audit: the custom file
+  picker now uses platform-correct separators, roots, breadcrumbs, parent
+  navigation, absolute path entry, and quick links; sidebar command fallbacks use
+  the Unix home directory instead of `%USERPROFILE%`; and startup presets such as
+  Claude, Qwen, Kimi, Codex, Pi, and Gemini now use the same GUI-launch-safe
+  binary resolution as OpenCode.
+- macOS tagged releases now fail fast if Developer ID signing/notarization secrets
+  are missing, and macOS bundles enable the hardened runtime required for
+  notarized builds.
+
 ## [2.1.8] - 2026-06-15
 
 ### Fixed
