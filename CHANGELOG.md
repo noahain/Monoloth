@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.9] - 2026-06-15
+
 ### Fixed
 - macOS and Linux portability issues found in the platform audit: the custom file
   picker now uses platform-correct separators, roots, breadcrumbs, parent
@@ -17,6 +19,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - macOS tagged releases now fail fast if Developer ID signing/notarization secrets
   are missing, and macOS bundles enable the hardened runtime required for
   notarized builds.
+- Async race conditions across the launcher. The file picker now tags every
+  navigation with a token so a slow `list_directory`, path probe, or image
+  preview that resolves after you've moved on can no longer overwrite the current
+  view. Relaunching the main terminal or restarting a CMD-panel tab now waits for
+  the old PTY to terminate before re-initializing, preventing a stale session
+  from racing the new one. A panel tab closed mid-startup tears down its PTY if
+  the spawn finishes after the close.
+- The auto-updater's Tauri plugin wrappers resolve the IPC core lazily (checking
+  `__TAURI_CORE__`, `__TAURI__.core`, and `__TAURI_INTERNALS__`), so an update
+  check no longer fails when the core attaches late. Update checks now time out
+  after 10s instead of hanging, and superseded auto-check retries are cancelled
+  by token so they can't stack up.
+- "Before" startup commands run before the agent spawns (so setup completes
+  first) and their 30s timeout no longer blocks on a wait thread that a
+  pipe-inheriting child process could stall — output is drained on separate
+  threads and the timeout is enforced with non-blocking polling.
+- The CMD panel's open/closed state, sidebar configuration, and recent-project
+  list are now stored as global config keys, so they persist across profile
+  switches instead of resetting per profile.
 
 ## [2.1.8] - 2026-06-15
 
@@ -205,6 +226,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release.
 
 [Unreleased]: https://github.com/noahain/Monoloth/compare/main...beta
+[2.1.9]: https://github.com/noahain/Monoloth/compare/v2.1.8...v2.1.9
+[2.1.8]: https://github.com/noahain/Monoloth/compare/v2.1.7...v2.1.8
 [2.1.7]: https://github.com/noahain/Monoloth/compare/v2.1.6...v2.1.7
 [2.1.6]: https://github.com/noahain/Monoloth/compare/v2.1.5...v2.1.6
 [2.1.5]: https://github.com/noahain/Monoloth/compare/v2.1.4...v2.1.5
