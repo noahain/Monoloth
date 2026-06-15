@@ -10,7 +10,54 @@ permissions:
   contents: write
 
 jobs:
+  macos-release-preflight:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check macOS signing secrets
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_PATH: ${{ secrets.APPLE_API_KEY_PATH }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY; do
+            if [ -z "${!name:-}" ]; then missing+=("$name"); fi
+          done
+
+          apple_id_ready=true
+          for name in APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!name:-}" ]; then apple_id_ready=false; fi
+          done
+
+          api_key_ready=true
+          for name in APPLE_API_ISSUER APPLE_API_KEY APPLE_API_KEY_PATH; do
+            if [ -z "${!name:-}" ]; then api_key_ready=false; fi
+          done
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing required macOS signing secrets: ${missing[*]}"
+            exit 1
+          fi
+          if [ "$apple_id_ready" != true ] && [ "$api_key_ready" != true ]; then
+            echo "::error::Missing macOS notarization secrets. Provide APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID or APPLE_API_ISSUER, APPLE_API_KEY, APPLE_API_KEY_PATH."
+            exit 1
+          fi
+
+      - name: Skip signing check for dry-run
+        if: github.event_name == 'workflow_dispatch'
+        run: echo "workflow_dispatch dry-run builds remain unsigned."
+
   release:
+    needs: macos-release-preflight
     strategy:
       fail-fast: false
       matrix:
@@ -72,10 +119,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # macOS signing is deferred. Do NOT set APPLE_* env vars here: an
-          # empty-but-present APPLE_CERTIFICATE (from a missing secret) makes the
-          # Tauri bundler attempt `security import` with an empty cert and fail.
-          # Re-add these only once the APPLE_* secrets actually exist.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_PATH: ${{ secrets.APPLE_API_KEY_PATH }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Monoloth ${{ github.ref_name }}'

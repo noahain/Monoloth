@@ -45,6 +45,9 @@
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
       }
+    },
+    "macOS": {
+      "hardenedRuntime": true
     }
   },
   "plugins": {

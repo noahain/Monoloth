@@ -12,11 +12,11 @@ function fakeEl() {
     };
 }
 
-function load() {
+function load(isWindows) {
     const context = {
         console, setTimeout, clearTimeout, Promise,
         document: { getElementById: () => fakeEl(), createElement: () => fakeEl(), querySelectorAll: () => [], addEventListener() {} },
-        window: { monolithApi: {}, MonolothUI: { escapeHtml: s => s } }
+        window: { monolithApi: {}, MonolothUI: { escapeHtml: s => s, isWindows: () => isWindows } }
     };
     context.window.window = context.window;
     vm.createContext(context);
@@ -24,9 +24,17 @@ function load() {
     return context.window.MonolithFilePicker;
 }
 
-test('joinPath appends name with single backslash, trims trailing slashes', () => {
-    const FP = load();
+test('joinPath uses Windows separators and trims trailing separators', () => {
+    const FP = load(true);
     assert.equal(FP.joinPath('C:\\Users', 'file.txt'), 'C:\\Users\\file.txt');
     assert.equal(FP.joinPath('C:\\Users\\', 'file.txt'), 'C:\\Users\\file.txt');
     assert.equal(FP.joinPath('C:\\\\', 'a'), 'C:\\a');
+});
+
+test('joinPath uses Unix separators and preserves root', () => {
+    const FP = load(false);
+    assert.equal(FP.joinPath('/home/user', 'file.txt'), '/home/user/file.txt');
+    assert.equal(FP.joinPath('/home/user/', 'file.txt'), '/home/user/file.txt');
+    assert.equal(FP.joinPath('/', 'home'), '/home');
+    assert.equal(FP.joinPath('~', 'Downloads'), '~/Downloads');
 });

@@ -80,6 +80,10 @@
         return '';
     }
 
+    function getDefaultHomeDir() {
+        return UI.isWindows() ? '%USERPROFILE%' : '~';
+    }
+
     function handleOpenFolder() {
         var dir = getCurrentDir();
         if (dir && window.monolithApi) {
@@ -89,7 +93,7 @@
 
     function handleOpenCmdProject() {
         if (!window.monolithApi) return;
-        var dir = getCurrentDir() || (UI.isWindows() ? '%USERPROFILE%' : '');
+        var dir = getCurrentDir() || getDefaultHomeDir();
         // On Windows the backend opens the chosen shell via `cmd /K <shell>`.
         // On Unix the backend launches the system terminal; passing a shell name
         // as the "command" would try to run a nonexistent `cmd` binary, so send
@@ -103,7 +107,7 @@
         if (_cmdPanelOpen) {
             hideCmdPanel();
         } else {
-            var dir = getCurrentDir() || (UI.isWindows() ? '%USERPROFILE%' : '');
+            var dir = getCurrentDir() || getDefaultHomeDir();
             openCmdPanelAt(dir);
         }
     }
@@ -126,7 +130,7 @@
 
     function executeCustomButton(btn) {
         if (!window.monolithApi) return;
-        var dir = getCurrentDir() || '%USERPROFILE%';
+        var dir = getCurrentDir() || getDefaultHomeDir();
         var mode = btn.mode || 'background';
         var cmd = btn.command || '';
 
@@ -373,7 +377,7 @@
     function createTab(name, activate, dir) {
         name = name || _panelShell || 'cmd';
         activate = activate !== false;
-        dir = dir || (getCurrentDir() || '%USERPROFILE%');
+        dir = dir || (getCurrentDir() || getDefaultHomeDir());
 
         var tabId = 'tab-' + _nextTabId;
         var sessionId = 'panel-tab-' + _nextTabId;
@@ -567,7 +571,7 @@
         tab.term = term;
         tab.fitAddon = fitAddon;
 
-        var dir = tab.dir || (getCurrentDir() || '%USERPROFILE%');
+        var dir = tab.dir || (getCurrentDir() || getDefaultHomeDir());
         var cols = term.cols || 80;
         var rows = term.rows || 24;
 
@@ -1498,7 +1502,7 @@
             _panelRestoreNeeded = false;
             showCmdPanel();
             if (_panelTabs.size === 0) {
-                createTab(null, true, getCurrentDir() || '%USERPROFILE%');
+                createTab(null, true, getCurrentDir() || getDefaultHomeDir());
             } else {
                 activateTab(_activeTabId || getAllTabs()[0].id);
             }

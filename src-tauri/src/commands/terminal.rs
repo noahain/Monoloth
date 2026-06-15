@@ -149,14 +149,48 @@ fn resolve_panel_shell(requested: Option<&str>) -> Result<(String, Vec<String>),
     }
 }
 
+#[cfg(any(not(windows), test))]
+const UNIX_PRESETS: [&str; 7] = ["opencode", "claude", "qwen", "kimi", "codex", "pi", "gemini"];
+
 fn resolve_command(preset: &str) -> Result<(String, Vec<String>), String> {
-    match preset {
-        "opencode" => {
-            let path = find_opencode()?;
-            Ok(wrap_path_for_windows(&path))
+    #[cfg(windows)]
+    {
+        match preset {
+            "opencode" => {
+                let path = find_opencode()?;
+                Ok(wrap_path_for_windows(&path))
+            }
+            other => Ok(wrap_path_for_windows(other)),
         }
-        other => Ok(wrap_path_for_windows(other)),
     }
+    #[cfg(not(windows))]
+    {
+        if is_unix_preset(preset) {
+            let path = if preset == "opencode" {
+                find_opencode()?
+            } else {
+                find_unix_preset(preset)?
+            };
+            Ok((path, vec![]))
+        } else {
+            Ok((preset.to_string(), vec![]))
+        }
+    }
+}
+
+#[cfg(any(not(windows), test))]
+fn is_unix_preset(preset: &str) -> bool {
+    UNIX_PRESETS.contains(&preset)
+}
+
+#[cfg(any(not(windows), test))]
+fn is_safe_binary_name(bin: &str) -> bool {
+    let mut chars = bin.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_alphanumeric() => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
 }
 
 fn wrap_path_for_windows(path: &str) -> (String, Vec<String>) {
@@ -246,7 +280,6 @@ fn no_window_command(program: &str) -> std::process::Command {
 }
 
 fn find_opencode() -> Result<String, String> {
-    use std::path::PathBuf;
     if let Ok(p) = std::env::var("OPENCODE_BIN_PATH") {
         let p = p.trim();
         if !p.is_empty() {
@@ -254,7 +287,10 @@ fn find_opencode() -> Result<String, String> {
         }
     }
 
-    if cfg!(windows) {
+    #[cfg(windows)]
+    {
+        use std::path::PathBuf;
+
         if let Ok(output) = no_window_command("where").arg("opencode").output() {
             if output.status.success() {
                 let path = String::from_utf8_lossy(&output.stdout);
@@ -300,35 +336,49 @@ fn find_opencode() -> Result<String, String> {
                 }
             }
         }
-    } else {
-        // 1. Try `which` against the process PATH (works when launched from a shell).
-        if let Ok(output) = no_window_command("which").arg("opencode").output() {
-            if output.status.success() {
-                let path = String::from_utf8_lossy(&output.stdout);
-                if let Some(first) = path.lines().next() {
-                    let p = first.trim();
-                    if !p.is_empty() {
-                        return Ok(p.to_string());
-                    }
-                }
-            }
-        }
+    }
 
-        // 2. GUI launchers (dock, .desktop, Finder) start with a minimal PATH that
-        //    omits the user's shell-profile additions (~/.local/bin, /usr/local/bin,
-        //    ~/.opencode/bin, brew, npm/bun globals, ...). Ask the user's login shell
-        //    to resolve opencode using its full profile PATH.
-        if let Some(path) = resolve_via_login_shell("opencode") {
-            return Ok(path);
-        }
-
-        // 3. Fall back to probing common absolute install locations.
-        if let Some(path) = probe_unix_install_paths("opencode") {
-            return Ok(path);
-        }
+    #[cfg(not(windows))]
+    if let Ok(path) = find_unix_preset("opencode") {
+        return Ok(path);
     }
 
     Err("opencode not found — install it or set OPENCODE_BIN_PATH".into())
+}
+
+#[cfg(not(windows))]
+fn find_unix_preset(bin: &str) -> Result<String, String> {
+    if !is_safe_binary_name(bin) {
+        return Err("invalid preset binary name".into());
+    }
+    if let Some(path) = resolve_via_process_path(bin) {
+        return Ok(path);
+    }
+    if let Some(path) = resolve_via_login_shell(bin) {
+        return Ok(path);
+    }
+    if let Some(path) = probe_unix_install_paths(bin) {
+        return Ok(path);
+    }
+    Err(format!("{} not found — install it or use a custom startup command", bin))
+}
+
+#[cfg(not(windows))]
+fn resolve_via_process_path(bin: &str) -> Option<String> {
+    let output = no_window_command("which").arg(bin).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    first_existing_line(&String::from_utf8_lossy(&output.stdout))
+}
+
+#[cfg(not(windows))]
+fn first_existing_line(output: &str) -> Option<String> {
+    output
+        .lines()
+        .map(|line| line.trim())
+        .find(|line| !line.is_empty() && std::path::Path::new(line).exists())
+        .map(|line| line.to_string())
 }
 
 /// Ask the user's login shell to resolve a binary using its full profile PATH.
@@ -341,14 +391,13 @@ fn find_opencode() -> Result<String, String> {
 #[cfg(not(windows))]
 fn resolve_via_login_shell(bin: &str) -> Option<String> {
     use std::process::Stdio;
-    use std::sync::mpsc;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     let shell = std::env::var("SHELL")
         .ok()
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| "/bin/sh".to_string());
-    // `-l -c` loads the login profile without going interactive (avoids hangs).
+    // `-l -c` loads the login profile without going interactive.
     let script = format!("command -v {} 2>/dev/null", bin);
     let mut child = std::process::Command::new(&shell)
         .args(["-l", "-c", &script])
@@ -358,36 +407,29 @@ fn resolve_via_login_shell(bin: &str) -> Option<String> {
         .spawn()
         .ok()?;
 
-    let (tx, rx) = mpsc::channel();
-    let stdout = child.stdout.take();
-    std::thread::spawn(move || {
-        let mut buf = String::new();
-        if let Some(mut out) = stdout {
-            use std::io::Read;
-            let _ = out.read_to_string(&mut buf);
-        }
-        let status = child.wait();
-        let _ = tx.send((status, buf));
-    });
-
-    match rx.recv_timeout(Duration::from_secs(5)) {
-        Ok((Ok(status), buf)) if status.success() => {
-            let first = buf.lines().next()?.trim();
-            if first.is_empty() || !std::path::Path::new(first).exists() {
+    let started = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if !status.success() {
+                    return None;
+                }
+                let mut buf = String::new();
+                if let Some(mut out) = child.stdout.take() {
+                    use std::io::Read;
+                    let _ = out.read_to_string(&mut buf);
+                }
+                return first_existing_line(&buf);
+            }
+            Ok(None) if started.elapsed() >= Duration::from_secs(5) => {
+                let _ = child.kill();
+                let _ = child.wait();
                 return None;
             }
-            Some(first.to_string())
+            Ok(None) => std::thread::sleep(Duration::from_millis(25)),
+            Err(_) => return None,
         }
-        // Non-success exit, collection error, timeout, or panic: give up and let
-        // the caller fall through to path probing. The orphaned shell (on timeout)
-        // exits on its own once it finishes sourcing the profile.
-        _ => None,
     }
-}
-
-#[cfg(windows)]
-fn resolve_via_login_shell(_bin: &str) -> Option<String> {
-    None
 }
 
 /// Probe common absolute install locations for a binary on Linux/macOS.
@@ -408,11 +450,6 @@ fn probe_unix_install_paths(bin: &str) -> Option<String> {
     candidates
         .into_iter()
         .find(|p| std::path::Path::new(p).exists())
-}
-
-#[cfg(windows)]
-fn probe_unix_install_paths(_bin: &str) -> Option<String> {
-    None
 }
 
 fn run_before_command(cmd: &str, cwd: &str) -> Result<String, String> {
@@ -469,6 +506,22 @@ mod tests {
     use std::sync::Mutex;
 
     static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn known_unix_presets_are_tracked() {
+        for preset in ["opencode", "claude", "qwen", "kimi", "codex", "pi", "gemini"] {
+            assert!(is_unix_preset(preset));
+            assert!(is_safe_binary_name(preset));
+        }
+        assert!(!is_unix_preset("bash"));
+    }
+
+    #[test]
+    fn unsafe_binary_names_are_rejected() {
+        for bin in ["", "-claude", "../claude", "claude beta", "claude;rm", "claude/bin"] {
+            assert!(!is_safe_binary_name(bin));
+        }
+    }
 
     #[test]
     #[cfg(windows)]

@@ -97,11 +97,19 @@
         pickerId: '',
     };
 
+    function isWindows() {
+        return UI && typeof UI.isWindows === 'function' && UI.isWindows();
+    }
+
+    function getHomePath() {
+        return isWindows() ? '%USERPROFILE%' : '~';
+    }
+
     var QUICK_PATHS = {
-        desktop:   '%USERPROFILE%\\Desktop',
-        documents: '%USERPROFILE%\\Documents',
-        downloads: '%USERPROFILE%\\Downloads',
-        pictures:  '%USERPROFILE%\\Pictures',
+        desktop:   joinPath(getHomePath(), 'Desktop'),
+        documents: joinPath(getHomePath(), 'Documents'),
+        downloads: joinPath(getHomePath(), 'Downloads'),
+        pictures:  joinPath(getHomePath(), 'Pictures'),
     };
 
     var _lastDirectories = {};
@@ -184,7 +192,7 @@
         openModal(fpEl);
         fpOk.textContent = fpState.mode === 'folder' ? 'Select Folder' : 'Open';
 
-        var startPath = opts.startPath || _getLastDirectory(fpState.pickerId) || (UI.isWindows() ? 'C:\\' : '/');
+        var startPath = opts.startPath || _getLastDirectory(fpState.pickerId) || (isWindows() ? 'C:\\' : '/');
         navigateToPath(startPath);
 
         return new Promise(function (resolve, reject) {
@@ -363,7 +371,62 @@
     }
 
     function joinPath(base, name) {
-        return base.replace(/\\+$/, '') + '\\' + name;
+        var windows = isWindows();
+        var sep = windows ? '\\' : '/';
+        if (!windows && base === '/') return '/' + name.replace(/^\/+/, '');
+        var trailing = windows ? /[\\/]+$/ : /\/+$/;
+        return base.replace(trailing, '') + sep + name.replace(windows ? /^[\\/]+/ : /^\/+/, '');
+    }
+
+    function isWindowsPath(path) {
+        return /^[A-Za-z]:/.test(path) || path.indexOf('\\') !== -1;
+    }
+
+    function isRootPath(path) {
+        if (!path) return true;
+        var p = path.trim();
+        return p === '/' || /^[A-Za-z]:[\\/]*$/.test(p);
+    }
+
+    function getParentPath(path) {
+        if (!path || isRootPath(path)) return '';
+        if (isWindowsPath(path)) {
+            var winPath = path.replace(/\//g, '\\').replace(/\\+$/, '');
+            var winIdx = winPath.lastIndexOf('\\');
+            if (winIdx === -1) return '';
+            var winParent = winPath.substring(0, winIdx);
+            if (/^[A-Za-z]:$/.test(winParent)) winParent += '\\';
+            return winParent;
+        }
+        var unixPath = path.replace(/\/+$/, '');
+        var unixIdx = unixPath.lastIndexOf('/');
+        if (unixIdx > 0) return unixPath.substring(0, unixIdx);
+        if (unixIdx === 0) return '/';
+        return '';
+    }
+
+    function appendPathPart(base, part, windows) {
+        var sep = windows ? '\\' : '/';
+        if (!base) return part;
+        if (!windows && base === '/') return '/' + part;
+        return base.replace(windows ? /[\\/]+$/ : /\/+$/, '') + sep + part;
+    }
+
+    function splitPathForBreadcrumb(path) {
+        if (isWindowsPath(path)) {
+            var normalized = path.replace(/\//g, '\\');
+            var match = normalized.match(/^([A-Za-z]:)\\*/);
+            var root = match ? match[1] + '\\' : '';
+            var rest = match ? normalized.substring(match[0].length) : normalized;
+            return { windows: true, root: root, parts: rest.split('\\').filter(Boolean) };
+        }
+        var absolute = path.charAt(0) === '/';
+        var unixRest = absolute ? path.replace(/^\/+/, '') : path;
+        return { windows: false, root: absolute ? '/' : '', parts: unixRest.split('/').filter(Boolean) };
+    }
+
+    function isAbsoluteInputPath(path) {
+        return path.charAt(0) === '/' || path.charAt(0) === '~' || /^[A-Za-z]:[\\/]/.test(path) || (path.indexOf(':') !== -1 && path.indexOf('\\') !== -1);
     }
 
     function onItemClick(entry) {
@@ -422,29 +485,42 @@
         if (fpPreviewInfo) fpPreviewInfo.textContent = '';
     }
 
-    // Breadcrumb uses backslash separator to match path input
     function renderBreadcrumb(path) {
         if (!fpBreadcrumb) return;
         fpBreadcrumb.innerHTML = '';
         if (!path) return;
         if (fpPathInput) fpPathInput.value = path;
-        var parts = path.split('\\').filter(Boolean);
-        var acc = '';
-        parts.forEach(function (p, i) {
-            if (i > 0) { var sp = document.createElement('span'); sp.className = 'fp-bc-sep'; sp.textContent = '\u203A'; fpBreadcrumb.appendChild(sp); }
+        var parsed = splitPathForBreadcrumb(path);
+        var acc = parsed.root;
+        var hasSegment = false;
+        function addSep() {
+            var sp = document.createElement('span');
+            sp.className = 'fp-bc-sep';
+            sp.textContent = '\u203A';
+            fpBreadcrumb.appendChild(sp);
+        }
+        function addSegment(label, clickPath, isLast) {
+            if (hasSegment) addSep();
             var seg = document.createElement('span');
-            seg.className = 'fp-bc-segment' + (i === parts.length - 1 ? ' fp-bc-last' : '');
-            seg.textContent = p;
-            if (i < parts.length - 1) { var clickPath = acc + p + '\\'; seg.addEventListener('click', function (e) { e.stopPropagation(); doNavigate(clickPath); }); }
-            acc += p + '\\';
+            seg.className = 'fp-bc-segment' + (isLast ? ' fp-bc-last' : '');
+            seg.textContent = label;
+            if (!isLast) seg.addEventListener('click', function (e) { e.stopPropagation(); doNavigate(clickPath); });
             fpBreadcrumb.appendChild(seg);
+            hasSegment = true;
+        }
+        if (parsed.root) {
+            addSegment(parsed.windows ? parsed.root.replace(/\\+$/, '') : '/', parsed.root, parsed.parts.length === 0);
+        }
+        parsed.parts.forEach(function (p, i) {
+            acc = appendPathPart(acc, p, parsed.windows);
+            addSegment(p, acc, i === parsed.parts.length - 1);
         });
     }
 
     function updateNavButtons() {
         if (fpBack) fpBack.disabled = fpState.historyIndex <= 0;
         if (fpForward) fpForward.disabled = fpState.historyIndex >= fpState.history.length - 1;
-        if (fpUp) { fpUp.disabled = !fpState.currentPath || fpState.currentPath.replace(/\\+$/, '').length <= 2; }
+        if (fpUp) fpUp.disabled = !fpState.currentPath || isRootPath(fpState.currentPath);
     }
 
     function showLoading(s) {
@@ -494,8 +570,11 @@
             drives.forEach(function (d) {
                 var item = document.createElement('div');
                 item.className = 'fp-drive-item';
-                item.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> ' + d.letter + (d.label ? ' \u2014 ' + d.label : '');
-                item.addEventListener('click', function () { doNavigate(d.letter + '\\'); });
+                var icon = document.createElement('span');
+                icon.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+                item.appendChild(icon);
+                item.appendChild(document.createTextNode(' ' + d.letter + (d.label ? ' \u2014 ' + d.label : '')));
+                item.addEventListener('click', function () { doNavigate(isWindowsPath(d.letter) ? d.letter + '\\' : d.letter); });
                 fpDrivesList.appendChild(item);
             });
             fpDrivesList.dataset.loaded = '1';
@@ -526,14 +605,7 @@
 
     if (fpUp) fpUp.addEventListener('click', function () {
         if (!fpState.currentPath) return;
-        var parent = fpState.currentPath;
-        if (parent.endsWith(':')) parent += '\\';
-        var p = parent.replace(/\\+$/, '');
-        var idx = p.lastIndexOf('\\');
-        var result;
-        if (idx > 0) result = p.substring(0, idx);
-        else if (idx === 0) result = p.substring(0, idx + 1);
-        if (result && result.endsWith(':')) result += '\\';
+        var result = getParentPath(fpState.currentPath);
         doNavigate(result);
     });
 
@@ -586,7 +658,7 @@
                 e.preventDefault();
                 var val = fpFilename.value.trim();
                 if (!val) return;
-                if (val.indexOf(':') !== -1 && val.indexOf('\\') !== -1) {
+                if (isAbsoluteInputPath(val)) {
                     navigateToPath(val);
                 } else if (fpOk && !fpOk.disabled) {
                     fpOk.click();
