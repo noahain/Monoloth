@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.8] - 2026-06-15
+
+### Fixed
+- macOS and Linux builds shipped the default Tauri icon. The macOS `icon.icns`
+  was malformed (its header declared an 11-byte file for a 277 KB icon), and the
+  Linux PNGs carried an off-brand gold/green logo that didn't match Windows.
+  Both are regenerated from the canonical Monoloth logo so every platform shows
+  the correct icon.
+- The window could not be dragged from the titlebar or sidebar on macOS and
+  Linux. Only the centered title text was a drag region and the titlebar bar
+  itself had `pointer-events: none`, which those platforms honor strictly
+  (Windows was more forgiving). The titlebar, its sections, and the sidebar are
+  now proper drag regions, with buttons opting out.
+- The main terminal failed to launch `opencode` on macOS and Linux
+  ("opencode not found"), even when installed. GUI launchers start with a
+  minimal `PATH` that omits shell-profile additions (`~/.local/bin`,
+  `/usr/local/bin`, `~/.opencode/bin`, npm/bun globals, ...), so the lone
+  `which opencode` lookup missed it. Resolution now also asks the user's login
+  shell (bounded by a 5s timeout so a slow profile can't stall startup) and
+  probes common absolute install locations. The CMD panel was unaffected because
+  it launches an absolute shell path.
+
 ## [2.1.7] - 2026-06-15
 
 ### Fixed

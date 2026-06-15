@@ -7,8 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=147">
-    <link rel="stylesheet" href="lib/xterm.css?v=147">
+    <link rel="stylesheet" href="style.css?v=148">
+    <link rel="stylesheet" href="lib/xterm.css?v=148">
     <style>
         .landing-brand, .landing-card, .landing-status-bar {
             visibility: hidden;
@@ -22,8 +22,8 @@
 </head>
 <body class="cta-blur custom-titlebar-active" data-current-view="landing">
     <!-- Custom Titlebar -->
-    <div id="custom-titlebar" class="custom-titlebar">
-      <div class="titlebar-section titlebar-left">
+    <div id="custom-titlebar" class="custom-titlebar" data-tauri-drag-region>
+      <div class="titlebar-section titlebar-left" data-tauri-drag-region>
         <button id="tb-back" class="titlebar-btn" data-tooltip="Back to Launcher" aria-label="Back to Launcher">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
@@ -32,9 +32,9 @@
         </button>
       </div>
       <div class="titlebar-section titlebar-center" data-tauri-drag-region>
-        <span class="titlebar-title">Monoloth</span>
+        <span class="titlebar-title" data-tauri-drag-region>Monoloth</span>
       </div>
-      <div class="titlebar-section titlebar-right">
+      <div class="titlebar-section titlebar-right" data-tauri-drag-region>
         <button id="tb-menu" class="titlebar-btn" data-tooltip="Command Palette" aria-label="Open command palette">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
@@ -526,9 +526,9 @@
     <!-- Terminal View -->
     <div id="terminal-view" class="terminal-view">
         <!-- Sidebar -->
-        <div id="sidebar" class="sidebar" style="display:none;">
-            <div id="sidebar-buttons" class="sidebar-buttons"></div>
-        </div>
+    <div id="sidebar" class="sidebar" style="display:none;" data-tauri-drag-region>
+        <div id="sidebar-buttons" class="sidebar-buttons" data-tauri-drag-region></div>
+    </div>
         <div class="terminal-toolbar">
             <button id="terminal-back-btn" class="terminal-back-btn" data-tooltip="Back to Launcher">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -692,26 +692,26 @@
             setTimeout(fontsReady, 1500);
         })();
     </script>
-    <script src="lib/xterm.js?v=147"></script>
-    <script src="lib/xterm-addon-fit.js?v=147"></script>
-    <script src="lib/xterm-addon-webgl.js?v=147"></script>
-    <script src="tauri-bridge.js?v=147"></script>
+    <script src="lib/xterm.js?v=148"></script>
+    <script src="lib/xterm-addon-fit.js?v=148"></script>
+    <script src="lib/xterm-addon-webgl.js?v=148"></script>
+    <script src="tauri-bridge.js?v=148"></script>
 
-    <script src="lib/dom-utils.js?v=147"></script>
-    <script src="lib/plugin-updater.js?v=147"></script>
-    <script src="lib/plugin-process.js?v=147"></script>
-    <script src="lib/updater-toast.js?v=147"></script>
-    <script src="tooltip.js?v=147"></script>
-    <script src="shortcuts.js?v=147"></script>
-    <script src="theme.js?v=147"></script>
-    <script src="dialog.js?v=147"></script>
-    <script src="file-picker.js?v=147"></script>
-    <script src="command-palette.js?v=147"></script>
-    <script src="profiles.js?v=147"></script>
-    <script src="terminal.js?v=147"></script>
+    <script src="lib/dom-utils.js?v=148"></script>
+    <script src="lib/plugin-updater.js?v=148"></script>
+    <script src="lib/plugin-process.js?v=148"></script>
+    <script src="lib/updater-toast.js?v=148"></script>
+    <script src="tooltip.js?v=148"></script>
+    <script src="shortcuts.js?v=148"></script>
+    <script src="theme.js?v=148"></script>
+    <script src="dialog.js?v=148"></script>
+    <script src="file-picker.js?v=148"></script>
+    <script src="command-palette.js?v=148"></script>
+    <script src="profiles.js?v=148"></script>
+    <script src="terminal.js?v=148"></script>
 
-    <script src="app.js?v=147"></script>
+    <script src="app.js?v=148"></script>
 
-    <script src="sidebar.js?v=147"></script>
+    <script src="sidebar.js?v=148"></script>
 </body>
 </html>

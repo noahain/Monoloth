@@ -1,6 +1,6 @@
 [package]
 name = "monoloth"
-version = "2.1.7"
+version = "2.1.8"
 description = "Desktop launcher for TUI coding agents"
 authors = ["Noahain"]
 license = ""

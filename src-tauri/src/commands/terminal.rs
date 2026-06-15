@@ -301,17 +301,118 @@ fn find_opencode() -> Result<String, String> {
             }
         }
     } else {
+        // 1. Try `which` against the process PATH (works when launched from a shell).
         if let Ok(output) = no_window_command("which").arg("opencode").output() {
             if output.status.success() {
                 let path = String::from_utf8_lossy(&output.stdout);
                 if let Some(first) = path.lines().next() {
-                    return Ok(first.trim().to_string());
+                    let p = first.trim();
+                    if !p.is_empty() {
+                        return Ok(p.to_string());
+                    }
                 }
             }
+        }
+
+        // 2. GUI launchers (dock, .desktop, Finder) start with a minimal PATH that
+        //    omits the user's shell-profile additions (~/.local/bin, /usr/local/bin,
+        //    ~/.opencode/bin, brew, npm/bun globals, ...). Ask the user's login shell
+        //    to resolve opencode using its full profile PATH.
+        if let Some(path) = resolve_via_login_shell("opencode") {
+            return Ok(path);
+        }
+
+        // 3. Fall back to probing common absolute install locations.
+        if let Some(path) = probe_unix_install_paths("opencode") {
+            return Ok(path);
         }
     }
 
     Err("opencode not found — install it or set OPENCODE_BIN_PATH".into())
+}
+
+/// Ask the user's login shell to resolve a binary using its full profile PATH.
+/// GUI-launched apps on Linux/macOS don't inherit shell-profile PATH additions,
+/// so `which` against the process PATH often misses user installs.
+///
+/// Bounded by a 5s timeout: a misconfigured/slow shell profile (e.g. a `.zshrc`
+/// that hangs) must not stall terminal startup. On timeout the child is killed
+/// and we fall through to absolute-path probing.
+#[cfg(not(windows))]
+fn resolve_via_login_shell(bin: &str) -> Option<String> {
+    use std::process::Stdio;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let shell = std::env::var("SHELL")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "/bin/sh".to_string());
+    // `-l -c` loads the login profile without going interactive (avoids hangs).
+    let script = format!("command -v {} 2>/dev/null", bin);
+    let mut child = std::process::Command::new(&shell)
+        .args(["-l", "-c", &script])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+
+    let (tx, rx) = mpsc::channel();
+    let stdout = child.stdout.take();
+    std::thread::spawn(move || {
+        let mut buf = String::new();
+        if let Some(mut out) = stdout {
+            use std::io::Read;
+            let _ = out.read_to_string(&mut buf);
+        }
+        let status = child.wait();
+        let _ = tx.send((status, buf));
+    });
+
+    match rx.recv_timeout(Duration::from_secs(5)) {
+        Ok((Ok(status), buf)) if status.success() => {
+            let first = buf.lines().next()?.trim();
+            if first.is_empty() || !std::path::Path::new(first).exists() {
+                return None;
+            }
+            Some(first.to_string())
+        }
+        // Non-success exit, collection error, timeout, or panic: give up and let
+        // the caller fall through to path probing. The orphaned shell (on timeout)
+        // exits on its own once it finishes sourcing the profile.
+        _ => None,
+    }
+}
+
+#[cfg(windows)]
+fn resolve_via_login_shell(_bin: &str) -> Option<String> {
+    None
+}
+
+/// Probe common absolute install locations for a binary on Linux/macOS.
+#[cfg(not(windows))]
+fn probe_unix_install_paths(bin: &str) -> Option<String> {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let candidates = [
+        format!("{}/.opencode/bin/{}", home, bin),
+        format!("{}/.local/bin/{}", home, bin),
+        format!("{}/.npm-global/bin/{}", home, bin),
+        format!("{}/.bun/bin/{}", home, bin),
+        format!("{}/.cargo/bin/{}", home, bin),
+        format!("{}/.yarn/bin/{}", home, bin),
+        format!("/usr/local/bin/{}", bin),
+        format!("/opt/homebrew/bin/{}", bin),
+        format!("/usr/bin/{}", bin),
+    ];
+    candidates
+        .into_iter()
+        .find(|p| std::path::Path::new(p).exists())
+}
+
+#[cfg(windows)]
+fn probe_unix_install_paths(_bin: &str) -> Option<String> {
+    None
 }
 
 fn run_before_command(cmd: &str, cwd: &str) -> Result<String, String> {

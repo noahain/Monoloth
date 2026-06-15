@@ -5809,16 +5809,18 @@ body.adaptive-light.cta-outline .id-close:hover {
     align-items: center;
     padding: 0;
     user-select: none;
-    pointer-events: none;
+    pointer-events: auto;
+    -webkit-app-region: drag;
 }
 
 body.custom-titlebar-active #custom-titlebar {
     display: flex;
 }
 
-/* Buttons must regain pointer events */
+/* Buttons must regain pointer events and opt out of the drag region */
 .titlebar-btn {
     pointer-events: auto;
+    -webkit-app-region: no-drag;
 }
 
 /* CTA Theme Variants */
@@ -5876,6 +5878,7 @@ body.adaptive-light.cta-outline #custom-titlebar {
     transform: translateX(-50%);
     cursor: default;
     pointer-events: auto;
+    -webkit-app-region: drag;
 }
 .titlebar-right { justify-content: flex-end; flex: 1; }
 
@@ -6429,6 +6432,7 @@ body.adaptive-light.cta-outline #sidebar::before { background: var(--border-mute
     transition: all 0.15s ease;
     position: relative;
     flex-shrink: 0;
+    -webkit-app-region: no-drag;
 }
 
 .sidebar-btn:hover {
