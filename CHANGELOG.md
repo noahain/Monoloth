@@ -16,9 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the Unix home directory instead of `%USERPROFILE%`; and startup presets such as
   Claude, Qwen, Kimi, Codex, Pi, and Gemini now use the same GUI-launch-safe
   binary resolution as OpenCode.
-- macOS tagged releases now fail fast if Developer ID signing/notarization secrets
-  are missing, and macOS bundles enable the hardened runtime required for
-  notarized builds.
+- macOS bundles enable the hardened runtime required for notarized builds.
 - Async race conditions across the launcher. The file picker now tags every
   navigation with a token so a slow `list_directory`, path probe, or image
   preview that resolves after you've moved on can no longer overwrite the current
