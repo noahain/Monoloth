@@ -23,6 +23,7 @@
     var _currentColor = '#0a0a0a';
     var _currentGradient = '';
     var _bgLayer = 'behind';
+    var _launchToken = 0;
 
     function isGifUrl(url) {
         if (!url) return false;
@@ -1312,10 +1313,14 @@
 
     // --- Show Terminal View ---
     function showTerminal(dir) {
+        var launchToken = ++_launchToken;
         setCurrentView('terminal');
         _currentLaunchDir = dir;
+        var terminatePromise = Promise.resolve();
+        window.MonolithTerminal.setSkipNextEof('main', false);
         if (window.MonolithTerminal.isRunning() && window.monolithApi) {
-            window.monolithApi.terminate_terminal('main');
+            window.MonolithTerminal.setSkipNextEof('main', true);
+            terminatePromise = window.monolithApi.terminate_terminal('main').catch(function () {});
         }
         window.MonolithTerminal.setRunning(false);
         window.MonolithTerminal.incrementSessionGeneration('main');
@@ -1335,14 +1340,18 @@
                 terminalView.removeEventListener('animationend', handler);
             });
         }
-        window.MonolithTerminal.initTerminal(dir);
-        loadBackgroundConfig();
-        if (typeof window.SidebarManager !== 'undefined') {
-            window.SidebarManager.show();
-            setTimeout(function () {
-                window.SidebarManager.restorePanelState();
-            }, 200);
-        }
+        terminatePromise.finally(function () {
+            if (launchToken !== _launchToken) return;
+            window.MonolithTerminal.setSkipNextEof('main', false);
+            window.MonolithTerminal.initTerminal(dir);
+            loadBackgroundConfig();
+            if (typeof window.SidebarManager !== 'undefined') {
+                window.SidebarManager.show();
+                setTimeout(function () {
+                    window.SidebarManager.restorePanelState();
+                }, 200);
+            }
+        });
     }
 
     // --- Back to Landing ---
@@ -1907,29 +1916,34 @@
                 var tab = window.SidebarManager.getTab(tabId);
                 if (!tab) return;
                 window.MonolithTerminal.setSkipNextEof(sessionId, true);
-                if (window.monolithApi) {
-                    window.monolithApi.terminate_terminal(sessionId)
-                        .finally(function () { window.MonolithTerminal.setSkipNextEof(sessionId, false); }).catch(function () {});
-                }
-                if (tab.term) {
-                    try { tab.term.dispose(); } catch (e) {}
-                    try { tab.fitAddon.dispose(); } catch (e) {}
-                    tab.term = null;
-                    tab.fitAddon = null;
-                }
-                tab.running = false;
-                tab.busy = false;
-                tab.generation = null;
-                window.MonolithTerminal.deleteSessionGeneration(sessionId);
-                if (window.MonolithTerminal.hasSkipNextEof(sessionId)) {
-                    window.MonolithTerminal.deleteSkipNextEof(sessionId);
-                }
-                var terminalDiv = tab.container.querySelector('.cmd-panel-tab-terminal');
-                if (terminalDiv) terminalDiv.innerHTML = '';
-                window.SidebarManager.hideTabExitBanner(tab);
-                if (window.SidebarManager.getActiveTabId() === tabId) {
-                    window.SidebarManager.initTabXterm(tab);
-                }
+                var restartPromise = window.monolithApi
+                    ? window.monolithApi.terminate_terminal(sessionId).catch(function () {})
+                    : Promise.resolve();
+                restartPromise.finally(function () {
+                    window.MonolithTerminal.setSkipNextEof(sessionId, false);
+                    tab = window.SidebarManager.getTab(tabId);
+                    if (!tab) return;
+                    if (tab.term) {
+                        try { tab.term.dispose(); } catch (e) {}
+                        try { tab.fitAddon.dispose(); } catch (e) {}
+                        tab.term = null;
+                        tab.fitAddon = null;
+                    }
+                    tab.running = false;
+                    tab.busy = false;
+                    tab.generation = null;
+                    tab.closing = false;
+                    window.MonolithTerminal.deleteSessionGeneration(sessionId);
+                    if (window.MonolithTerminal.hasSkipNextEof(sessionId)) {
+                        window.MonolithTerminal.deleteSkipNextEof(sessionId);
+                    }
+                    var terminalDiv = tab.container.querySelector('.cmd-panel-tab-terminal');
+                    if (terminalDiv) terminalDiv.innerHTML = '';
+                    window.SidebarManager.hideTabExitBanner(tab);
+                    if (window.SidebarManager.getActiveTabId() === tabId) {
+                        window.SidebarManager.initTabXterm(tab);
+                    }
+                });
             } else if (sessionId === 'panel') {
                 if (_panelRunning) {
                     window.MonolithTerminal.setSkipNextEof('panel', true);

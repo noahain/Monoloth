@@ -2,6 +2,18 @@
     'use strict';
 
     var STALL_TIMEOUT_MS = 2 * 60 * 1000;
+    var CHECK_TIMEOUT_MS = 10000;
+
+    function getCore() {
+        var candidates = [window.__TAURI_CORE__, window.__TAURI__ && window.__TAURI__.core, window.__TAURI_INTERNALS__];
+        for (var i = 0; i < candidates.length; i++) {
+            if (candidates[i] && typeof candidates[i].invoke === 'function') {
+                window.__TAURI_CORE__ = candidates[i];
+                return candidates[i];
+            }
+        }
+        return null;
+    }
 
     var state = {
         current: 'IDLE',
@@ -14,6 +26,7 @@
         mounted: null,
         cancelled: false
     };
+    var _autoCheckToken = 0;
 
     function classifyError(e) {
         var msg = String((e && e.message) || e);
@@ -288,9 +301,12 @@
         var process = window.__TAURI_PLUGIN_PROCESS__ || null;
         if (process && typeof process.relaunch === 'function') {
             process.relaunch();
-        } else if (window.__TAURI_CORE__) {
-            window.__TAURI_CORE__.invoke('plugin:process|restart');
         } else {
+            var core = getCore();
+            if (core) {
+                core.invoke('plugin:process|restart');
+                return;
+            }
             console.error('Cannot relaunch: tauri-plugin-process not available');
         }
     }
@@ -328,12 +344,15 @@
     }
 
     function tryCheck(retriesLeft) {
+        var checkToken = ++_autoCheckToken;
         var timeoutId = setTimeout(function () {
+            if (checkToken !== _autoCheckToken) return;
             console.warn('Auto-update check timed out');
+            _autoCheckToken++;
             if (retriesLeft > 0) {
                 setTimeout(function () { tryCheck(retriesLeft - 1); }, 5000);
             }
-        }, 10000);
+        }, CHECK_TIMEOUT_MS);
 
         try {
             var updater = window.__TAURI_PLUGIN_UPDATER__ || null;
@@ -342,21 +361,26 @@
                 return;
             }
             updater.check().then(function (update) {
+                if (checkToken !== _autoCheckToken) return;
                 clearTimeout(timeoutId);
                 if (update && update.available) {
                     mountToast(update);
                 }
             }).catch(function (e) {
+                if (checkToken !== _autoCheckToken) return;
                 clearTimeout(timeoutId);
                 console.warn('Auto-update check failed:', e && e.message);
                 if (retriesLeft > 0) {
+                    _autoCheckToken++;
                     setTimeout(function () { tryCheck(retriesLeft - 1); }, 5000);
                 }
             });
         } catch (e) {
+            if (checkToken !== _autoCheckToken) return;
             clearTimeout(timeoutId);
             console.warn('Auto-update check threw:', e && e.message);
             if (retriesLeft > 0) {
+                _autoCheckToken++;
                 setTimeout(function () { tryCheck(retriesLeft - 1); }, 5000);
             }
         }
@@ -377,7 +401,21 @@
             if (status) status.textContent = 'Updater not available';
             return;
         }
+        var settled = false;
+        var timeoutId = setTimeout(function () {
+            if (settled) return;
+            settled = true;
+            if (btn) btn.disabled = false;
+            if (status && window.MonolothUI && window.MonolothUI.showStatus) {
+                window.MonolothUI.showStatus('updater-status', 'Update check timed out.', true);
+            } else if (status) {
+                status.textContent = 'Update check timed out.';
+            }
+        }, CHECK_TIMEOUT_MS);
         updater.check().then(function (update) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeoutId);
             if (btn) btn.disabled = false;
             if (update && update.available) {
                 mountToast(update);
@@ -394,6 +432,9 @@
                 }
             }
         }).catch(function (e) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeoutId);
             if (btn) btn.disabled = false;
             var msg = (e && e.message) || String(e);
             if (status && window.MonolothUI && window.MonolothUI.showStatus) {
@@ -409,6 +450,7 @@
         _classifyError: classifyError,
         _touchProgress: touchProgress,
         _clearStallTimer: clearStallTimer,
+        _setCheckTimeoutForTest: function (ms) { CHECK_TIMEOUT_MS = ms; },
         mountToast: mountToast,
         mountPill: mountPill,
         removeMounted: removeMounted,

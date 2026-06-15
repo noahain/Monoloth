@@ -243,9 +243,8 @@ impl PtyManager {
             let _ = s.child.kill();
             drop(s.writer);
             s.resizer = None;
-            if let Some(handle) = s.read_thread.take() {
-                let _ = handle.join();
-            }
+            // Do not join here: PTY reader backends can stay blocked briefly after kill.
+            let _ = s.read_thread.take();
         }
     }
 

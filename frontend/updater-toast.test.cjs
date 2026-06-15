@@ -214,3 +214,39 @@ test('init() retries once after a transient IPC failure and mounts the toast', a
     assert.strictEqual(state.current, 'AVAILABLE', 'toast should be mounted after retry');
     assert.ok(state.mounted, 'a toast should be mounted');
 });
+
+test('manual update check re-enables button after timeout', async () => {
+    const button = new FakeElement('check-update-btn');
+    const status = new FakeElement('updater-status');
+    const elements = {
+        'check-update-btn': button,
+        'updater-status': status
+    };
+    const document = {
+        body: new FakeElement('body'),
+        getElementById: (id) => elements[id] || null,
+        createElement: (tag) => new FakeElement(tag),
+        addEventListener() {},
+        removeEventListener() {}
+    };
+    document.documentElement = new FakeElement('html');
+    const window = {
+        __TAURI_PLUGIN_UPDATER__: { check: () => new Promise(() => {}) },
+        MonolothUI: { showStatus: (id, msg) => { elements[id].textContent = msg; } },
+        addEventListener() {},
+        removeEventListener() {}
+    };
+    window.window = window;
+    window.document = document;
+    const context = { console, document, window, Promise, setTimeout, clearTimeout };
+    context.globalThis = context;
+    vm.createContext(context);
+    vm.runInContext(fs.readFileSync('frontend/lib/updater-toast.js', 'utf8'), context, { filename: 'frontend/lib/updater-toast.js' });
+
+    context.window.MonolothUpdater._setCheckTimeoutForTest(1);
+    context.window.MonolothUpdater.checkFromFooter();
+    await flushAsync();
+
+    assert.equal(button.disabled, false);
+    assert.equal(status.textContent, 'Update check timed out.');
+});

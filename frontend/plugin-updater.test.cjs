@@ -139,6 +139,51 @@ test('check() rejects when Tauri is not available (lazy guard)', async () => {
     );
 });
 
+test('check() resolves Tauri core injected after plugin load', async () => {
+    const window = { __TAURI__: null };
+    window.window = window;
+    const context = { console, window, Promise };
+    context.globalThis = context;
+    vm.createContext(context);
+    const source = fs.readFileSync('frontend/lib/plugin-updater.js', 'utf8');
+    vm.runInContext(source, context, { filename: 'frontend/lib/plugin-updater.js' });
+
+    context.window.__TAURI__ = {
+        core: {
+            invoke: (cmd) => cmd === 'plugin:updater|check'
+                ? Promise.resolve({ version: '2.0.1', currentVersion: '2.0.0' })
+                : Promise.reject(new Error('Unexpected: ' + cmd)),
+            Channel: class {}
+        }
+    };
+
+    const update = await context.window.__TAURI_PLUGIN_UPDATER__.check();
+    assert.equal(update.version, '2.0.1');
+});
+
+test('plugin-process resolves Tauri core injected after plugin load', async () => {
+    const calls = [];
+    const window = { __TAURI__: null };
+    window.window = window;
+    const context = { console, window, Promise };
+    context.globalThis = context;
+    vm.createContext(context);
+    const source = fs.readFileSync('frontend/lib/plugin-process.js', 'utf8');
+    vm.runInContext(source, context, { filename: 'frontend/lib/plugin-process.js' });
+
+    context.window.__TAURI__ = {
+        core: {
+            invoke: (cmd) => {
+                calls.push(cmd);
+                return Promise.resolve();
+            }
+        }
+    };
+
+    await context.window.__TAURI_PLUGIN_PROCESS__.relaunch();
+    assert.deepEqual(calls, ['plugin:process|restart']);
+});
+
 test('downloadAndInstall throws when Channel is not available', async () => {
     const h = createUpdaterHarness();
     delete h.context.window.__TAURI__.core.Channel;

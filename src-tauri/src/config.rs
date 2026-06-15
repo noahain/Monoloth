@@ -127,7 +127,8 @@ const GLOBAL_KEYS: &[&str] = &[
     "active_profile", "last_directory", "window_width", "window_height",
     "window_maximized", "fp_last_dir_bg_image", "fp_last_dir_choose",
     "use_custom_titlebar", "window_x", "window_y",
-    "cmdPanelHeight", "panelShell", "confirm_dialog_prefs",
+    "cmdPanelHeight", "panelShell", "cmdPanelOpen", "sidebar_config",
+    "recent_directories", "confirm_dialog_prefs",
 ];
 
 fn is_global_key(key: &str) -> bool {
@@ -440,6 +441,13 @@ mod tests {
         let config = AppConfig::new();
         config.set("last_directory", Value::String("C:\\test".into()));
         assert_eq!(config.get("last_directory").as_str().unwrap(), "C:\\test");
+        config.create_profile("ProfileA").unwrap();
+        config.switch_profile("ProfileA").unwrap();
+        config.set("recent_directories", serde_json::json!(["C:\\test"]));
+        config.set("cmdPanelOpen", Value::Bool(true));
+        config.switch_profile("Default").unwrap();
+        assert_eq!(config.get("recent_directories").as_array().unwrap().len(), 1);
+        assert_eq!(config.get("cmdPanelOpen").as_bool().unwrap(), true);
         cleanup_test_env(&test_dir);
     }
 

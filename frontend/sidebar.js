@@ -434,6 +434,7 @@
             fitAddon: null,
             generation: null,
             busy: false,
+            closing: false,
             exitBanner: null,
             dir: dir
         };
@@ -577,6 +578,12 @@
 
         var initPromise = window.monolithApi.start_terminal(tab.sessionId, dir, false, _panelShell, cols, rows)
             .then(function (result) {
+                if (tab.closing || !_panelTabs.has(tab.id)) {
+                    if (result && result.success && window.monolithApi) {
+                        window.monolithApi.terminate_terminal(tab.sessionId).catch(function () {});
+                    }
+                    return tab;
+                }
                 if (result && result.success) {
                     tab.running = true;
                     tab.generation = result.generation;
@@ -598,13 +605,14 @@
                 return tab;
             })
             .catch(function (err) {
+                if (tab.closing || !_panelTabs.has(tab.id)) return tab;
                 console.error('Failed to start tab PTY:', err);
                 tab.running = false;
                 showTabExitBanner(tab);
                 return tab;
             })
             .finally(function () {
-                tab.initializing = false;
+                if (_panelTabs.has(tab.id)) tab.initializing = false;
             });
 
         tab.initPromise = initPromise;
@@ -633,6 +641,7 @@
     function _doCloseTab(tabId) {
         var tab = _panelTabs.get(tabId);
         if (!tab) return;
+        tab.closing = true;
 
         if (window.monolithApi) {
             window.monolithApi.terminate_terminal(tab.sessionId).catch(function () {});

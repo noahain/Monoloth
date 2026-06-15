@@ -94,6 +94,7 @@
         filter: '*.*',
         filterExts: [],
         _listings: {},
+        _navToken: 0,
         pickerId: '',
     };
 
@@ -185,6 +186,7 @@
         fpState.selectedPath = '';
         fpState.filterExts = [];
         fpState._listings = {};
+        fpState._navToken++;
         fpState.pickerId = opts.id || '';
 
         fpTitle.textContent = opts.title || (fpState.mode === 'folder' ? 'Choose Directory' : 'Choose File');
@@ -244,8 +246,10 @@
 
     function navigateToPath(path) {
         if (!path) { console.warn('[Monoloth][Picker] navigateToPath: empty path'); return; }
+        var token = ++fpState._navToken;
         showLoading(true);
         window.monolithApi.get_path_info(path).then(function (info) {
+            if (token !== fpState._navToken) return;
             if (!info || !info.success || !info.exists) {
                 showLoading(false);
                 if (!info || !info.success) {
@@ -256,16 +260,19 @@
                 return;
             }
             var target = info.isDir ? info.absolute : info.parent;
-            doNavigate(target);
+            doNavigate(target, token);
         }).catch(function (err) {
+            if (token !== fpState._navToken) return;
             console.error('[Monoloth][Picker] get_path_info error:', err);
             showLoading(false);
             showEmpty();
         });
     }
 
-    function doNavigate(absPath) {
+    function doNavigate(absPath, token) {
         if (!absPath) return;
+        if (token == null) token = ++fpState._navToken;
+        if (token !== fpState._navToken) return;
         fpState.currentPath = absPath;
 
         if (fpState.historyIndex < fpState.history.length - 1) {
@@ -274,12 +281,14 @@
         fpState.history.push(absPath);
         fpState.historyIndex = fpState.history.length - 1;
         updateNavButtons();
-        loadDirectory(absPath);
+        loadDirectory(absPath, token);
     }
 
-    function loadDirectory(path) {
+    function loadDirectory(path, token) {
+        if (token == null) token = fpState._navToken;
         showLoading(true);
         window.monolithApi.list_directory(path).then(function (result) {
+            if (token !== fpState._navToken || path !== fpState.currentPath) return;
             showLoading(false);
             if (!result || !result.success) { console.warn('[Monoloth][Picker] list_directory failed'); showError('Access denied'); return; }
             fpState._listings[path] = result.entries;
@@ -290,6 +299,7 @@
             fpFilename.value = '';
             fpOk.disabled = (fpState.mode !== 'folder');
         }).catch(function (err) {
+            if (token !== fpState._navToken || path !== fpState.currentPath) return;
             console.error('[Monoloth][Picker] list_directory error:', err);
             showLoading(false);
             showError('Access denied or network error');
@@ -465,7 +475,9 @@
         fpPreviewPane.classList.add('anim-enter');
         // Reset image opacity for fade-in
         if (fpPreviewImg) fpPreviewImg.classList.remove('loaded');
+        var token = fpState._navToken;
         window.monolithApi.get_file_preview(filePath).then(function (res) {
+            if (token !== fpState._navToken || fpState.selectedPath !== filePath) return;
             if (res && res.success && res.dataUrl) {
                 fpPreviewImg.src = res.dataUrl;
                 fpPreviewImg.style.display = 'block';
@@ -473,7 +485,10 @@
                 fpPreviewImg.onload = function () { fpPreviewImg.classList.add('loaded'); };
                 fpPreviewInfo.textContent = formatSize(entry.size) + ' | ' + ext.toUpperCase();
             } else { noPreview(); }
-        }).catch(function () { noPreview(); });
+        }).catch(function () {
+            if (token !== fpState._navToken || fpState.selectedPath !== filePath) return;
+            noPreview();
+        });
         function noPreview() { fpPreviewImg.src = ''; fpPreviewImg.style.display = 'none'; fpPreviewInfo.textContent = 'Preview not available'; }
     }
 
@@ -678,8 +693,9 @@
             }
             item.classList.add('active');
             if (QUICK_PATHS[p]) {
+                var token = ++fpState._navToken;
                 window.monolithApi.get_path_info(QUICK_PATHS[p]).then(function (info) {
-                    if (info && info.success && info.isDir) doNavigate(info.absolute);
+                    if (token === fpState._navToken && info && info.success && info.isDir) doNavigate(info.absolute, token);
                 });
             }
         });
@@ -718,6 +734,7 @@
 
     function closePicker(result) {
         if (!fpEl) return;
+        fpState._navToken++;
         closeModal(fpEl);
         fpState.selectedPath = '';
         if (fpFilename) fpFilename.value = '';

@@ -45,6 +45,31 @@ pub fn start_terminal(
         resolve_command(&startup_cmd)?
     };
 
+    let secondary = if session_id == "main" {
+        config.get("secondary_commands")
+    } else {
+        Value::Null
+    };
+    if session_id == "main" {
+        if let Value::Array(cmds) = &secondary {
+            for cmd_val in cmds {
+                if let Some(cmd_obj) = cmd_val.as_object() {
+                    if let Some(enabled) = cmd_obj.get("enabled").and_then(|v| v.as_bool()) {
+                        if enabled {
+                            if let Some(cmd_str) = cmd_obj.get("command").and_then(|v| v.as_str()) {
+                                if cmd_obj.get("mode").and_then(|v| v.as_str()) == Some("before") {
+                                    if let Err(e) = run_before_command(cmd_str, &directory) {
+                                        warn!("Before command failed: {}", e);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     let args_str: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
     let gen = pty.spawn(&session_id, &cmd, &args_str, &directory, cols, rows)?;
 
@@ -54,25 +79,16 @@ pub fn start_terminal(
     }
 
     if session_id == "main" {
-        let secondary = config.get("secondary_commands");
         if let Value::Array(cmds) = &secondary {
             for cmd_val in cmds {
                 if let Some(cmd_obj) = cmd_val.as_object() {
                     if let Some(enabled) = cmd_obj.get("enabled").and_then(|v| v.as_bool()) {
                         if enabled {
                             if let Some(cmd_str) = cmd_obj.get("command").and_then(|v| v.as_str()) {
-                                match cmd_obj.get("mode").and_then(|v| v.as_str()) {
-                                    Some("before") => {
-                                        if let Err(e) = run_before_command(cmd_str, &directory) {
-                                            warn!("Before command failed: {}", e);
-                                        }
+                                if cmd_obj.get("mode").and_then(|v| v.as_str()) == Some("parallel") {
+                                    if let Err(e) = run_parallel_command(cmd_str.to_string(), directory.clone()) {
+                                        warn!("Parallel command failed: {}", e);
                                     }
-                                    Some("parallel") => {
-                                        if let Err(e) = run_parallel_command(cmd_str.to_string(), directory.clone()) {
-                                            warn!("Parallel command failed: {}", e);
-                                        }
-                                    }
-                                    _ => {}
                                 }
                             }
                         }
@@ -453,50 +469,76 @@ fn probe_unix_install_paths(bin: &str) -> Option<String> {
 }
 
 fn run_before_command(cmd: &str, cwd: &str) -> Result<String, String> {
-    use std::process::Stdio;
-    use std::sync::mpsc;
-    use std::sync::{Arc, Mutex};
-    use std::time::Duration;
+    run_before_command_with_timeout(cmd, cwd, std::time::Duration::from_secs(30))
+}
 
-    let child = shell_command(cmd)
+fn run_before_command_with_timeout(
+    cmd: &str,
+    cwd: &str,
+    timeout: std::time::Duration,
+) -> Result<String, String> {
+    use std::io::Read;
+    use std::process::Stdio;
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    let mut child = shell_command(cmd)
         .current_dir(cwd)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("Failed to spawn: {}", e))?;
 
-    let shared_child = Arc::new(Mutex::new(Some(child)));
-    let thread_child = shared_child.clone();
-
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let mut guard = thread_child.lock().unwrap_or_else(|p| p.into_inner());
-        if let Some(child) = guard.take() {
-            let result = child.wait_with_output();
-            let _ = tx.send(result);
-        }
+    let stdout = child.stdout.take().map(|mut pipe| {
+        thread::spawn(move || {
+            let mut output = String::new();
+            let _ = pipe.read_to_string(&mut output);
+            output
+        })
+    });
+    let stderr = child.stderr.take().map(|mut pipe| {
+        thread::spawn(move || {
+            let mut output = String::new();
+            let _ = pipe.read_to_string(&mut output);
+            output
+        })
     });
 
-    match rx.recv_timeout(Duration::from_secs(30)) {
-        Ok(Ok(output)) => {
-            if !output.status.success() {
-                return Err(format!("Command exited with code: {:?}", output.status.code()));
-            }
-            Ok(format!("{}{}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)))
-        }
-        Ok(Err(e)) => Err(format!("Failed to collect output: {}", e)),
-        Err(mpsc::RecvTimeoutError::Timeout) => {
-            let mut guard = shared_child.lock().unwrap_or_else(|p| p.into_inner());
-            if let Some(mut child) = guard.take() {
+    let started = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if started.elapsed() >= timeout => {
                 let _ = child.kill();
+                let _ = child.wait();
+                drop(stdout);
+                drop(stderr);
+                return Err(format!("Before command timed out after {}", format_duration(timeout)));
             }
-            Err("Before command timed out after 30s".into())
+            Ok(None) => thread::sleep(Duration::from_millis(25)),
+            Err(e) => return Err(format!("Failed to wait for command: {}", e)),
         }
-        Err(mpsc::RecvTimeoutError::Disconnected) => {
-            Err("Before command thread panicked".into())
-        }
+    };
+
+    let stdout = collect_reader(stdout);
+    let stderr = collect_reader(stderr);
+
+    if !status.success() {
+        return Err(format!("Command exited with code: {:?}", status.code()));
+    }
+
+    Ok(format!("{}{}", stdout, stderr))
+}
+
+fn collect_reader(handle: Option<std::thread::JoinHandle<String>>) -> String {
+    handle.and_then(|h| h.join().ok()).unwrap_or_default()
+}
+
+fn format_duration(duration: std::time::Duration) -> String {
+    if duration.as_secs() > 0 {
+        format!("{}s", duration.as_secs())
+    } else {
+        format!("{}ms", duration.as_millis())
     }
 }
 
@@ -597,6 +639,50 @@ mod tests {
         let result = find_opencode();
         let _ = result;
         std::env::remove_var("OPENCODE_BIN_PATH");
+    }
+
+    #[test]
+    fn before_command_collects_output() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let cmd = if cfg!(windows) { "echo before" } else { "printf before" };
+        let output = run_before_command_with_timeout(
+            cmd,
+            ".",
+            std::time::Duration::from_secs(2),
+        ).unwrap();
+        assert!(output.contains("before"));
+    }
+
+    #[test]
+    fn before_command_timeout_does_not_block_on_wait_thread() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let cmd = if cfg!(windows) {
+            "powershell -NoProfile -Command \"Start-Sleep -Seconds 5\""
+        } else {
+            "sleep 5"
+        };
+        let started = std::time::Instant::now();
+        let result = run_before_command_with_timeout(
+            cmd,
+            ".",
+            std::time::Duration::from_millis(100),
+        );
+        assert!(result.unwrap_err().contains("timed out"));
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn before_command_timeout_does_not_wait_for_pipe_inheriting_descendant() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let started = std::time::Instant::now();
+        let result = run_before_command_with_timeout(
+            "sleep 5 & wait",
+            ".",
+            std::time::Duration::from_millis(100),
+        );
+        assert!(result.unwrap_err().contains("timed out"));
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
     }
 
     // pick_windows_executable tests — the root-cause fix for the npm extensionless

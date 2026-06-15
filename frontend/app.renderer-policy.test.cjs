@@ -323,3 +323,64 @@ test('does not load WebGL when the terminal background is transparent', async ()
 
     assert.equal(harness.getWebglLoadCount(), 0);
 });
+
+test('showTerminal waits for previous main session termination before starting another', async () => {
+    const harness = createHarness({
+        type: 'none',
+        image: '',
+        imageUrl: '',
+        transparency: 75,
+        bgLayer: 'behind',
+        themeMode: 'dark',
+        ctaButtonStyle: 'blur'
+    });
+
+    await flushAsync();
+    let releaseTerminate;
+    let startCalls = 0;
+    harness.context.window.monolithApi.terminate_terminal = () => new Promise((resolve) => { releaseTerminate = resolve; });
+    harness.context.window.monolithApi.start_terminal = () => {
+        startCalls += 1;
+        return Promise.resolve({ success: true, generation: 2 });
+    };
+    harness.context.window.MonolithTerminal.setRunning(true);
+
+    harness.context.window.MonolothApp.showTerminal('C:\\repo');
+    await flushAsync();
+    assert.equal(startCalls, 0);
+
+    releaseTerminate();
+    await flushAsync();
+    assert.equal(startCalls, 1);
+});
+
+test('showTerminal ignores stale delayed launches when a newer launch starts', async () => {
+    const harness = createHarness({
+        type: 'none',
+        image: '',
+        imageUrl: '',
+        transparency: 75,
+        bgLayer: 'behind',
+        themeMode: 'dark',
+        ctaButtonStyle: 'blur'
+    });
+
+    await flushAsync();
+    let releaseFirstTerminate;
+    const startedDirs = [];
+    harness.context.window.monolithApi.terminate_terminal = () => new Promise((resolve) => { releaseFirstTerminate = resolve; });
+    harness.context.window.monolithApi.start_terminal = (_sessionId, dir) => {
+        startedDirs.push(dir);
+        return Promise.resolve({ success: true, generation: startedDirs.length + 1 });
+    };
+    harness.context.window.MonolithTerminal.setRunning(true);
+
+    harness.context.window.MonolothApp.showTerminal('C:\\old');
+    harness.context.window.MonolothApp.showTerminal('C:\\new');
+    await flushAsync();
+    assert.deepEqual(startedDirs, ['C:\\new']);
+
+    releaseFirstTerminate();
+    await flushAsync();
+    assert.deepEqual(startedDirs, ['C:\\new']);
+});

@@ -3,8 +3,19 @@
 (function () {
     'use strict';
 
+    function getCore() {
+        var candidates = [window.__TAURI_CORE__, window.__TAURI__ && window.__TAURI__.core, window.__TAURI_INTERNALS__];
+        for (var i = 0; i < candidates.length; i++) {
+            if (candidates[i] && typeof candidates[i].invoke === 'function') {
+                window.__TAURI_CORE__ = candidates[i];
+                return candidates[i];
+            }
+        }
+        return null;
+    }
+
     function check() {
-        var core = window.__TAURI_CORE__;
+        var core = getCore();
         if (!core) return Promise.reject(new Error('Tauri not available'));
         return core.invoke('plugin:updater|check').then(function (metadata) {
             if (!metadata) return null;
