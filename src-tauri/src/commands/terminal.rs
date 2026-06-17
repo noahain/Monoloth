@@ -123,6 +123,15 @@ pub fn terminate_terminal(pty: State<PtyManager>, history: State<HistoryManager>
 }
 
 #[tauri::command]
+pub fn retire_panel_tab(pty: State<PtyManager>, history: State<HistoryManager>, session_id: String) {
+    if !session_id.starts_with("panel-tab-") {
+        return;
+    }
+    history.session_end_by_id(&session_id);
+    pty.retire_session(&session_id);
+}
+
+#[tauri::command]
 pub fn run_parallel_command(cmd: String, cwd: String) -> Result<bool, String> {
     let mut command = shell_command(&cmd);
     command.current_dir(&cwd);

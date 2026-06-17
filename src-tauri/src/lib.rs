@@ -8,7 +8,7 @@ use tauri::Manager;
 use tauri_plugin_updater::UpdaterExt;
 use tokio::sync::{oneshot, Mutex};
 
-use config::{AppConfig, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, WINDOW_MINIMIZED_SENTINEL};
+use config::{AppConfig, MAX_WINDOW_DIMENSION, MAX_WINDOW_POSITION, MIN_WINDOW_HEIGHT, MIN_WINDOW_POSITION, MIN_WINDOW_WIDTH, WINDOW_MINIMIZED_SENTINEL};
 use history::HistoryManager;
 use pty::PtyManager;
 
@@ -137,7 +137,10 @@ pub fn run() {
             window.on_window_event(move |event| {
                 match event {
                     tauri::WindowEvent::Resized(size) => {
-                        if size.width >= MIN_WINDOW_WIDTH as u32 && size.height >= MIN_WINDOW_HEIGHT as u32 {
+                        if size.width >= MIN_WINDOW_WIDTH as u32 && size.height >= MIN_WINDOW_HEIGHT as u32
+                            && (size.width as i64) <= MAX_WINDOW_DIMENSION
+                            && (size.height as i64) <= MAX_WINDOW_DIMENSION
+                        {
                             let is_minimized = window_clone.is_minimized().unwrap_or(false);
                             if is_minimized {
                                 return;
@@ -155,7 +158,15 @@ pub fn run() {
                                     drop(last);
                                     cfg_for_events.set_window_size(size.width, size.height);
                                     if let Ok(pos) = window_clone.outer_position() {
-                                        cfg_for_events.set_window_position(pos.x, pos.y);
+                                        if (pos.x as i64) > WINDOW_MINIMIZED_SENTINEL
+                                            && (pos.y as i64) > WINDOW_MINIMIZED_SENTINEL
+                                            && (pos.x as i64) >= MIN_WINDOW_POSITION
+                                            && (pos.y as i64) >= MIN_WINDOW_POSITION
+                                            && (pos.x as i64) <= MAX_WINDOW_POSITION
+                                            && (pos.y as i64) <= MAX_WINDOW_POSITION
+                                        {
+                                            cfg_for_events.set_window_position(pos.x, pos.y);
+                                        }
                                     }
                                 }
                             }
@@ -166,6 +177,13 @@ pub fn run() {
                             return;
                         }
                         if pos.x <= WINDOW_MINIMIZED_SENTINEL as i32 || pos.y <= WINDOW_MINIMIZED_SENTINEL as i32 {
+                            return;
+                        }
+                        if (pos.x as i64) < MIN_WINDOW_POSITION
+                            || (pos.y as i64) < MIN_WINDOW_POSITION
+                            || (pos.x as i64) > MAX_WINDOW_POSITION
+                            || (pos.y as i64) > MAX_WINDOW_POSITION
+                        {
                             return;
                         }
                         if !window_clone.is_maximized().unwrap_or(false) {
@@ -184,12 +202,22 @@ pub fn run() {
                             let is_minimized = window_clone.is_minimized().unwrap_or(false);
                             if !is_minimized {
                                 if let Ok(pos) = window_clone.outer_position() {
-                                    if pos.x as i64 > WINDOW_MINIMIZED_SENTINEL && pos.y as i64 > WINDOW_MINIMIZED_SENTINEL {
+                                    if (pos.x as i64) > WINDOW_MINIMIZED_SENTINEL
+                                        && (pos.y as i64) > WINDOW_MINIMIZED_SENTINEL
+                                        && (pos.x as i64) >= MIN_WINDOW_POSITION
+                                        && (pos.y as i64) >= MIN_WINDOW_POSITION
+                                        && (pos.x as i64) <= MAX_WINDOW_POSITION
+                                        && (pos.y as i64) <= MAX_WINDOW_POSITION
+                                    {
                                         cfg_for_events.set_window_position(pos.x, pos.y);
                                     }
                                 }
-                                if let Ok(size) = window_clone.outer_size() {
-                                    if size.width >= MIN_WINDOW_WIDTH as u32 && size.height >= MIN_WINDOW_HEIGHT as u32 {
+                                if let Ok(size) = window_clone.inner_size() {
+                                    if size.width >= MIN_WINDOW_WIDTH as u32
+                                        && size.height >= MIN_WINDOW_HEIGHT as u32
+                                        && (size.width as i64) <= MAX_WINDOW_DIMENSION
+                                        && (size.height as i64) <= MAX_WINDOW_DIMENSION
+                                    {
                                         cfg_for_events.set_window_size(size.width, size.height);
                                     }
                                 }
@@ -216,6 +244,7 @@ pub fn run() {
             commands::get_config,
             commands::set_config,
             commands::get_all_config,
+            commands::set_many_config,
             commands::pick_directory,
             commands::pick_file,
             commands::list_directory,
@@ -227,6 +256,7 @@ pub fn run() {
             commands::send_input,
             commands::resize_terminal,
             commands::terminate_terminal,
+            commands::retire_panel_tab,
             commands::get_current_version,
             commands::get_windows_pty_info,
             commands::analyze_image_brightness,

@@ -71,6 +71,10 @@
         return callApi('terminate_terminal', { sessionId: sessionId || 'main' });
     };
 
+    api.retire_panel_tab = function (sessionId) {
+        return callApi('retire_panel_tab', { sessionId: sessionId });
+    };
+
     api.terminate = function () {
         return api.terminate_terminal('main');
     };
@@ -234,25 +238,28 @@
     };
 
     api.set_background_config = function (bg_type, image_path, color, gradient, transparency, theme_mode, cta_button_style, bg_layer) {
-        var promises = [];
-        if (bg_type !== undefined) promises.push(invoke('set_config', { key: 'bg_type', value: bg_type }));
-        if (image_path !== undefined) {
-            var imgPath = image_path || '';
-            promises.push(invoke('set_config', { key: 'bg_image', value: imgPath }));
-            if (bg_type === 'image' && imgPath) {
-                promises.push(
-                    invoke('read_image_as_data_url', { imagePath: imgPath })
-                        .catch(function () {})
-                );
-            }
-        }
-        if (color !== undefined) promises.push(invoke('set_config', { key: 'bg_color', value: color }));
-        if (gradient !== undefined) promises.push(invoke('set_config', { key: 'bg_gradient', value: gradient }));
-        if (transparency !== undefined) promises.push(invoke('set_config', { key: 'bg_transparency', value: transparency }));
-        if (theme_mode !== undefined) promises.push(invoke('set_config', { key: 'theme_mode', value: theme_mode }));
-        if (cta_button_style !== undefined) promises.push(invoke('set_config', { key: 'cta_button_style', value: cta_button_style }));
-        if (bg_layer !== undefined) promises.push(invoke('set_config', { key: 'bg_layer', value: bg_layer }));
-        return Promise.all(promises)
+        var entries = {};
+        if (bg_type !== undefined) entries.bg_type = bg_type;
+        if (image_path !== undefined) entries.bg_image = image_path || '';
+        if (color !== undefined) entries.bg_color = color;
+        if (gradient !== undefined) entries.bg_gradient = gradient;
+        if (transparency !== undefined) entries.bg_transparency = transparency;
+        if (theme_mode !== undefined) entries.theme_mode = theme_mode;
+        if (cta_button_style !== undefined) entries.cta_button_style = cta_button_style;
+        if (bg_layer !== undefined) entries.bg_layer = bg_layer;
+
+        var dataUrlPromise = (image_path && bg_type === 'image')
+            ? invoke('read_image_as_data_url', { imagePath: image_path }).catch(function () {})
+            : Promise.resolve();
+
+        return invoke('set_many_config', { entries: entries })
+            .then(function () { return dataUrlPromise; })
+            .then(function () { return { success: true }; })
+            .catch(function (err) { return { success: false, error: String(err) }; });
+    };
+
+    api.set_many_config = function (entries) {
+        return invoke('set_many_config', { entries: entries || {} })
             .then(function () { return { success: true }; })
             .catch(function (err) { return { success: false, error: String(err) }; });
     };

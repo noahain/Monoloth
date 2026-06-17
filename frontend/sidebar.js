@@ -453,10 +453,6 @@
             return Promise.resolve();
         }
 
-        if (tab.initializing) {
-            return tab.initPromise || Promise.resolve();
-        }
-
         if (_activeTabId && _activeTabId !== tabId) {
             var oldTab = _panelTabs.get(_activeTabId);
             if (oldTab) {
@@ -478,6 +474,10 @@
         _activeTabId = tabId;
 
         updateBusyDot(tab);
+
+        if (tab.initializing) {
+            return tab.initPromise || Promise.resolve();
+        }
 
         if (!tab.term) {
             return initTabXterm(tab);
@@ -630,7 +630,8 @@
                 window.MonolothApp.showConfirm('Close Tab', 'This tab has a running process. Close anyway?', 'close_dirty_tab')
                     .then(function (confirmed) {
                         if (confirmed) _doCloseTab(tabId);
-                    });
+                    })
+                    .catch(function () {});
                 return;
             }
         }
@@ -652,6 +653,16 @@
             try { tab.fitAddon.dispose(); } catch (e) {}
             tab.term = null;
             tab.fitAddon = null;
+        }
+
+        if (window.MonolithTerminal && typeof window.MonolithTerminal.deleteSessionGeneration === 'function') {
+            window.MonolithTerminal.deleteSessionGeneration(tab.sessionId);
+        }
+        if (window.MonolithTerminal && typeof window.MonolithTerminal.deleteSkipNextEof === 'function' && window.MonolithTerminal.hasSkipNextEof && window.MonolithTerminal.hasSkipNextEof(tab.sessionId)) {
+            window.MonolithTerminal.deleteSkipNextEof(tab.sessionId);
+        }
+        if (window.monolithApi && typeof window.monolithApi.retire_panel_tab === 'function') {
+            window.monolithApi.retire_panel_tab(tab.sessionId).catch(function () {});
         }
 
         tab.container.remove();

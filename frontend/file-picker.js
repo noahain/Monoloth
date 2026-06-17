@@ -367,7 +367,7 @@
         loadDrives();
     }
 
-    var FILE_IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.ico'];
+    var FILE_IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
     var FILE_CODE_EXTS = ['.js', '.py', '.html', '.css', '.json', '.xml', '.ts', '.jsx', '.tsx', '.yaml', '.yml', '.md', '.sh', '.bat', '.ps1', '.lua', '.rb', '.go', '.rs', '.c', '.cpp', '.h', '.java', '.kt', '.swift'];
     var FILE_ARCHIVE_EXTS = ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.zst'];
 
@@ -464,7 +464,7 @@
     function showPreview(filePath, entry) {
         if (!fpPreviewPane) return;
         var ext = (entry.extension || '').toLowerCase();
-        if ('.png.jpg.jpeg.gif.bmp.webp.svg.ico'.indexOf(ext) === -1) {
+        if (FILE_IMAGE_EXTS.indexOf(ext) === -1) {
             fpPreviewPane.style.display = 'none';
             fpPreviewPane.classList.remove('anim-enter');
             return;
@@ -563,9 +563,24 @@
         clearPreview();
     }
 
-    function formatDate(ts) {
-        if (!ts || ts <= 0) return '\u2014';
-        return new Date(ts * 1000).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' });
+    function formatDate(value) {
+        if (value === null || value === undefined || value === '') return '\u2014';
+        if (typeof value === 'number' && value > 0) {
+            return new Date(value * 1000).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' });
+        }
+        if (typeof value === 'string') {
+            // Backend now returns relative strings like "3d ago", "5h ago", "12m ago", "just now".
+            // Display them as-is; only fall back to Date parsing if it looks like an ISO timestamp.
+            if (/^\d+(\.\d+)?$/.test(value)) {
+                var n = Number(value);
+                if (n > 0) return new Date(n * 1000).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' });
+                return '\u2014';
+            }
+            if (/^(\d{4}-\d{2}-\d{2}|just now|\d+[smhd] ago|\d+y ago)/i.test(value)) {
+                return value;
+            }
+        }
+        return '\u2014';
     }
 
     function formatSize(bytes) {

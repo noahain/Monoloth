@@ -57,10 +57,32 @@ pub fn analyze_image_brightness(image_path: String) -> Result<f64, String> {
     }
 
     if weight_sum == 0 {
-        return Ok(0.0);
+        return Err("Image is fully transparent — no brightness signal".into());
     }
 
     Ok(total as f64 / weight_sum as f64 / 255.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fully_transparent_image_is_a_no_signal_error() {
+        // Write a 2x2 RGBA PNG where every alpha is 0.
+        let dir = std::env::temp_dir().join(format!("monoloth_test_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("transparent.png");
+        // Use the `image` crate to produce a fully transparent RGBA buffer, then save as PNG.
+        let mut buf = image::RgbaImage::new(2, 2);
+        for px in buf.pixels_mut() {
+            *px = image::Rgba([0, 0, 0, 0]);
+        }
+        buf.save(&path).expect("write png");
+        let result = analyze_image_brightness(path.to_string_lossy().to_string());
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(result.is_err(), "fully-transparent image must not return 0.0 (would force dark auto theme)");
+    }
 }
 
 

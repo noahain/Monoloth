@@ -35,6 +35,9 @@
     function renderProfilesList() {
         var list = document.getElementById('profiles-list');
         if (!list) return;
+        if (window.MonolothTooltip) {
+            window.MonolothTooltip.cleanup();
+        }
         list.innerHTML = '';
         _profiles.forEach(function (profile, idx) {
             var item = document.createElement('div');

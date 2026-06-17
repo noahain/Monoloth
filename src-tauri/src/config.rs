@@ -258,6 +258,9 @@ impl AppConfig {
         let mut result = inner.global.clone();
         if inner.active_profile != "Default" {
             for (k, v) in &inner.profile_overrides {
+                if is_global_key(k) {
+                    continue;
+                }
                 result.insert(k.clone(), v.clone());
             }
         }
@@ -335,6 +338,7 @@ impl AppConfig {
         }
         validate_profile_name(name)?;
         let path = profile_path(name);
+        fs::remove_file(&path).map_err(|e| format!("Failed to delete profile: {}", e))?;
         let mut inner = self.inner.lock();
         if inner.active_profile == name {
             inner.active_profile = "Default".to_string();
@@ -342,8 +346,6 @@ impl AppConfig {
             save_json(&config_path(), &inner.global);
             inner.profile_overrides = Map::new();
         }
-        drop(inner);
-        fs::remove_file(&path).map_err(|e| format!("Failed to delete profile: {}", e))?;
         Ok(())
     }
 
@@ -485,6 +487,58 @@ mod tests {
         assert_eq!(config.get("active_profile").as_str().unwrap(), "OldName");
         assert!(config.rename_profile("OldName", "NewName").is_ok());
         assert_eq!(config.get("active_profile").as_str().unwrap(), "NewName");
+        cleanup_test_env(&test_dir);
+    }
+
+    #[test]
+    fn test_delete_profile_removes_file_before_mutating_state() {
+        let (test_dir, _lock) = setup_test_env();
+        let config = AppConfig::new();
+        config.create_profile("Throwaway").unwrap();
+        config.switch_profile("Throwaway").unwrap();
+        // Mark the profile with a custom override so we can detect partial state.
+        config.set("bg_type", Value::String("color".into()));
+
+        let path = profile_path("Throwaway");
+        assert!(path.exists(), "profile file must exist before delete");
+
+        config.delete_profile("Throwaway").unwrap();
+
+        // File must be gone even if the active-profile switch failed downstream.
+        assert!(!path.exists(), "profile file must be removed on delete");
+        assert_eq!(config.get("active_profile").as_str().unwrap(), "Default");
+        cleanup_test_env(&test_dir);
+    }
+
+    #[test]
+    fn test_get_all_skips_global_keys_for_active_profile() {
+        let (test_dir, _lock) = setup_test_env();
+        let config = AppConfig::new();
+        config.create_profile("TestProfile").unwrap();
+        config.switch_profile("TestProfile").unwrap();
+        // Stash a global-looking key inside the profile overrides (only possible
+        // if an external writer corrupted it, but we still must not let it leak).
+        let corrupted_path = profile_path("TestProfile");
+        let mut overrides = std::collections::HashMap::new();
+        overrides.insert("last_directory".to_string(), Value::String("C:\\spoofed".into()));
+        overrides.insert("bg_type".to_string(), Value::String("image".into()));
+        let json = serde_json::to_string(&overrides).unwrap();
+        std::fs::write(&corrupted_path, json).unwrap();
+
+        // Reload the active profile from disk to pick up the corruption.
+        config.switch_profile("Default").unwrap();
+        config.switch_profile("TestProfile").unwrap();
+
+        let all = config.get_all();
+        // Global keys from the profile must not appear in get_all() output
+        // — the global map's value should win.
+        assert_eq!(
+            all.get("last_directory").and_then(|v| v.as_str()).unwrap_or(""),
+            "",
+            "global key must not be overridden by profile file"
+        );
+        // Non-global keys from the profile must still overlay.
+        assert_eq!(all["bg_type"].as_str().unwrap(), "image");
         cleanup_test_env(&test_dir);
     }
 

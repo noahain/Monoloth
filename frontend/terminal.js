@@ -22,6 +22,8 @@
     var _skipNextEof = {};  // Session-ID-keyed
     var _sessionGeneration = { main: 0 };  // Session-ID-keyed; tab sessions added dynamically
     var _terminalRunning = false;
+    var _exitCountdownInterval = null;
+    var _exitBanner = null;
 
     // Builds the xterm.js windows option from cached PTY info. Prefers the modern
     // windowsPty descriptor (correct reflow heuristics per ConPTY build); falls
@@ -43,8 +45,15 @@
         if (_contextMenuHandler) { terminalContainer.removeEventListener('contextmenu', _contextMenuHandler); _contextMenuHandler = null; }
     }
 
+    function clearSessionExitCountdown() {
+        if (_exitCountdownInterval) { clearInterval(_exitCountdownInterval); _exitCountdownInterval = null; }
+        if (_exitBanner && _exitBanner.parentNode) _exitBanner.remove();
+        _exitBanner = null;
+    }
+
     // Teardown the main terminal (moved from backToLanding's term-teardown block).
     function dispose() {
+        clearSessionExitCountdown();
         if (term) {
             try { term.dispose(); } catch (e) {}
             term = null;
@@ -103,6 +112,7 @@
     function initTerminal(dir) {
         if (!terminalContainer) return;
 
+        clearSessionExitCountdown();
         cleanupTerminalDomHandlers();
 
         // Dispose existing terminal and listeners before creating a new one
@@ -163,11 +173,17 @@
         requestAnimationFrame(function() {
             if (fitAddon) fitAddon.fit();
             if (window.monolithApi) {
-                window.monolithApi.start_terminal('main', dir, true, null, term.cols, term.rows)
+                var startGen = _sessionGeneration['main'] || 0;
+                var myTerm = term;
+                var myDir = dir;
+                window.monolithApi.start_terminal('main', dir, true, null, myTerm.cols, myTerm.rows)
                     .then((result) => {
+                        if (term !== myTerm) return;
                         if (!result || !result.success) {
-                            term.writeln('');
-                            term.writeln('Failed to start ' + window.MonolothApp.getStartupLabel() + '. ' + (result && result.error ? result.error : 'Check that it is installed and in your PATH.'));
+                            if (term) {
+                                term.writeln('');
+                                term.writeln('Failed to start ' + window.MonolothApp.getStartupLabel() + '. ' + (result && result.error ? result.error : 'Check that it is installed and in your PATH.'));
+                            }
                         } else {
                             _terminalRunning = true;
                             if (result.generation) {
@@ -176,8 +192,11 @@
                         }
                     })
                     .catch((err) => {
-                        term.writeln('');
-                        term.writeln('Error starting ' + window.MonolothApp.getStartupLabel() + ': ' + err);
+                        if (term !== myTerm) return;
+                        if (term) {
+                            term.writeln('');
+                            term.writeln('Error starting ' + window.MonolothApp.getStartupLabel() + ': ' + err);
+                        }
                     });
             }
         });
@@ -277,13 +296,10 @@
         _resizeObserver.observe(terminalContainer);
 
         var firstOutput = true;
-        var _exitCountdownInterval = null;
-        var _exitBanner = null;
 
         function startSessionExitCountdown() {
             _terminalRunning = false;
-            if (_exitCountdownInterval) { clearInterval(_exitCountdownInterval); _exitCountdownInterval = null; }
-            if (_exitBanner && _exitBanner.parentNode) _exitBanner.remove();
+            clearSessionExitCountdown();
             var exitBanner = document.createElement('div');
             exitBanner.className = 'session-exit-banner';
             exitBanner.style.cssText = 'position:absolute;bottom:40px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,0.9);color:#c0c0c0;padding:8px 16px;border-radius:6px;font-family:monospace;font-size:13px;z-index:101;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(4px);pointer-events:auto;cursor:pointer;';
@@ -292,15 +308,12 @@
             _exitBanner = exitBanner;
             var countdown = 5;
             exitBanner.addEventListener('click', function () {
-                if (_exitCountdownInterval) { clearInterval(_exitCountdownInterval); _exitCountdownInterval = null; }
-                if (exitBanner.parentNode) exitBanner.remove();
+                clearSessionExitCountdown();
             });
             _exitCountdownInterval = setInterval(function () {
                 countdown--;
                 if (countdown <= 0) {
-                    clearInterval(_exitCountdownInterval);
-                    _exitCountdownInterval = null;
-                    if (exitBanner.parentNode) exitBanner.remove();
+                    clearSessionExitCountdown();
                     window.MonolothApp.backToLanding();
                 } else {
                     exitBanner.textContent = 'Session ended \u2014 returning to launcher in ' + countdown + 's (click to stay)';

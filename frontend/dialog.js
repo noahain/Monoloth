@@ -15,17 +15,24 @@
     var idFooter = document.getElementById('id-footer');
     var idClose = document.getElementById('id-close');
 
-    function _idResolve(v) { /* set by showers */ }
-    function _idReject(e) { /* set by showers */ }
+    // Per-dialog resolvers so overlapping shows don't strand earlier promises.
+    var _dialogStack = [];
+
+    function finishTop(result) {
+        var top = _dialogStack.pop();
+        if (!top) return;
+        if (result !== undefined) {
+            top.resolve(result);
+        } else {
+            top.reject(new Error('cancelled'));
+        }
+    }
 
     function closeDialog(result) {
         if (!idEl) return;
+        if (_dialogStack.length === 0) return;
         closeModal(idEl);
-        if (result !== undefined) {
-            _idResolve(result);
-        } else {
-            _idReject(new Error('cancelled'));
-        }
+        finishTop(result);
     }
 
     if (idClose) {
@@ -40,8 +47,7 @@
 
     function showPrompt(title, label, defaultValue) {
         return new Promise(function (resolve, reject) {
-            _idResolve = resolve;
-            _idReject = reject;
+            _dialogStack.push({ resolve: resolve, reject: reject });
             if (idTitle) idTitle.textContent = title;
             if (idBody) {
                 idBody.innerHTML = '<input type="text" id="id-input-field" class="id-input"><div id="id-input-error" class="id-error"></div>';
@@ -84,8 +90,7 @@
             return Promise.resolve(true);
         }
         return new Promise(function (resolve, reject) {
-            _idResolve = resolve;
-            _idReject = reject;
+            _dialogStack.push({ resolve: resolve, reject: reject });
             if (idTitle) idTitle.textContent = title;
             if (idBody) {
                 if (skipKey) {

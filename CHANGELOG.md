@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Stale async results from previous terminal sessions can no longer corrupt
+  the new one. `initTerminal` captures its terminal reference at closure
+  time and drops late `start_terminal` errors, the auto-return countdown is
+  cancelled on every init, and main / panel-tab restarts now bump a session
+  generation token so a late EOF from the old PTY is ignored. The titlebar
+  refresh path applies the same guard.
+- Overlapping modal dialogs no longer strand the first promise. `showConfirm`
+  and `showPrompt` now stack dialogs (LIFO), and the focus-trap / saved-focus
+  bookkeeping in `dom-utils` matches — opening a second dialog over the
+  first closes cleanly on either.
+- Sidebar tab bugs: clicking a still-initializing CMD tab now activates it
+  (the `initializing` guard no longer blocks the visual swap), and
+  cancelling the close confirmation on a panel tab no longer logs an
+  unhandled promise rejection. Closing a panel tab also retires its backend
+  session and clears its generation / skip-next-EOF tracking so a late spawn
+  can't ghost it.
+- Tooltip references no longer leak to detached DOM. `MonolithTooltip.cleanup`
+  now hides the floating tooltip when its target is removed, and the profile
+  modal calls cleanup before rebuilding the list.
+- File picker: `.svg` and `.ico` are no longer advertised as previewable
+  (the backend doesn't return a `dataUrl` for them, so they always showed
+  "not available"); the preview check uses the canonical `FILE_IMAGE_EXTS`
+  set. Relative date strings from the backend (`"3d ago"`, `"5h ago"`,
+  `"just now"`) now format instead of "Invalid Date".
+- Updater toast status text routes through `MonolothApp.showStatus` (the
+  previous call to a non-existent helper silently no-op'd), and the error
+  state scopes its `querySelector` to its own element.
+- Background config saves are now atomic. `set_background_config` builds a
+  single entry map and calls a new `set_many_config` IPC, so a partial
+  write between the type, image, color, gradient, and transparency keys
+  can no longer leave the background in a half-updated state. Stale
+  brightness is cleared before the new wallpaper is analyzed, so the
+  auto-theme doesn't briefly flash the previous mode.
+- Window state persistence validates bounds. `Resized` and `Moved` events
+  reject out-of-range positions (`MIN/MAX_WINDOW_POSITION`) and the
+  `Resized` event also rejects dimensions over `MAX_WINDOW_DIMENSION`,
+  matching the sanitize step on load.
+- A fully-transparent wallpaper no longer forces the dark auto-theme. Image
+  brightness analysis returns an error instead of `0.0` so the auto-mode
+  detector can fall back to the previous theme.
+- History `parse_iso_to_epoch` rejects non-ASCII input and pre-1970 dates
+  (the year-loop subtraction previously panicked), and `retention_days`
+  caps at 100 years and rejects bogus values like `0d` / `d` / `forever`.
+  The retention apply path uses `saturating_mul` + `checked_sub` to avoid
+  overflow on huge values.
+- `get_all` skips global keys when reading profile overrides, so a corrupted
+  profile can no longer leak a global key like `last_directory` into the
+  active config. `delete_profile` removes the file before mutating in-memory
+  state, so a failed delete doesn't desync disk and memory.
+- `get_path_info.success` is now decoupled from `exists` (it reports
+  command success, not path existence), and SVG previews cap at 1 MB so a
+  huge SVG can't stall the file picker.
+
 ## [2.1.9] - 2026-06-15
 
 ### Fixed

@@ -248,6 +248,12 @@ impl PtyManager {
         }
     }
 
+    pub fn retire_session(&self, session_id: &str) {
+        self.terminate(session_id);
+        let mut gens = self.session_generation.lock();
+        gens.remove(session_id);
+    }
+
     pub fn terminate_all(&self) {
         let all_sessions: Vec<String> = {
             self.sessions.lock().keys().cloned().collect()

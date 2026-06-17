@@ -218,6 +218,28 @@ function flushAsync() {
     return new Promise((resolve) => setTimeout(resolve, 20));
 }
 
+function installTimerControls(context) {
+    const intervals = [];
+    context.setInterval = function (fn) {
+        const id = intervals.length + 1;
+        intervals.push({ fn, cleared: false });
+        return id;
+    };
+    context.clearInterval = function (id) {
+        if (intervals[id - 1]) intervals[id - 1].cleared = true;
+    };
+    return {
+        tick(id, count) {
+            for (let i = 0; i < count; i++) {
+                const interval = intervals[id - 1];
+                if (!interval || interval.cleared) return;
+                interval.fn();
+            }
+        },
+        count() { return intervals.length; }
+    };
+}
+
 test('does not load WebGL when terminal background is transparent', async () => {
     const harness = createHarness({ type: 'image', layer: 'behind', transparency: 75 });
     harness.context.window.MonolithTerminal.initTerminal('C:\\dir');
@@ -254,6 +276,24 @@ test('writeToTerm honors skipNextEof', async () => {
     // skip flag cleared: a subsequent eof now writes (and starts countdown)
     harness.context.window.writeToTerm('z', true, 'main', 0);
     assert.equal(term.writeCount, before + 1, 'skip flag must clear after one eof');
+});
+
+test('initTerminal cancels pending session-exit auto-return', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 0 });
+    const timers = installTimerControls(harness.context);
+    const T = harness.context.window.MonolithTerminal;
+    let backToLandingCalls = 0;
+    harness.context.window.MonolothApp.backToLanding = () => { backToLandingCalls += 1; };
+
+    T.initTerminal('C:\\old');
+    await flushAsync();
+    harness.context.window.writeToTerm('', true, 'main', 0);
+    assert.equal(timers.count(), 1);
+
+    T.initTerminal('C:\\new');
+    timers.tick(1, 5);
+
+    assert.equal(backToLandingCalls, 0, 'old exit countdown must not auto-return after a new terminal starts');
 });
 
 // --- Resize-corruption regression tests ---

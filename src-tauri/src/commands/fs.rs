@@ -45,7 +45,12 @@ pub struct DriveInfo {
 pub fn get_path_info(path: String) -> PathInfo {
     let expanded = expand_env_vars(&path);
     let path_buf = PathBuf::from(&expanded);
-    let absolute_raw = path_buf.canonicalize().unwrap_or_else(|_| path_buf.clone());
+    let exists = path_buf.exists();
+    let absolute_raw = if exists {
+        path_buf.canonicalize().unwrap_or_else(|_| path_buf.clone())
+    } else {
+        path_buf.clone()
+    };
     let absolute_str = clean_path(&absolute_raw.to_string_lossy());
     let absolute = if PathBuf::from(&absolute_str).is_absolute() {
         absolute_str.clone()
@@ -56,8 +61,8 @@ pub fn get_path_info(path: String) -> PathInfo {
     };
     let parent = PathBuf::from(&absolute).parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
     PathInfo {
-        success: path_buf.exists(),
-        exists: path_buf.exists(),
+        success: true,
+        exists,
         is_dir: path_buf.is_dir(),
         is_file: path_buf.is_file(),
         absolute,
@@ -198,6 +203,11 @@ pub fn get_file_preview(path: String) -> Result<FilePreview, String> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
     let image_exts = ["jpg", "jpeg", "png", "gif", "bmp", "webp"];
     if ext == "svg" {
+        const MAX_SVG_PREVIEW_BYTES: u64 = 1024 * 1024;
+        let meta = fs::metadata(&path).map_err(|e| format!("Cannot read file: {}", e))?;
+        if meta.len() > MAX_SVG_PREVIEW_BYTES {
+            return Err("SVG too large to preview (max 1MB)".into());
+        }
         let content = fs::read_to_string(&path).map_err(|e| format!("Cannot read file: {}", e))?;
         return Ok(FilePreview::Text(content));
     }
@@ -334,5 +344,24 @@ fn get_volume_label(drive: &str) -> Option<String> {
         Some(String::from_utf16_lossy(&buf[..len]))
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn get_path_info_decouples_success_from_existence() {
+        // Existing path: both flags true.
+        let info = get_path_info(".".to_string());
+        assert!(info.success, "command must succeed even when the path exists");
+        assert!(info.exists);
+        assert!(info.is_dir);
+
+        // Non-existing path: success still true; exists false.
+        let info = get_path_info("/__monoloth_test_definitely_does_not_exist__".to_string());
+        assert!(info.success, "command must succeed even when the path is missing — success is for command success, not path existence");
+        assert!(!info.exists, "non-existent path must report exists=false");
     }
 }

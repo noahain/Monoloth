@@ -306,6 +306,27 @@ function flushAsync() {
     return new Promise((resolve) => setTimeout(resolve, 20));
 }
 
+function installTimerControls(context) {
+    const intervals = [];
+    context.setInterval = function (fn) {
+        const id = intervals.length + 1;
+        intervals.push({ fn, cleared: false });
+        return id;
+    };
+    context.clearInterval = function (id) {
+        if (intervals[id - 1]) intervals[id - 1].cleared = true;
+    };
+    return {
+        tick(id, count) {
+            for (let i = 0; i < count; i++) {
+                const interval = intervals[id - 1];
+                if (!interval || interval.cleared) return;
+                interval.fn();
+            }
+        }
+    };
+}
+
 test('does not load WebGL when the terminal background is transparent', async () => {
     const harness = createHarness({
         type: 'image',
@@ -383,4 +404,167 @@ test('showTerminal ignores stale delayed launches when a newer launch starts', a
     releaseFirstTerminate();
     await flushAsync();
     assert.deepEqual(startedDirs, ['C:\\new']);
+});
+
+test('titlebar refresh ignores late EOF from the previous main generation', async () => {
+    const harness = createHarness({
+        type: 'none',
+        image: '',
+        imageUrl: '',
+        transparency: 75,
+        bgLayer: 'behind',
+        themeMode: 'dark',
+        ctaButtonStyle: 'blur'
+    });
+    const timers = installTimerControls(harness.context);
+    let startCalls = 0;
+    let releaseRefreshStart;
+    let backToLandingCalls = 0;
+
+    harness.context.window.monolithApi.start_terminal = () => {
+        startCalls += 1;
+        if (startCalls === 1) return Promise.resolve({ success: true, generation: 1 });
+        return new Promise((resolve) => { releaseRefreshStart = () => resolve({ success: true, generation: 2 }); });
+    };
+    harness.context.window.monolithApi.terminate = () => Promise.resolve();
+    harness.context.window.MonolothApp.backToLanding = () => { backToLandingCalls += 1; };
+
+    await flushAsync();
+    harness.context.window.MonolothApp.showTerminal('C:\\repo');
+    await flushAsync();
+
+    const refreshButton = harness.context.document.getElementById('tb-refresh');
+    refreshButton.eventListeners.click[0]();
+    await flushAsync();
+    assert.equal(startCalls, 2);
+
+    harness.context.window.writeToTerm('', true, 'main', 1);
+    timers.tick(1, 5);
+
+    assert.equal(backToLandingCalls, 0, 'old EOF must not start auto-return after refresh begins');
+    releaseRefreshStart();
+    await flushAsync();
+});
+
+test('main restartSession ignores late EOF from the previous generation', async () => {
+    const harness = createHarness({
+        type: 'none',
+        image: '',
+        imageUrl: '',
+        transparency: 75,
+        bgLayer: 'behind',
+        themeMode: 'dark',
+        ctaButtonStyle: 'blur'
+    });
+    const timers = installTimerControls(harness.context);
+    let startCalls = 0;
+    let releaseRestartStart;
+    let backToLandingCalls = 0;
+
+    harness.context.window.monolithApi.start_terminal = () => {
+        startCalls += 1;
+        if (startCalls === 1) return Promise.resolve({ success: true, generation: 1 });
+        return new Promise((resolve) => { releaseRestartStart = () => resolve({ success: true, generation: 2 }); });
+    };
+    harness.context.window.monolithApi.terminate_terminal = () => Promise.resolve();
+    harness.context.window.MonolothApp.backToLanding = () => { backToLandingCalls += 1; };
+
+    await flushAsync();
+    harness.context.window.MonolothApp.showTerminal('C:\\repo');
+    await flushAsync();
+
+    harness.context.window.MonolothApp.restartSession('main');
+    await flushAsync();
+    assert.equal(startCalls, 2);
+
+    harness.context.window.writeToTerm('', true, 'main', 1);
+    timers.tick(1, 5);
+
+    assert.equal(backToLandingCalls, 0, 'old EOF must not start auto-return after restart begins');
+    releaseRestartStart();
+    await flushAsync();
+});
+
+test('panel-tab restart ignores late EOF from the previous generation', async () => {
+    const harness = createHarness({
+        type: 'none',
+        image: '',
+        imageUrl: '',
+        transparency: 75,
+        bgLayer: 'behind',
+        themeMode: 'dark',
+        ctaButtonStyle: 'blur'
+    });
+    const tab = {
+        id: 'tab-1',
+        sessionId: 'panel-tab-1',
+        term: { dispose() {} },
+        fitAddon: { dispose() {} },
+        container: { querySelector: () => ({ innerHTML: '' }) },
+        running: false,
+        busy: false,
+        generation: 5,
+        closing: false
+    };
+    let eofWrites = 0;
+
+    await flushAsync();
+    harness.context.window.MonolithTerminal.initTerminal('C:\\repo');
+    await flushAsync();
+    harness.context.window.MonolithTerminal.setSessionGeneration('panel-tab-1', 5);
+    harness.context.window.monolithApi.terminate_terminal = () => Promise.resolve();
+    harness.context.window.SidebarManager = {
+        getTab: () => tab,
+        getActiveTabId: () => 'tab-1',
+        hideTabExitBanner() {},
+        initTabXterm() {},
+        writeToTab(_tabId, _data, eof) { if (eof) eofWrites += 1; }
+    };
+
+    harness.context.window.MonolothApp.restartSession('panel-tab-1');
+    await flushAsync();
+    harness.context.window.writeToTerm('', true, 'panel-tab-1', 5);
+
+    assert.equal(eofWrites, 0, 'old panel EOF must not mark the restarted tab as exited');
+});
+
+// Regression for bug 1: the async start_terminal callback inside initTerminal's
+// requestAnimationFrame must not write to a terminal instance that has been
+// replaced by a newer initTerminal call (e.g. titlebar refresh during slow spawn).
+test('initTerminal ignores late start_terminal result after a new terminal is created', async () => {
+    const harness = createHarness({
+        type: 'none',
+        image: '',
+        imageUrl: '',
+        transparency: 75,
+        bgLayer: 'behind',
+        themeMode: 'dark',
+        ctaButtonStyle: 'blur'
+    });
+    const T = harness.context.window.MonolithTerminal;
+    let resolveFirst;
+    harness.context.window.monolithApi.start_terminal = () => new Promise((resolve) => { resolveFirst = resolve; });
+    T.initTerminal('C:\\old');
+    await flushAsync();
+    const oldTerm = T.getTerm();
+
+    // Start a second terminal while the first start_terminal is still pending.
+    harness.context.window.monolithApi.start_terminal = () => Promise.resolve({ success: true, generation: 2 });
+    T.initTerminal('C:\\new');
+    await flushAsync();
+    const newTerm = T.getTerm();
+    assert.notStrictEqual(oldTerm, newTerm, 'initTerminal must replace the terminal instance');
+
+    // The original RAF callback's start_terminal finally resolves with a failure.
+    // It must NOT call writeln on the new terminal (which would write "Failed to
+    // start" onto the live terminal after the user already started a new one).
+    const writeSpyCalls = [];
+    const origWrite = newTerm.write.bind(newTerm);
+    newTerm.write = function (data) { writeSpyCalls.push(data); return origWrite(data); };
+    resolveFirst({ success: false, error: 'late' });
+    await flushAsync();
+
+    const lateFailureWrites = writeSpyCalls.filter((d) => /Failed to start/.test(d));
+    assert.equal(lateFailureWrites.length, 0,
+        'late start_terminal failure must not write onto the replacement terminal');
 });

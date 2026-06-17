@@ -386,19 +386,23 @@
         }
     }
 
+    function setStatusText(status, msg, isError) {
+        if (window.MonolothApp && typeof window.MonolothApp.showStatus === 'function') {
+            window.MonolothApp.showStatus('updater-status', msg, isError);
+            return;
+        }
+        if (status) status.textContent = msg;
+    }
+
     function checkFromFooter() {
         var btn = document.getElementById('check-update-btn');
         var status = document.getElementById('updater-status');
         if (btn) btn.disabled = true;
-        if (status && window.MonolothUI && window.MonolothUI.showStatus) {
-            window.MonolothUI.showStatus('updater-status', 'Checking…', false);
-        } else if (status) {
-            status.textContent = 'Checking…';
-        }
+        setStatusText(status, 'Checking…', false);
         var updater = window.__TAURI_PLUGIN_UPDATER__ || null;
         if (!updater) {
             if (btn) btn.disabled = false;
-            if (status) status.textContent = 'Updater not available';
+            setStatusText(status, 'Updater not available', true);
             return;
         }
         var settled = false;
@@ -406,11 +410,7 @@
             if (settled) return;
             settled = true;
             if (btn) btn.disabled = false;
-            if (status && window.MonolothUI && window.MonolothUI.showStatus) {
-                window.MonolothUI.showStatus('updater-status', 'Update check timed out.', true);
-            } else if (status) {
-                status.textContent = 'Update check timed out.';
-            }
+            setStatusText(status, 'Update check timed out.', true);
         }, CHECK_TIMEOUT_MS);
         updater.check().then(function (update) {
             if (settled) return;
@@ -419,17 +419,9 @@
             if (btn) btn.disabled = false;
             if (update && update.available) {
                 mountToast(update);
-                if (status && window.MonolothUI && window.MonolothUI.showStatus) {
-                    window.MonolothUI.showStatus('updater-status', 'Update available: v' + (update.version || '?'), false);
-                } else if (status) {
-                    status.textContent = 'Update available: v' + (update.version || '?');
-                }
+                setStatusText(status, 'Update available: v' + (update.version || '?'), false);
             } else {
-                if (status && window.MonolothUI && window.MonolothUI.showStatus) {
-                    window.MonolothUI.showStatus('updater-status', 'You are on the latest version.', false);
-                } else if (status) {
-                    status.textContent = 'You are on the latest version.';
-                }
+                setStatusText(status, 'You are on the latest version.', false);
             }
         }).catch(function (e) {
             if (settled) return;
@@ -437,11 +429,7 @@
             clearTimeout(timeoutId);
             if (btn) btn.disabled = false;
             var msg = (e && e.message) || String(e);
-            if (status && window.MonolothUI && window.MonolothUI.showStatus) {
-                window.MonolothUI.showStatus('updater-status', msg, true);
-            } else if (status) {
-                status.textContent = msg;
-            }
+            setStatusText(status, msg, true);
         });
     }
 
@@ -478,8 +466,8 @@
                             +   '<button class="update-toast-cancel">Cancel</button>'
                             + '</div>';
                         errorEl.hidden = false;
-                        var retryBtn = state.mounted.querySelector('.update-toast-retry');
-                        var cancelBtn = state.mounted.querySelector('.update-toast-cancel');
+                        var retryBtn = errorEl.querySelector('.update-toast-retry');
+                        var cancelBtn = errorEl.querySelector('.update-toast-cancel');
                         if (retryBtn) retryBtn.addEventListener('click', function () { startDownload(); });
                         if (cancelBtn) cancelBtn.addEventListener('click', function () {
                             if (state.abortController) { try { state.abortController.abort(); } catch (_) {} }

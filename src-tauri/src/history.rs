@@ -230,26 +230,31 @@ fn epoch_seconds() -> i64 {
 }
 
 fn retention_days(retention: &str) -> Option<i64> {
-    match retention {
+    let days = match retention {
         "7d" => Some(7),
         "30d" => Some(30),
         "90d" => Some(90),
         _ => {
-            // Try to parse "Nd" format
-            if retention.ends_with('d') {
+            if retention.ends_with('d') && retention.len() > 1 {
                 retention[..retention.len() - 1].parse::<i64>().ok()
             } else {
                 None
             }
         }
-    }
+    };
+    // Reject absurd values up front (signed i64 max / 86400 ~= 1e14 years; cap at 100y).
+    days.filter(|d| *d > 0 && *d <= 36500)
 }
 
 fn apply_retention(sessions: &mut Vec<SessionEntry>, retention: &str) {
     let Some(days) = retention_days(retention) else {
         return;
     };
-    let cutoff = epoch_seconds() - days * 86400;
+    let now = epoch_seconds();
+    let day_secs = days.saturating_mul(86400);
+    let Some(cutoff) = now.checked_sub(day_secs) else {
+        return;
+    };
     sessions.retain(|s| {
         let ts = s.end_time.as_ref()
             .and_then(|t| parse_iso_to_epoch(t).ok())
@@ -305,12 +310,16 @@ fn parse_iso_to_epoch(s: &str) -> Result<i64, ()> {
     if s.len() < 20 {
         return Err(());
     }
-    let year: i64 = s[0..4].parse().map_err(|_| ())?;
-    let month: i64 = s[5..7].parse().map_err(|_| ())?;
-    let day: i64 = s[8..10].parse().map_err(|_| ())?;
-    let hour: i64 = s[11..13].parse().map_err(|_| ())?;
-    let min: i64 = s[14..16].parse().map_err(|_| ())?;
-    let sec: i64 = s[17..19].parse().map_err(|_| ())?;
+    if !s.is_ascii() {
+        return Err(());
+    }
+    let bytes = s.as_bytes();
+    let year: i64 = std::str::from_utf8(&bytes[0..4]).map_err(|_| ())?.parse().map_err(|_| ())?;
+    let month: i64 = std::str::from_utf8(&bytes[5..7]).map_err(|_| ())?.parse().map_err(|_| ())?;
+    let day: i64 = std::str::from_utf8(&bytes[8..10]).map_err(|_| ())?.parse().map_err(|_| ())?;
+    let hour: i64 = std::str::from_utf8(&bytes[11..13]).map_err(|_| ())?.parse().map_err(|_| ())?;
+    let min: i64 = std::str::from_utf8(&bytes[14..16]).map_err(|_| ())?.parse().map_err(|_| ())?;
+    let sec: i64 = std::str::from_utf8(&bytes[17..19]).map_err(|_| ())?.parse().map_err(|_| ())?;
 
     if month < 1 || month > 12 {
         return Err(());
@@ -320,6 +329,9 @@ fn parse_iso_to_epoch(s: &str) -> Result<i64, ()> {
     }
 
     let mut days = 0i64;
+    if year < 1970 {
+        return Err(());
+    }
     for y in 1970..year {
         days += if is_leap(y) { 366 } else { 365 };
     }
@@ -340,6 +352,66 @@ fn parse_iso_to_epoch(s: &str) -> Result<i64, ()> {
 
 fn is_leap(year: i64) -> bool {
     (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_iso_rejects_multibyte_input_without_panic() {
+        // 3 multibyte chars at the start; byte 4 would land mid-codepoint.
+        let multibyte = "ééé-12-12T12:00:00Z";
+        assert!(parse_iso_to_epoch(multibyte).is_err());
+    }
+
+    #[test]
+    fn parse_iso_rejects_short_input() {
+        assert!(parse_iso_to_epoch("").is_err());
+        assert!(parse_iso_to_epoch("2024").is_err());
+        assert!(parse_iso_to_epoch("2024-01-01").is_err());
+    }
+
+    #[test]
+    fn parse_iso_handles_valid_timestamp() {
+        let s = "2024-06-15T12:30:45Z";
+        let t = parse_iso_to_epoch(s).expect("valid ISO should parse");
+        assert!(t > 1_700_000_000 && t < 1_750_000_000);
+    }
+
+    #[test]
+    fn parse_iso_rejects_pre_1970() {
+        // Year < 1970 must reject because the for-loop subtraction assumes >= 1970.
+        assert!(parse_iso_to_epoch("1969-12-31T23:59:59Z").is_err());
+    }
+
+    #[test]
+    fn retention_days_rejects_absurd_values() {
+        assert_eq!(retention_days("7d"), Some(7));
+        assert_eq!(retention_days("30d"), Some(30));
+        assert_eq!(retention_days("100d"), Some(100));
+        // Beyond the 100-year cap the value is treated as invalid (no retention).
+        assert_eq!(retention_days("100000d"), None);
+        assert_eq!(retention_days("0d"), None);
+        // No trailing 'd' or empty body is not parseable.
+        assert_eq!(retention_days("d"), None);
+        assert_eq!(retention_days("forever"), None);
+    }
+
+    #[test]
+    fn apply_retention_handles_huge_days_without_overflow() {
+        // A huge retention that would overflow i64 epoch when multiplied by 86400
+        // must be silently dropped (no panic, no negative cutoff).
+        let mut sessions = vec![SessionEntry {
+            profile: "p".into(),
+            command: "c".into(),
+            start_time: "2024-01-01T00:00:00Z".into(),
+            end_time: None,
+            directory: "d".into(),
+        }];
+        apply_retention(&mut sessions, "9999999999d");
+        assert_eq!(sessions.len(), 1, "unparseable retention must not drop sessions");
+    }
 }
 
 fn load_json(path: &Path) -> HistoryData {

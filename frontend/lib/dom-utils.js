@@ -1,8 +1,8 @@
 (function () {
     'use strict';
 
-    var _focusBeforeModal = null;
-    var _trapHandler = null;
+    var _focusStack = [];
+    var _trapStack = [];
 
     function escapeHtml(str) {
         if (str === null || str === undefined) return '';
@@ -17,29 +17,34 @@
     }
 
     function saveFocus() {
-        _focusBeforeModal = document.activeElement;
+        _focusStack.push(document.activeElement);
     }
 
     function restoreFocus() {
-        if (_focusBeforeModal && _focusBeforeModal.focus) {
-            try { _focusBeforeModal.focus(); } catch (e) {}
-            _focusBeforeModal = null;
+        var prev = _focusStack.pop();
+        if (prev && prev.focus) {
+            try { prev.focus(); } catch (e) {}
         }
     }
 
     function trapFocus(container) {
-        if (_trapHandler) {
-            document.removeEventListener('keydown', _trapHandler, true);
-            _trapHandler = null;
-        }
         if (!container) return;
+        // Drop any stale trap for the same container before pushing a new one.
+        for (var i = _trapStack.length - 1; i >= 0; i--) {
+            if (_trapStack[i].container === container) {
+                document.removeEventListener('keydown', _trapStack[i].handler, true);
+                _trapStack.splice(i, 1);
+            }
+        }
         var allFocusable = container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
         var focusable = Array.from(allFocusable).filter(function (el) { return el.offsetParent !== null; });
         if (focusable.length === 0) return;
         var first = focusable[0];
         var last = focusable[focusable.length - 1];
-        setTimeout(function () { first.focus(); }, 50);
-        _trapHandler = function (e) {
+        setTimeout(function () {
+            if (document.contains(first)) first.focus();
+        }, 50);
+        var handler = function (e) {
             if (e.key !== 'Tab') return;
             if (e.shiftKey) {
                 if (document.activeElement === first) {
@@ -53,13 +58,14 @@
                 }
             }
         };
-        document.addEventListener('keydown', _trapHandler, true);
+        document.addEventListener('keydown', handler, true);
+        _trapStack.push({ container: container, handler: handler });
     }
 
     function releaseFocus() {
-        if (_trapHandler) {
-            document.removeEventListener('keydown', _trapHandler, true);
-            _trapHandler = null;
+        var entry = _trapStack.pop();
+        if (entry) {
+            document.removeEventListener('keydown', entry.handler, true);
         }
         restoreFocus();
     }

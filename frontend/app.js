@@ -770,6 +770,13 @@
 
                 // Analyze background brightness for auto theme
                 if (config.type === 'image' && config.image) {
+                    // Clear stale brightness (from a previous color/gradient) until the
+                    // new image analysis finishes; otherwise auto theme may briefly apply
+                    // against a brightness that no longer matches the wallpaper.
+                    window.MonolithTheme.setWallpaperBrightness(null);
+                    if (window.MonolithTheme.getThemeMode() === 'auto') {
+                        document.body.classList.remove('light-mode', 'adaptive-light');
+                    }
                     window.MonolithTheme.analyzeWallpaperBrightness(config.image);
                 } else if (config.type === 'color' && config.color) {
                     window.MonolithTheme.setWallpaperBrightness(window.MonolithTheme.hexToLuminance(config.color));
@@ -1773,6 +1780,7 @@
         if (tbRefresh) {
             tbRefresh.addEventListener('click', function() {
                 if (_currentLaunchDir) {
+                    window.MonolithTerminal.incrementSessionGeneration('main');
                     window.MonolithTerminal.setSkipNextEof('main', true);
                     var terminatePromise = window.MonolithTerminal.isRunning() && window.monolithApi
                         ? window.monolithApi.terminate()
@@ -1903,6 +1911,7 @@
         restartSession: function (sessionId) {
             sessionId = sessionId || 'main';
             if (sessionId === 'main') {
+                window.MonolithTerminal.incrementSessionGeneration('main');
                 if (window.MonolithTerminal.isRunning()) {
                     window.MonolithTerminal.setSkipNextEof('main', true);
                     window.monolithApi.terminate_terminal('main')
@@ -1915,6 +1924,7 @@
                 var tabId = sessionId.replace('panel-', '');
                 var tab = window.SidebarManager.getTab(tabId);
                 if (!tab) return;
+                window.MonolithTerminal.incrementSessionGeneration(sessionId);
                 window.MonolithTerminal.setSkipNextEof(sessionId, true);
                 var restartPromise = window.monolithApi
                     ? window.monolithApi.terminate_terminal(sessionId).catch(function () {})
@@ -1933,7 +1943,6 @@
                     tab.busy = false;
                     tab.generation = null;
                     tab.closing = false;
-                    window.MonolithTerminal.deleteSessionGeneration(sessionId);
                     if (window.MonolithTerminal.hasSkipNextEof(sessionId)) {
                         window.MonolithTerminal.deleteSkipNextEof(sessionId);
                     }

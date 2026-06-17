@@ -147,6 +147,9 @@
                 entry.el.removeEventListener('mouseenter', entry.enter);
                 entry.el.removeEventListener('mouseleave', entry.leave);
                 entry.el.removeEventListener('mousemove', entry.move);
+                if (_tooltipTarget === entry.el) {
+                    hide();
+                }
                 _activeEls.splice(i, 1);
             }
         }
