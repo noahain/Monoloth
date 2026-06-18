@@ -35,6 +35,9 @@ pub fn validate_profile_name(name: &str) -> Result<(), String> {
     if name.is_empty() {
         return Err("Profile name cannot be empty".into());
     }
+    if name.len() > 128 {
+        return Err("Profile name too long (max 128 characters)".into());
+    }
     if name.contains('/')
         || name.contains('\\')
         || name.contains("..")
@@ -463,6 +466,14 @@ mod tests {
         config.switch_profile("Default").unwrap();
         assert_eq!(config.get("active_profile").as_str().unwrap(), "Default");
         cleanup_test_env(&test_dir);
+    }
+
+    #[test]
+    fn test_profile_name_too_long() {
+        let long_name = "A".repeat(129);
+        assert!(validate_profile_name(&long_name).is_err());
+        let max_name = "A".repeat(128);
+        assert!(validate_profile_name(&max_name).is_ok());
     }
 
     #[test]

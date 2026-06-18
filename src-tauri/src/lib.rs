@@ -252,7 +252,6 @@ pub fn run() {
             commands::get_path_info,
             commands::get_file_preview,
             commands::start_terminal,
-            commands::run_parallel_command,
             commands::send_input,
             commands::resize_terminal,
             commands::terminate_terminal,

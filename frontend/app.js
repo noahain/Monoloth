@@ -860,7 +860,11 @@
         var transparency = slider ? parseInt(slider.value, 10) : 75;
         var args = [type, extras.image, extras.color, extras.gradient, transparency, window.MonolithTheme.getThemeMode(), window.MonolithTheme.getCtaStyle(), _bgLayer];
         window.monolithApi.set_background_config.apply(null, args)
-            .then(function () {
+            .then(function (result) {
+                if (result && result.success === false) {
+                    showStatus('appearance-status', 'Failed to save: ' + (result.error || 'Unknown error'), true);
+                    return;
+                }
                 loadBackgroundConfig();
                 if (msg) showStatus('appearance-status', msg, false);
             })
@@ -1429,6 +1433,7 @@
 
     document.addEventListener('keydown', function (e) {
         if (_editingShortcutKey && shortcutEditMode && shortcutEditMode.style.display !== 'none') return;
+        if (window.MonolithFilePicker && window.MonolithFilePicker.isActive()) return;
 
         if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('command_palette'))) {
             e.preventDefault();
@@ -1707,9 +1712,10 @@
                 if (_useCustomTitlebar && window.monolithApi.is_window_maximized) {
                     window.monolithApi.is_window_maximized().then(function(result) {
                         _isMaximized = result.maximized;
-                    });
+                    }).catch(function () {});
                 }
-            });
+            })
+            .catch(function () {});
     }
 
     function applyCustomTitlebarUI(enable, persist) {
@@ -1725,7 +1731,7 @@
         }
 
         if (persist !== false && window.monolithApi) {
-            window.monolithApi.toggle_custom_titlebar(enable);
+            window.monolithApi.toggle_custom_titlebar(enable).catch(function () {});
         }
     }
 
@@ -1806,7 +1812,7 @@
         var tbMinimize = document.getElementById('tb-minimize');
         if (tbMinimize) {
             tbMinimize.addEventListener('click', function() {
-                if (window.monolithApi) window.monolithApi.minimize_window();
+                if (window.monolithApi) window.monolithApi.minimize_window().catch(function () {});
             });
         }
 
@@ -1829,7 +1835,7 @@
                         .then(function() { if (window.monolithApi) window.monolithApi.close_window(); })
                         .catch(function() {});
                 } else {
-                    if (window.monolithApi) window.monolithApi.close_window();
+                    if (window.monolithApi) window.monolithApi.close_window().catch(function () {});
                 }
             });
         }
@@ -1860,7 +1866,7 @@
             historyToggle.querySelectorAll('.history-toggle-btn').forEach(function(b) {
                 b.classList.toggle('active', b.dataset.enabled === String(enabled));
             });
-            window.monolithApi.set_history_enabled(enabled);
+            window.monolithApi.set_history_enabled(enabled).catch(function () {});
             if (enabled) loadHistoryTab();
             else {
                 var rankingEl = document.getElementById('history-ranking');
@@ -1915,6 +1921,7 @@
                 if (window.MonolithTerminal.isRunning()) {
                     window.MonolithTerminal.setSkipNextEof('main', true);
                     window.monolithApi.terminate_terminal('main')
+                        .catch(function () {})
                         .finally(function () { window.MonolithTerminal.setSkipNextEof('main', false); window.MonolithTerminal.setRunning(false); window.MonolithTerminal.initTerminal(_currentLaunchDir); });
                 } else {
                     window.MonolithTerminal.initTerminal(_currentLaunchDir);
@@ -1955,8 +1962,10 @@
                 });
             } else if (sessionId === 'panel') {
                 if (_panelRunning) {
+                    window.MonolithTerminal.incrementSessionGeneration('panel');
                     window.MonolithTerminal.setSkipNextEof('panel', true);
                     window.monolithApi.terminate_terminal('panel')
+                        .catch(function () {})
                         .finally(function () { window.MonolithTerminal.setSkipNextEof('panel', false); _panelRunning = false; if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.createTab === 'function') { window.SidebarManager.showCmdPanel(); window.SidebarManager.createTab(null, true, _currentLaunchDir); } });
                 } else {
                     if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.createTab === 'function') {

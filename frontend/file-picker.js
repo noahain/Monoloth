@@ -775,6 +775,7 @@
         savePickerType: savePickerType,
         getPickerType: getPickerType,
         setStatusReporter: setStatusReporter,
-        joinPath: joinPath
+        joinPath: joinPath,
+        isActive: function () { return fpEl && fpEl.classList.contains('active'); }
     };
 })();

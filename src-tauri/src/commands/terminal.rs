@@ -112,14 +112,13 @@ pub fn resize_terminal(pty: State<PtyManager>, session_id: String, cols: u16, ro
 }
 
 #[tauri::command]
-pub fn terminate_terminal(pty: State<PtyManager>, history: State<HistoryManager>, session_id: Option<String>) {
-    let sid = session_id.unwrap_or_else(|| "main".to_string());
-    if sid == "main" {
+pub fn terminate_terminal(pty: State<PtyManager>, history: State<HistoryManager>, session_id: String) {
+    if session_id == "main" {
         history.session_end();
     } else {
-        history.session_end_by_id(&sid);
+        history.session_end_by_id(&session_id);
     }
-    pty.terminate(&sid);
+    pty.terminate(&session_id);
 }
 
 #[tauri::command]
@@ -131,7 +130,6 @@ pub fn retire_panel_tab(pty: State<PtyManager>, history: State<HistoryManager>, 
     pty.retire_session(&session_id);
 }
 
-#[tauri::command]
 pub fn run_parallel_command(cmd: String, cwd: String) -> Result<bool, String> {
     let mut command = shell_command(&cmd);
     command.current_dir(&cwd);

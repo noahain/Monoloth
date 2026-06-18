@@ -26,7 +26,6 @@
     var _panelShell = 'cmd';
     var _panelHeight = 250;
     var _cmdPanelOpen = false;
-    var _panelClosing = false;
 
     var _isDragging = false;
     var _resizeStartY = 0;
@@ -147,7 +146,8 @@
                     if (tab && tab.running) {
                         window.monolithApi.send_input(tab.sessionId, cmd + '\n').catch(function () {});
                     }
-                });
+                })
+                .catch(function () {});
         }
     }
 
@@ -295,7 +295,7 @@
         if (_sidebarConfig) _sidebarConfig.enabled = _sidebarEnabled;
         applySidebar();
         if (window.monolithApi) {
-            window.monolithApi.set_config('sidebar_config', _sidebarConfig);
+            window.monolithApi.set_config('sidebar_config', _sidebarConfig).catch(function () {});
         }
     }
 
@@ -891,13 +891,11 @@
 
     function hideCmdPanel(persist) {
         _cmdPanelOpen = false;
-        _panelClosing = true;
         if (cmdPanel) {
             cmdPanel.classList.add('anim-close');
             setTimeout(function () {
                 cmdPanel.classList.remove('open');
                 cmdPanel.classList.remove('anim-close');
-                _panelClosing = false;
             }, 200);
         }
         var panelBtn = sidebarButtons.querySelector('[data-btn-id="open_cmd_panel"]');

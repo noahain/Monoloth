@@ -60,6 +60,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `get_path_info.success` is now decoupled from `exists` (it reports
   command success, not path existence), and SVG previews cap at 1 MB so a
   huge SVG can't stall the file picker.
+- Background appearance settings are now validated on the backend. The
+  `bg_*` fields (`bg_type`, `bg_image`, `bg_color`, `bg_gradient`,
+  `bg_transparency`), `theme_mode`, and `cta_button_style` are checked for
+  allowed values and correct types before write — invalid values are
+  rejected with an error that the appearance section surfaces as a red
+  status message instead of being silently stored. `set_background_config`
+  now calls the dedicated IPC endpoint directly rather than routing through
+  the generic bulk-write, so the validation can't be bypassed.
+- The global keyboard shortcut handler suppresses itself while the file
+  picker is open, so command palette and other shortcuts can no longer
+  fire while the user is browsing files.
+- Profile names are capped at 128 characters and rejected with an error
+  beyond that, instead of being silently truncated downstream.
+- `terminate_terminal` now requires an explicit `session_id` (the silent
+  default to `"main"` is gone), and the internal `run_parallel_command`
+  helper is no longer exposed as an IPC command.
+- Several previously-unhandled promise rejections across the IPC bridge
+  (`is_window_maximized`, `toggle_custom_titlebar`, `minimize_window`,
+  `close_window`, `set_history_enabled`, the main / panel terminal
+  termination calls, and sidebar `send_input` / config writes) now have
+  `.catch` guards, so a failed window op or PTY teardown no longer
+  prints a console error.
+- The CMD-panel recycle path bumps the panel session generation before
+  tearing down the old PTY, so a late spawn from the previous session
+  can't ghost the new tab.
 
 ## [2.1.9] - 2026-06-15
 

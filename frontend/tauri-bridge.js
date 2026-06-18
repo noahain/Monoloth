@@ -238,21 +238,20 @@
     };
 
     api.set_background_config = function (bg_type, image_path, color, gradient, transparency, theme_mode, cta_button_style, bg_layer) {
-        var entries = {};
-        if (bg_type !== undefined) entries.bg_type = bg_type;
-        if (image_path !== undefined) entries.bg_image = image_path || '';
-        if (color !== undefined) entries.bg_color = color;
-        if (gradient !== undefined) entries.bg_gradient = gradient;
-        if (transparency !== undefined) entries.bg_transparency = transparency;
-        if (theme_mode !== undefined) entries.theme_mode = theme_mode;
-        if (cta_button_style !== undefined) entries.cta_button_style = cta_button_style;
-        if (bg_layer !== undefined) entries.bg_layer = bg_layer;
+        var args = { bg_type: bg_type };
+        if (image_path !== undefined) args.bg_image = image_path || '';
+        if (color !== undefined) args.bg_color = color;
+        if (gradient !== undefined) args.bg_gradient = gradient;
+        if (transparency !== undefined) args.bg_transparency = transparency;
+        if (theme_mode !== undefined) args.theme_mode = theme_mode;
+        if (cta_button_style !== undefined) args.cta_button_style = cta_button_style;
+        if (bg_layer !== undefined) args.bg_layer = bg_layer;
 
         var dataUrlPromise = (image_path && bg_type === 'image')
             ? invoke('read_image_as_data_url', { imagePath: image_path }).catch(function () {})
             : Promise.resolve();
 
-        return invoke('set_many_config', { entries: entries })
+        return invoke('set_background_config', args)
             .then(function () { return dataUrlPromise; })
             .then(function () { return { success: true }; })
             .catch(function (err) { return { success: false, error: String(err) }; });
