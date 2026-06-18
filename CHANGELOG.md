@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- A new "Hidden" mode for secondary commands. Hidden commands spawn a
+  headless PTY session (id `hidden-{idx}`) using the configured `panelShell`
+  (cmd or PowerShell on Windows, sh on Unix), so long-running background
+  tools like file watchers or indexers can live for the lifetime of the main
+  session without taking a UI slot. The main session restart terminates any
+  prior `hidden-*` sessions via the new `PtyManager::terminate_by_prefix`
+  helper.
+
 ### Fixed
 - Stale async results from previous terminal sessions can no longer corrupt
   the new one. `initTerminal` captures its terminal reference at closure
@@ -85,6 +94,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The CMD-panel recycle path bumps the panel session generation before
   tearing down the old PTY, so a late spawn from the previous session
   can't ghost the new tab.
+- Wayland window placement. The startup position restore, and the `Moved`
+  / `Resized` event handlers, no longer query or save absolute position
+  when `WAYLAND_DISPLAY` is set — the Wayland compositor owns window
+  placement.
+- Custom-titlebar drag region on Linux. Window decorations are now set
+  statically in `tauri.conf.json` instead of flipped at runtime before
+  `show()`, so the titlebar is draggable.
 
 ## [2.1.9] - 2026-06-15
 

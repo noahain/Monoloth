@@ -87,18 +87,26 @@ pub(super) fn parse_path(path: &str) -> PathBuf {
     PathBuf::from(expand_env_vars(path))
 }
 
-pub(super) fn shell_command(command: &str) -> Command {
+pub(super) fn shell_command(command: &str, shell: &str) -> Command {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
-        let mut cmd = Command::new("cmd");
-        cmd.args(["/C", command]);
+        let mut cmd = if shell == "powershell" || shell == "pwsh" {
+            let mut c = Command::new("powershell");
+            c.args(["-NoProfile", "-Command", command]);
+            c
+        } else {
+            let mut c = Command::new("cmd");
+            c.args(["/C", command]);
+            c
+        };
         cmd.creation_flags(CREATE_NO_WINDOW);
         cmd
     }
     #[cfg(not(windows))]
     {
+        let _ = shell;
         let mut cmd = Command::new("sh");
         cmd.args(["-c", command]);
         cmd

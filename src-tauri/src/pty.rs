@@ -262,4 +262,17 @@ impl PtyManager {
             self.terminate(&sid);
         }
     }
+
+    pub fn terminate_by_prefix(&self, prefix: &str) {
+        let to_terminate: Vec<String> = {
+            self.sessions.lock()
+                .keys()
+                .filter(|k| k.starts_with(prefix))
+                .cloned()
+                .collect()
+        };
+        for sid in to_terminate {
+            self.terminate(&sid);
+        }
+    }
 }

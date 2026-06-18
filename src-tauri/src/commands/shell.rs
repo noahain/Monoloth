@@ -19,7 +19,7 @@ pub fn execute_background(command: String, cwd: String) -> Result<bool, String> 
     #[cfg(not(windows))]
     {
         use super::shell_command;
-        shell_command(&command)
+        shell_command(&command, "cmd")
             .current_dir(&expanded_cwd)
             .spawn()
             .map_err(|e| format!("Failed to spawn: {}", e))?;

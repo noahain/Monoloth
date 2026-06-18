@@ -1138,8 +1138,12 @@
             var optParallel = document.createElement('option');
             optParallel.value = 'parallel';
             optParallel.textContent = 'Parallel';
+            var optHidden = document.createElement('option');
+            optHidden.value = 'hidden';
+            optHidden.textContent = 'Hidden';
             modeSelect.appendChild(optBefore);
             modeSelect.appendChild(optParallel);
+            modeSelect.appendChild(optHidden);
             modeSelect.value = cmd.mode || 'before';
             modeSelect.addEventListener('change', function () {
                 _secondaryCommands[idx].mode = this.value;

@@ -38,6 +38,7 @@ pub fn start_terminal(
     let startup_cmd = config.get("startup_command").as_str().unwrap_or("opencode").to_string();
     let cmd_type = config.get("startup_command_type").as_str().unwrap_or("preset").to_string();
     let active_profile = config.get_active_profile();
+    let panel_shell = config.get("panelShell").as_str().unwrap_or("cmd").to_string();
 
     let (cmd, args): (String, Vec<String>) = if cmd_type == "custom" {
         resolve_custom_command(&startup_cmd)?
@@ -58,7 +59,7 @@ pub fn start_terminal(
                         if enabled {
                             if let Some(cmd_str) = cmd_obj.get("command").and_then(|v| v.as_str()) {
                                 if cmd_obj.get("mode").and_then(|v| v.as_str()) == Some("before") {
-                                    if let Err(e) = run_before_command(cmd_str, &directory) {
+                                    if let Err(e) = run_before_command(cmd_str, &directory, &panel_shell) {
                                         warn!("Before command failed: {}", e);
                                     }
                                 }
@@ -79,15 +80,28 @@ pub fn start_terminal(
     }
 
     if session_id == "main" {
+        pty.terminate_by_prefix("hidden-");
         if let Value::Array(cmds) = &secondary {
-            for cmd_val in cmds {
+            for (idx, cmd_val) in cmds.iter().enumerate() {
                 if let Some(cmd_obj) = cmd_val.as_object() {
                     if let Some(enabled) = cmd_obj.get("enabled").and_then(|v| v.as_bool()) {
                         if enabled {
                             if let Some(cmd_str) = cmd_obj.get("command").and_then(|v| v.as_str()) {
-                                if cmd_obj.get("mode").and_then(|v| v.as_str()) == Some("parallel") {
-                                    if let Err(e) = run_parallel_command(cmd_str.to_string(), directory.clone()) {
+                                let mode = cmd_obj.get("mode").and_then(|v| v.as_str());
+                                if mode == Some("parallel") {
+                                    if let Err(e) = run_parallel_command(cmd_str.to_string(), directory.clone(), &panel_shell) {
                                         warn!("Parallel command failed: {}", e);
+                                    }
+                                } else if mode == Some("hidden") {
+                                    let hidden_sid = format!("hidden-{}", idx);
+                                    match resolve_hidden_command(&panel_shell, cmd_str) {
+                                        Ok((exe, args)) => {
+                                            let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+                                            if let Err(e) = pty.spawn(&hidden_sid, &exe, &args_ref, &directory, cols, rows) {
+                                                warn!("Hidden command failed: {}", e);
+                                            }
+                                        }
+                                        Err(e) => warn!("Hidden command resolve failed: {}", e),
                                     }
                                 }
                             }
@@ -130,8 +144,8 @@ pub fn retire_panel_tab(pty: State<PtyManager>, history: State<HistoryManager>, 
     pty.retire_session(&session_id);
 }
 
-pub fn run_parallel_command(cmd: String, cwd: String) -> Result<bool, String> {
-    let mut command = shell_command(&cmd);
+pub fn run_parallel_command(cmd: String, cwd: String, shell: &str) -> Result<bool, String> {
+    let mut command = shell_command(&cmd, shell);
     command.current_dir(&cwd);
     #[cfg(windows)]
     {
@@ -170,6 +184,28 @@ fn resolve_panel_shell(requested: Option<&str>) -> Result<(String, Vec<String>),
             });
         Ok((shell, vec![]))
     }
+}
+
+/// Resolve the shell + user command for a hidden (headless PTY) secondary command.
+/// Uses the same shell preference as the CMD panel (panelShell config).
+fn resolve_hidden_command(shell_pref: &str, user_cmd: &str) -> Result<(String, Vec<String>), String> {
+    let (exe, _base_args) = resolve_panel_shell(Some(shell_pref))?;
+    let mut args: Vec<String> = Vec::new();
+    #[cfg(windows)]
+    {
+        if exe.eq_ignore_ascii_case("powershell") {
+            args.push("-NoProfile".to_string());
+            args.push("-Command".to_string());
+        } else {
+            args.push("/C".to_string());
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        args.push("-c".to_string());
+    }
+    args.push(user_cmd.to_string());
+    Ok((exe, args))
 }
 
 #[cfg(any(not(windows), test))]
@@ -475,21 +511,22 @@ fn probe_unix_install_paths(bin: &str) -> Option<String> {
         .find(|p| std::path::Path::new(p).exists())
 }
 
-fn run_before_command(cmd: &str, cwd: &str) -> Result<String, String> {
-    run_before_command_with_timeout(cmd, cwd, std::time::Duration::from_secs(30))
+fn run_before_command(cmd: &str, cwd: &str, shell: &str) -> Result<String, String> {
+    run_before_command_with_timeout(cmd, cwd, std::time::Duration::from_secs(30), shell)
 }
 
 fn run_before_command_with_timeout(
     cmd: &str,
     cwd: &str,
     timeout: std::time::Duration,
+    shell: &str,
 ) -> Result<String, String> {
     use std::io::Read;
     use std::process::Stdio;
     use std::thread;
     use std::time::{Duration, Instant};
 
-    let mut child = shell_command(cmd)
+    let mut child = shell_command(cmd, shell)
         .current_dir(cwd)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -656,6 +693,7 @@ mod tests {
             cmd,
             ".",
             std::time::Duration::from_secs(2),
+            "cmd",
         ).unwrap();
         assert!(output.contains("before"));
     }
@@ -673,6 +711,7 @@ mod tests {
             cmd,
             ".",
             std::time::Duration::from_millis(100),
+            "cmd",
         );
         assert!(result.unwrap_err().contains("timed out"));
         assert!(started.elapsed() < std::time::Duration::from_secs(2));
@@ -687,6 +726,7 @@ mod tests {
             "sleep 5 & wait",
             ".",
             std::time::Duration::from_millis(100),
+            "cmd",
         );
         assert!(result.unwrap_err().contains("timed out"));
         assert!(started.elapsed() < std::time::Duration::from_secs(2));

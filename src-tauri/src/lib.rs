@@ -110,23 +110,34 @@ pub fn run() {
 
             let window = app.get_webview_window("main").unwrap();
 
-            // Restore position if saved
-            if let (Some(x), Some(y)) = (
-                cfg.get("window_x").as_i64(),
-                cfg.get("window_y").as_i64(),
-            ) {
-                window.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
-                    x: x as i32,
-                    y: y as i32,
-                })).ok();
+            // Wayland clients cannot set/query absolute window position
+            let is_wayland = std::env::var("WAYLAND_DISPLAY").is_ok();
+
+            // Restore position if saved (skip on Wayland — compositor owns placement)
+            if !is_wayland {
+                if let (Some(x), Some(y)) = (
+                    cfg.get("window_x").as_i64(),
+                    cfg.get("window_y").as_i64(),
+                ) {
+                    window.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+                        x: x as i32,
+                        y: y as i32,
+                    })).ok();
+                }
             }
 
             window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height })).ok();
-            window.set_decorations(!use_custom_titlebar).ok();
             if maximized {
                 window.maximize().ok();
             }
             window.show().ok();
+
+            // decorations: false is set statically in tauri.conf.json to avoid Linux bug
+            // #11856 where set_decorations(false) before show() breaks drag regions.
+            // Only flip to native decorations if user disabled custom titlebar.
+            if !use_custom_titlebar {
+                window.set_decorations(true).ok();
+            }
 
             // Save window state on resize / move / close
             let cfg_for_events = cfg.clone();
@@ -157,15 +168,17 @@ pub fn run() {
                                     *last = now;
                                     drop(last);
                                     cfg_for_events.set_window_size(size.width, size.height);
-                                    if let Ok(pos) = window_clone.outer_position() {
-                                        if (pos.x as i64) > WINDOW_MINIMIZED_SENTINEL
-                                            && (pos.y as i64) > WINDOW_MINIMIZED_SENTINEL
-                                            && (pos.x as i64) >= MIN_WINDOW_POSITION
-                                            && (pos.y as i64) >= MIN_WINDOW_POSITION
-                                            && (pos.x as i64) <= MAX_WINDOW_POSITION
-                                            && (pos.y as i64) <= MAX_WINDOW_POSITION
-                                        {
-                                            cfg_for_events.set_window_position(pos.x, pos.y);
+                                    if !is_wayland {
+                                        if let Ok(pos) = window_clone.outer_position() {
+                                            if (pos.x as i64) > WINDOW_MINIMIZED_SENTINEL
+                                                && (pos.y as i64) > WINDOW_MINIMIZED_SENTINEL
+                                                && (pos.x as i64) >= MIN_WINDOW_POSITION
+                                                && (pos.y as i64) >= MIN_WINDOW_POSITION
+                                                && (pos.x as i64) <= MAX_WINDOW_POSITION
+                                                && (pos.y as i64) <= MAX_WINDOW_POSITION
+                                            {
+                                                cfg_for_events.set_window_position(pos.x, pos.y);
+                                            }
                                         }
                                     }
                                 }
@@ -174,6 +187,9 @@ pub fn run() {
                     }
                     tauri::WindowEvent::Moved(pos) => {
                         if window_clone.is_minimized().unwrap_or(false) {
+                            return;
+                        }
+                        if is_wayland {
                             return;
                         }
                         if pos.x <= WINDOW_MINIMIZED_SENTINEL as i32 || pos.y <= WINDOW_MINIMIZED_SENTINEL as i32 {
@@ -201,15 +217,17 @@ pub fn run() {
                         if !is_max {
                             let is_minimized = window_clone.is_minimized().unwrap_or(false);
                             if !is_minimized {
-                                if let Ok(pos) = window_clone.outer_position() {
-                                    if (pos.x as i64) > WINDOW_MINIMIZED_SENTINEL
-                                        && (pos.y as i64) > WINDOW_MINIMIZED_SENTINEL
-                                        && (pos.x as i64) >= MIN_WINDOW_POSITION
-                                        && (pos.y as i64) >= MIN_WINDOW_POSITION
-                                        && (pos.x as i64) <= MAX_WINDOW_POSITION
-                                        && (pos.y as i64) <= MAX_WINDOW_POSITION
-                                    {
-                                        cfg_for_events.set_window_position(pos.x, pos.y);
+                                if !is_wayland {
+                                    if let Ok(pos) = window_clone.outer_position() {
+                                        if (pos.x as i64) > WINDOW_MINIMIZED_SENTINEL
+                                            && (pos.y as i64) > WINDOW_MINIMIZED_SENTINEL
+                                            && (pos.x as i64) >= MIN_WINDOW_POSITION
+                                            && (pos.y as i64) >= MIN_WINDOW_POSITION
+                                            && (pos.x as i64) <= MAX_WINDOW_POSITION
+                                            && (pos.y as i64) <= MAX_WINDOW_POSITION
+                                        {
+                                            cfg_for_events.set_window_position(pos.x, pos.y);
+                                        }
                                     }
                                 }
                                 if let Ok(size) = window_clone.inner_size() {
