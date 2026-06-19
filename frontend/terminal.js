@@ -1,34 +1,30 @@
 (function () {
     'use strict';
 
-    // --- Terminal Session Core (extracted from app.js) ---
+    // --- Main Terminal Tab Manager ---
     // Depends on: window.MonolithTheme, window.MonolithShortcuts, window.MonolothApp
-    // (background hub + clipboard + startup label + backToLanding stay in app.js
-    //  and are reached through the MonolothApp facade). Behavior-preserving move.
+    // Mirrors the sidebar.js panel-tab pattern but for the MAIN terminal view.
+    // session_id "main" = first tab (gets secondary commands).
+    // session_id "main-tab-N" = additional tabs.
 
-    const terminalContainer = document.getElementById('terminal');
-    const terminalView = document.getElementById('terminal-view');
+    var tabHost = document.getElementById('main-tab-host');
+    var tabBar = document.getElementById('main-tab-bar');
+    var tabList = document.getElementById('main-tab-tabs');
+    var tabNewBtn = document.getElementById('main-tab-new');
 
-    let term = null;
-    let fitAddon = null;
-    let webglAddon = null;
-    // Windows PTY compat info ({ backend, buildNumber }) fetched once at startup.
-    // Drives xterm.js's windowsPty option so reflow heuristics match the real
-    // ConPTY build. null until loaded or on non-Windows.
+    var _tabs = new Map();       // tabId -> tab object
+    var _activeTabId = null;
+    var _nextTabId = 1;          // numeric counter; first tab gets id "1", session "main"
+
+    // Windows PTY compat info — fetched once, shared across all tabs.
     var _windowsPtyInfo = null;
-    var _resizeObserver = null;
-    var _resizeHandler = null;
-    var _contextMenuHandler = null;
-    var _skipNextEof = {};  // Session-ID-keyed
-    var _sessionGeneration = { main: 0 };  // Session-ID-keyed; tab sessions added dynamically
-    var _terminalRunning = false;
-    var _exitCountdownInterval = null;
-    var _exitBanner = null;
 
-    // Builds the xterm.js windows option from cached PTY info. Prefers the modern
-    // windowsPty descriptor (correct reflow heuristics per ConPTY build); falls
-    // back to nothing when info is unavailable. Returns an object to spread into
-    // the Terminal config. Shared with sidebar.js via window.__monolithTermWinOpts.
+    // Session-generation / skip-eof tracking, keyed by session ID.
+    var _skipNextEof = {};
+    var _sessionGeneration = {};
+
+    var _resizeTimer = null;
+
     function buildTerminalWindowsOptions() {
         var info = window.__monolithWindowsPty || _windowsPtyInfo;
         if (info && info.backend && typeof info.buildNumber === 'number') {
@@ -38,98 +34,150 @@
     }
     window.__monolithTermWinOpts = buildTerminalWindowsOptions;
 
-    function cleanupTerminalDomHandlers() {
-        if (_resizeTimer) { clearTimeout(_resizeTimer); _resizeTimer = null; }
-        if (_resizeObserver) { _resizeObserver.disconnect(); _resizeObserver = null; }
-        if (_resizeHandler) { window.removeEventListener('resize', _resizeHandler); _resizeHandler = null; }
-        if (_contextMenuHandler) { terminalContainer.removeEventListener('contextmenu', _contextMenuHandler); _contextMenuHandler = null; }
+    function escapeHtml(str) {
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
-    function clearSessionExitCountdown() {
-        if (_exitCountdownInterval) { clearInterval(_exitCountdownInterval); _exitCountdownInterval = null; }
-        if (_exitBanner && _exitBanner.parentNode) _exitBanner.remove();
-        _exitBanner = null;
+    function getActiveTab() {
+        return _activeTabId ? _tabs.get(_activeTabId) : null;
     }
 
-    // Teardown the main terminal (moved from backToLanding's term-teardown block).
-    function dispose() {
-        clearSessionExitCountdown();
-        if (term) {
-            try { term.dispose(); } catch (e) {}
-            term = null;
-            fitAddon = null;
-            webglAddon = null;
+    function updateTabBarVisibility() {
+        if (!tabBar) return;
+        if (_tabs.size > 1) {
+            tabBar.classList.add('visible');
+        } else {
+            tabBar.classList.remove('visible');
         }
-        if (terminalContainer) terminalContainer.innerHTML = '';
-        cleanupTerminalDomHandlers();
     }
 
-    // Coalesced resize machinery (shared by window-resize, ResizeObserver, the
-    // refitTerminals facade, and the first-output settle). Hoisted to module
-    // level so every trigger funnels through ONE debounce timer — multiple
-    // separate timers previously let resize events race and push mismatched
-    // sizes to ConPTY faster than the child app could repaint.
-    var _resizeTimer = null;
-
-    // Apply a single resize. Order matters: resize the PTY FIRST so the child
-    // app's SIGWINCH-driven redraw targets the final dimensions, THEN resize
-    // xterm to match. We deliberately do NOT force term.refresh() afterwards:
-    // xterm re-renders on resize, and forcing a refresh paints the transitional
-    // (half-reflowed) buffer. Diff-based TUI apps (opencode, vim) in the
-    // alternate-screen buffer only repaint the cells they think changed, so any
-    // garbage painted into the transitional frame is never overwritten — that
-    // is the source of the "frozen edges + random middle characters" corruption.
-    function applyResize() {
-        if (!term || !fitAddon) return;
-        var el = term.element || terminalContainer;
-        if (!el || el.offsetParent === null) return;
-        var dims;
-        try { dims = fitAddon.proposeDimensions(); } catch (e) { return; }
-        if (!dims || isNaN(dims.cols) || isNaN(dims.rows)) return;
-        if (dims.cols === term.cols && dims.rows === term.rows) return;
-        if (window.monolithApi) {
-            try { window.monolithApi.resize_terminal('main', dims.cols, dims.rows); } catch (e) {}
-        }
-        try { term.resize(dims.cols, dims.rows); } catch (e) {}
+    function updateBusyDot(tab) {
+        var item = tabList && tabList.querySelector('.main-tab[data-tab-id="' + tab.id + '"]');
+        if (!item) return;
+        var dot = item.querySelector('.main-tab-dirty');
+        if (dot) dot.style.display = tab.busy ? '' : 'none';
     }
 
-    // Debounced entry point for high-frequency triggers. The delay gives ConPTY
-    // time to acknowledge and the child app time to repaint before the next one.
-    function scheduleResize() {
-        clearTimeout(_resizeTimer);
-        _resizeTimer = setTimeout(applyResize, 120);
+    // No-op stub — real persistence wiring lands in Task 3.x.
+    // Without this, createTab/_doCloseTab/startRenameTab throw ReferenceError.
+    function schedulePersistSave() {}
+
+    // Create a tab. The FIRST tab created uses session_id "main" (so the Rust
+    // backend runs secondary commands on it). Subsequent tabs use "main-tab-N".
+    function createTab(dir, activate, profile) {
+        activate = activate !== false;
+        dir = dir || (window.MonolothApp && window.MonolothApp.getCurrentDir ? window.MonolothApp.getCurrentDir() : '');
+        profile = profile || null;  // null = use global active profile
+
+        var tabId = 'mtab-' + _nextTabId;
+        var isFirst = _nextTabId === 1;
+        var sessionId = isFirst ? 'main' : 'main-tab-' + _nextTabId;
+        _nextTabId++;
+
+        // Name the first tab from the dir basename; subsequent tabs default to "Terminal".
+        var tabName = 'Terminal';
+        if (isFirst && dir) {
+            var base = dir.replace(/[\\/]+$/, '').split(/[\\/]/).pop();
+            if (base) tabName = base;
+        }
+
+        var container = document.createElement('div');
+        container.className = 'main-tab-container';
+        container.id = 'main-tab-container-' + tabId;
+        if (activate) container.classList.add('active');
+
+        var termDiv = document.createElement('div');
+        termDiv.className = 'main-tab-terminal';
+        container.appendChild(termDiv);
+
+        if (tabHost) tabHost.appendChild(container);
+
+        var tabItem = document.createElement('div');
+        tabItem.className = 'main-tab';
+        tabItem.setAttribute('data-tab-id', tabId);
+        if (activate) tabItem.classList.add('active');
+        tabItem.innerHTML = '<span class="main-tab-name">' + escapeHtml(tabName) + '</span>' +
+            '<span class="main-tab-dirty" style="display:none;">\u25CF</span>' +
+            '<button class="main-tab-close" data-tab-id="' + tabId + '" aria-label="Close tab">&times;</button>';
+        if (tabList) tabList.appendChild(tabItem);
+
+        tabItem.addEventListener('click', function (e) {
+            if (e.target.classList.contains('main-tab-close')) {
+                e.stopPropagation();
+                closeTab(tabId);
+            } else {
+                activateTab(tabId);
+            }
+        });
+        tabItem.querySelector('.main-tab-name').addEventListener('dblclick', function (e) {
+            e.stopPropagation();
+            startRenameTab(tabId);
+        });
+
+        var tab = {
+            id: tabId,
+            name: tabName,
+            sessionId: sessionId,
+            profile: profile,  // Profile name for this tab (null = Default/global). Set in Phase 5.
+            running: false,
+            container: container,
+            termDiv: termDiv,
+            term: null,
+            fitAddon: null,
+            webglAddon: null,
+            generation: null,
+            busy: false,
+            closing: false,
+            exitBanner: null,
+            exitCountdown: null,
+            dir: dir,
+            firstOutput: true
+        };
+        _tabs.set(tabId, tab);
+
+        updateTabBarVisibility();
+        schedulePersistSave();
+
+        if (activate) {
+            return activateTab(tabId);
+        }
+        return Promise.resolve(tab);
     }
 
-    // Public "fit now" used by the refitTerminals facade (view-enter, panel
-    // toggle). applyResize is idempotent (early-returns when dimensions are
-    // unchanged), so an immediate call here cannot conflict with a debounced
-    // observer call that lands later with the same target size.
-    function refit() {
-        applyResize();
+    function activateTab(tabId) {
+        var tab = _tabs.get(tabId);
+        if (!tab) return Promise.resolve();
+
+        if (_activeTabId && _activeTabId !== tabId) {
+            var oldTab = _tabs.get(_activeTabId);
+            if (oldTab) {
+                oldTab.container.classList.remove('active');
+                var oldItem = tabList && tabList.querySelector('.main-tab[data-tab-id="' + _activeTabId + '"]');
+                if (oldItem) oldItem.classList.remove('active');
+                updateBusyDot(oldTab);
+            }
+        }
+
+        tab.container.classList.add('active');
+        var newItem = tabList && tabList.querySelector('.main-tab[data-tab-id="' + tabId + '"]');
+        if (newItem) {
+            newItem.classList.add('active');
+            newItem.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+        }
+        _activeTabId = tabId;
+        updateBusyDot(tab);
+
+        if (!tab.term) {
+            return initTabXterm(tab);
+        }
+        refitActiveTab();
+        if (tab.term) tab.term.focus();
+        return Promise.resolve();
     }
 
-    // --- Terminal Setup ---
-    function initTerminal(dir) {
-        if (!terminalContainer) return;
-
-        clearSessionExitCountdown();
-        cleanupTerminalDomHandlers();
-
-        // Dispose existing terminal and listeners before creating a new one
-        if (term) {
-            try { term.dispose(); } catch (e) { console.error('Error disposing term:', e); }
-            term = null;
-            webglAddon = null;
-        }
-        if (fitAddon) {
-            fitAddon = null;
-        }
-        terminalContainer.innerHTML = '';
-
-        if (typeof Terminal === 'undefined') {
-            terminalContainer.innerHTML = '<div style="color:#c0c0c0;padding:20px;font-family:monospace;">Error: Terminal library failed to load.</div>';
-            return;
-        }
+    function initTabXterm(tab) {
+        var termDiv = tab.termDiv;
+        if (!termDiv || typeof Terminal === 'undefined') return Promise.resolve();
 
         var _bg = window.MonolothApp.getBgState();
         var initBgConfig = { type: _bg.type, bgLayer: _bg.layer };
@@ -139,6 +187,7 @@
         var initTheme = isLight ? window.MonolithTheme.getTerminalLightTheme() : window.MonolithTheme.getTerminalDarkTheme();
         initTheme.background = terminalBg;
         initTheme.black = terminalBlack;
+
         var termOptions = {
             allowTransparency: true,
             theme: initTheme,
@@ -160,49 +209,18 @@
             scrollOnUserInput: true
         };
         Object.assign(termOptions, buildTerminalWindowsOptions());
-        term = new Terminal(termOptions);
 
-        term.open(terminalContainer);
+        var term = new Terminal(termOptions);
+        var fitAddon = (typeof FitAddon !== 'undefined') ? new FitAddon.FitAddon() : null;
+        if (fitAddon) term.loadAddon(fitAddon);
+        term.open(termDiv);
         term.focus();
 
-        if (typeof FitAddon !== 'undefined') {
-            fitAddon = new FitAddon.FitAddon();
-            term.loadAddon(fitAddon);
-        }
+        tab.term = term;
+        tab.fitAddon = fitAddon;
 
-        requestAnimationFrame(function() {
-            if (fitAddon) fitAddon.fit();
-            if (window.monolithApi) {
-                var startGen = _sessionGeneration['main'] || 0;
-                var myTerm = term;
-                var myDir = dir;
-                window.monolithApi.start_terminal('main', dir, true, null, myTerm.cols, myTerm.rows)
-                    .then((result) => {
-                        if (term !== myTerm) return;
-                        if (!result || !result.success) {
-                            if (term) {
-                                term.writeln('');
-                                term.writeln('Failed to start ' + window.MonolothApp.getStartupLabel() + '. ' + (result && result.error ? result.error : 'Check that it is installed and in your PATH.'));
-                            }
-                        } else {
-                            _terminalRunning = true;
-                            if (result.generation) {
-                                _sessionGeneration['main'] = result.generation;
-                            }
-                        }
-                    })
-                    .catch((err) => {
-                        if (term !== myTerm) return;
-                        if (term) {
-                            term.writeln('');
-                            term.writeln('Error starting ' + window.MonolothApp.getStartupLabel() + ': ' + err);
-                        }
-                    });
-            }
-        });
-
-        // --- Keyboard copy/paste shortcuts ---
-        term.attachCustomKeyEventHandler((e) => {
+        // Keyboard copy/paste/shortcut interception (same as original terminal.js)
+        term.attachCustomKeyEventHandler(function (e) {
             if (e.ctrlKey && !e.shiftKey && e.code === 'KeyC' && term.hasSelection()) {
                 window.MonolothApp.copyToClipboard(term.getSelection());
                 term.clearSelection();
@@ -215,48 +233,28 @@
                 }
                 return false;
             }
-            if ((e.ctrlKey && e.code === 'KeyV') || (e.shiftKey && e.code === 'Insert')) {
-                return false;
-            }
-            if (e.ctrlKey && e.shiftKey && e.code === 'KeyW') {
-                return false;
-            }
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('command_palette'))) {
-                return false;
-            }
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('settings'))) {
-                return false;
-            }
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('toggle_sidebar'))) {
-                return false;
-            }
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('cmd_panel'))) {
-                return false;
-            }
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('clear_terminal'))) {
-                return false;
-            }
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('switch_profile'))) {
-                return false;
-            }
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('back_to_launcher'))) {
-                return false;
-            }
+            if ((e.ctrlKey && e.code === 'KeyV') || (e.shiftKey && e.code === 'Insert')) return false;
+            if (e.ctrlKey && e.shiftKey && e.code === 'KeyW') return false;
+            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('command_palette'))) return false;
+            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('settings'))) return false;
+            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('toggle_sidebar'))) return false;
+            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('cmd_panel'))) return false;
+            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('clear_terminal'))) return false;
+            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('switch_profile'))) return false;
+            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('back_to_launcher'))) return false;
             return true;
         });
 
-        // --- Paste: DOM event avoids clipboard permission prompt & double-paste ---
-        term.element.addEventListener('paste', (e) => {
-            const text = e.clipboardData.getData('text');
+        term.element.addEventListener('paste', function (e) {
+            var text = e.clipboardData.getData('text');
             if (text && window.monolithApi) {
                 e.preventDefault();
                 e.stopPropagation();
-                try { window.monolithApi.send_input('main', text); } catch (err) {}
+                try { window.monolithApi.send_input(tab.sessionId, text); } catch (err) {}
             }
         });
 
-        // --- Right-click copy context menu ---
-        _contextMenuHandler = function (e) {
+        termDiv.addEventListener('contextmenu', function (e) {
             e.preventDefault();
             var selection = term.getSelection();
             if (selection) {
@@ -273,131 +271,446 @@
             } else {
                 navigator.clipboard.readText().then(function (text) {
                     if (window.monolithApi && text) {
-                        window.monolithApi.send_input('main', text).catch(function () {});
+                        window.monolithApi.send_input(tab.sessionId, text).catch(function () {});
                     }
                 }).catch(function () {});
             }
-        };
-        terminalContainer.addEventListener('contextmenu', _contextMenuHandler);
-
-        function syncSize() {
-            applyResize();
-        }
-
-        var _resizeListener = function () {
-            scheduleResize();
-        };
-        window.addEventListener('resize', _resizeListener);
-        _resizeHandler = _resizeListener;
-
-        _resizeObserver = new ResizeObserver(function () {
-            scheduleResize();
         });
-        _resizeObserver.observe(terminalContainer);
 
-        var firstOutput = true;
+        term.onData(function (data) {
+            if (window.monolithApi) {
+                try { window.monolithApi.send_input(tab.sessionId, data); } catch (e) {}
+            }
+            if (data.indexOf('\r') !== -1) {
+                tab.busy = true;
+                updateBusyDot(tab);
+            }
+        });
 
-        function startSessionExitCountdown() {
-            _terminalRunning = false;
-            clearSessionExitCountdown();
-            var exitBanner = document.createElement('div');
-            exitBanner.className = 'session-exit-banner';
-            exitBanner.style.cssText = 'position:absolute;bottom:40px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,0.9);color:#c0c0c0;padding:8px 16px;border-radius:6px;font-family:monospace;font-size:13px;z-index:101;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(4px);pointer-events:auto;cursor:pointer;';
-            exitBanner.textContent = 'Session ended \u2014 returning to launcher in 5s (click to stay)';
-            if (terminalView) terminalView.appendChild(exitBanner);
-            _exitBanner = exitBanner;
-            var countdown = 5;
-            exitBanner.addEventListener('click', function () {
-                clearSessionExitCountdown();
-            });
-            _exitCountdownInterval = setInterval(function () {
-                countdown--;
-                if (countdown <= 0) {
-                    clearSessionExitCountdown();
-                    window.MonolothApp.backToLanding();
-                } else {
-                    exitBanner.textContent = 'Session ended \u2014 returning to launcher in ' + countdown + 's (click to stay)';
-                }
-            }, 1000);
+        // Start the PTY session
+        var startGen = _sessionGeneration[tab.sessionId] || 0;
+        var cols = term.cols || 80;
+        var rows = term.rows || 24;
+
+        term.writeln('');
+        term.writeln('Monoloth Terminal');
+        term.writeln('Directory: ' + (tab.dir || ''));
+        term.writeln('Starting ' + window.MonolothApp.getStartupLabel() + '...');
+        term.writeln('');
+
+        if (!window.monolithApi) {
+            term.writeln('Error: Bridge not available.');
+            return Promise.resolve(tab);
         }
 
-        window.writeToTerm = (data, eof, sessionId, generation) => {
-            sessionId = sessionId || 'main';
-            generation = generation || 0;
-            if (generation > 0 && _sessionGeneration[sessionId] > 0 &&
-                generation < _sessionGeneration[sessionId]) {
-                return;
-            }
-            if (eof && _skipNextEof[sessionId]) {
-                _skipNextEof[sessionId] = false;
-                return;
-            }
-            if (sessionId === 'main') {
-                if (term) {
-                    if (eof) {
-                        term.write(data);
-                        startSessionExitCountdown();
-                        return;
+        return window.monolithApi.start_terminal(tab.sessionId, tab.dir, true, null, cols, rows)
+            .then(function (result) {
+                if (tab.closing || !_tabs.has(tab.id)) {
+                    if (result && result.success && window.monolithApi) {
+                        window.monolithApi.terminate_terminal(tab.sessionId).catch(function () {});
                     }
-                    term.write(data);
-                    if (firstOutput) {
-                        firstOutput = false;
-                        setTimeout(syncSize, 1500);
-                    }
-                    if (typeof data === 'string' && data.indexOf('[session ended]') !== -1) {
-                        startSessionExitCountdown();
-                    }
+                    return tab;
                 }
-            } else if (sessionId.startsWith('panel-tab-')) {
-                var tabId = sessionId.replace('panel-', '');
+                if (result && result.success) {
+                    tab.running = true;
+                    tab.generation = result.generation;
+                    if (result.generation) _sessionGeneration[tab.sessionId] = result.generation;
+                    requestAnimationFrame(function () {
+                        if (fitAddon) fitAddon.fit();
+                        refitActiveTab();
+                    });
+                } else {
+                    tab.running = false;
+                    term.writeln('');
+                    term.writeln('Failed to start ' + window.MonolothApp.getStartupLabel() + '. ' + (result && result.error ? result.error : 'Check that it is installed and in your PATH.'));
+                    showTabExitBanner(tab);
+                }
+                return tab;
+            })
+            .catch(function (err) {
+                if (tab.closing || !_tabs.has(tab.id)) return tab;
+                tab.running = false;
+                term.writeln('');
+                term.writeln('Error starting ' + window.MonolothApp.getStartupLabel() + ': ' + err);
+                showTabExitBanner(tab);
+                return tab;
+            });
+    }
+
+    function startSessionExitCountdown(tab) {
+        tab.running = false;
+        clearTabExitCountdown(tab);
+        var banner = document.createElement('div');
+        banner.className = 'session-exit-banner';
+        banner.style.cssText = 'position:absolute;bottom:40px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,0.9);color:#c0c0c0;padding:8px 16px;border-radius:6px;font-family:monospace;font-size:13px;z-index:101;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(4px);pointer-events:auto;cursor:pointer;';
+        banner.textContent = 'Session ended \u2014 returning to launcher in 5s (click to stay)';
+        tab.container.appendChild(banner);
+        tab.exitBanner = banner;
+        var countdown = 5;
+        banner.addEventListener('click', function () { clearTabExitCountdown(tab); });
+        tab.exitCountdown = setInterval(function () {
+            countdown--;
+            if (countdown <= 0) {
+                clearTabExitCountdown(tab);
+                window.MonolothApp.backToLanding();
+            } else {
+                banner.textContent = 'Session ended \u2014 returning to launcher in ' + countdown + 's (click to stay)';
+            }
+        }, 1000);
+    }
+
+    function clearTabExitCountdown(tab) {
+        if (tab.exitCountdown) { clearInterval(tab.exitCountdown); tab.exitCountdown = null; }
+        if (tab.exitBanner && tab.exitBanner.parentNode) tab.exitBanner.remove();
+        tab.exitBanner = null;
+    }
+
+    function showTabExitBanner(tab) {
+        // For main tabs, show the auto-return countdown (matches original behavior).
+        startSessionExitCountdown(tab);
+    }
+
+    function hideTabExitBanner(tab) {
+        clearTabExitCountdown(tab);
+    }
+
+    function closeTab(tabId, force) {
+        var tab = _tabs.get(tabId);
+        if (!tab) return;
+        force = force || false;
+        if (tab.running && tab.busy && !force) {
+            window.MonolothApp.showConfirm('Close Tab', 'This tab has a running process. Close anyway?', 'close_main_tab')
+                .then(function (confirmed) { if (confirmed) _doCloseTab(tabId); })
+                .catch(function () {});
+            return;
+        }
+        _doCloseTab(tabId);
+    }
+
+    function _doCloseTab(tabId) {
+        var tab = _tabs.get(tabId);
+        if (!tab) return;
+        tab.closing = true;
+
+        if (window.monolithApi) {
+            window.monolithApi.terminate_terminal(tab.sessionId).catch(function () {});
+            if (tab.sessionId === 'main' && typeof window.monolithApi.terminate_hidden === 'function') {
+                window.monolithApi.terminate_hidden().catch(function () {});
+            }
+        }
+        clearTabExitCountdown(tab);
+        if (tab.term) {
+            try { tab.term.dispose(); } catch (e) {}
+            try { if (tab.fitAddon) tab.fitAddon.dispose(); } catch (e) {}
+            tab.term = null;
+            tab.fitAddon = null;
+        }
+        delete _sessionGeneration[tab.sessionId];
+        delete _skipNextEof[tab.sessionId];
+
+        // For main-tab-N sessions, call retire (cleans backend generation tracking).
+        // The "main" session is fully terminated by terminate_terminal above.
+        if (tab.sessionId.startsWith('main-tab-') && window.monolithApi && typeof window.monolithApi.retire_panel_tab === 'function') {
+            window.monolithApi.retire_panel_tab(tab.sessionId).catch(function () {});
+        }
+
+        tab.container.remove();
+        var tabItem = tabList && tabList.querySelector('.main-tab[data-tab-id="' + tabId + '"]');
+        if (tabItem) tabItem.remove();
+        _tabs.delete(tabId);
+
+        // If no tabs left, go back to landing.
+        if (_tabs.size === 0) {
+            _activeTabId = null;
+            updateTabBarVisibility();
+            schedulePersistSave();
+            window.MonolothApp.backToLanding();
+            return;
+        }
+
+        // Activate the nearest surviving tab.
+        if (_activeTabId === tabId) {
+            var arr = Array.from(_tabs.values());
+            // Find the index of the closed tab in insertion order, pick prev or next.
+            var closedIdx = -1;
+            for (var i = 0; i < arr.length; i++) {
+                // arr reflects current _tabs after deletion; the closed tab's
+                // neighbors shifted. Use _nextTabId ordering as a proxy: the
+                // tab with the highest id below the closed tab's id, else lowest.
+            }
+            // Simpler: activate the last tab in the array (most recently added
+            // survivor), which is the most likely "previous" in usage.
+            var newActive = arr[arr.length - 1] || arr[0];
+            activateTab(newActive.id);
+        }
+        updateTabBarVisibility();
+        schedulePersistSave();
+    }
+
+    function startRenameTab(tabId) {
+        var tab = _tabs.get(tabId);
+        if (!tab) return;
+        var tabItem = tabList && tabList.querySelector('.main-tab[data-tab-id="' + tabId + '"]');
+        if (!tabItem) return;
+        var nameSpan = tabItem.querySelector('.main-tab-name');
+        if (!nameSpan) return;
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.value = tab.name;
+        input.style.cssText = 'width:100%;font-size:0.75rem;border:none;background:transparent;color:inherit;outline:none;';
+        input.maxLength = 20;
+        nameSpan.replaceWith(input);
+        input.focus();
+        input.select();
+        function finish() {
+            var newName = input.value.trim() || tab.name;
+            tab.name = newName;
+            var newSpan = document.createElement('span');
+            newSpan.className = 'main-tab-name';
+            newSpan.textContent = newName;
+            newSpan.addEventListener('dblclick', function (e) { e.stopPropagation(); startRenameTab(tabId); });
+            input.replaceWith(newSpan);
+            schedulePersistSave();
+        }
+        input.addEventListener('blur', finish);
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') finish();
+            if (e.key === 'Escape') { input.value = tab.name; finish(); }
+        });
+    }
+
+    function applyResize() {
+        var tab = getActiveTab();
+        if (!tab || !tab.term || !tab.fitAddon) return;
+        var el = tab.term.element || tab.termDiv;
+        if (!el || el.offsetParent === null) return;
+        var dims;
+        try { dims = tab.fitAddon.proposeDimensions(); } catch (e) { return; }
+        if (!dims || isNaN(dims.cols) || isNaN(dims.rows)) return;
+        if (dims.cols === tab.term.cols && dims.rows === tab.term.rows) return;
+        if (window.monolithApi) {
+            try { window.monolithApi.resize_terminal(tab.sessionId, dims.cols, dims.rows); } catch (e) {}
+        }
+        try { tab.term.resize(dims.cols, dims.rows); } catch (e) {}
+    }
+
+    function scheduleResize() {
+        clearTimeout(_resizeTimer);
+        _resizeTimer = setTimeout(applyResize, 120);
+    }
+
+    function refit() {
+        applyResize();
+    }
+
+    function refitActiveTab() {
+        applyResize();
+    }
+
+    // Global resize listener (once, for all tabs — applies to active tab)
+    window.addEventListener('resize', function () { scheduleResize(); });
+    if (tabHost) {
+        var ro = new ResizeObserver(function () { scheduleResize(); });
+        ro.observe(tabHost);
+    }
+
+    // New-tab button — opens the file picker modal (same one as the landing page)
+    // to choose a directory, then a profile picker. The new tab opens with the
+    // chosen directory and profile's appearance.
+    if (tabNewBtn) {
+        tabNewBtn.addEventListener('click', function () {
+            promptNewTab();
+        });
+    }
+
+    // Shared new-tab flow: file picker → profile picker → createTab.
+    // Also called from the Ctrl+T shortcut handler in app.js.
+    function promptNewTab() {
+        if (typeof window.MonolithFilePicker === 'undefined' || !window.MonolithFilePicker.pickPath) return;
+        window.MonolithFilePicker.pickPath({
+            id: 'opencode_dir',
+            title: 'Choose Directory for New Tab',
+            mode: 'folder'
+        }).then(function (path) {
+            if (!path) return;  // user cancelled the file picker
+            // After picking a directory, show the profile picker.
+            promptProfileForNewTab(path);
+        });
+    }
+
+    // Minimal stub — full implementation in Task 5.2.
+    // For now, just use the active profile (no picker UI).
+    function showProfileSelectorModal(profiles, activeProfile, callback) {
+        callback(activeProfile);
+    }
+
+    // Shows a profile selection dropdown/modal, then creates the tab.
+    // Falls back to the global active profile if the user skips selection.
+    function promptProfileForNewTab(dir) {
+        if (typeof window.MonolithProfiles === 'undefined' || !window.MonolithProfiles.getProfilesList) {
+            createTab(dir, true, null);
+            return;
+        }
+        var profiles = window.MonolithProfiles.getProfilesList();
+        var activeProfile = window.MonolithProfiles.getActiveProfileName ? window.MonolithProfiles.getActiveProfileName() : 'Default';
+        // Show a lightweight profile selector modal.
+        showProfileSelectorModal(profiles, activeProfile, function (selectedProfile) {
+            createTab(dir, true, selectedProfile || activeProfile);
+        });
+    }
+
+    // --- writeToTerm router (called by Rust backend via tauri-bridge) ---
+    // Routes PTY output to the correct tab by session ID.
+    window.writeToTerm = function (data, eof, sessionId, generation) {
+        sessionId = sessionId || 'main';
+        generation = generation || 0;
+        if (generation > 0 && _sessionGeneration[sessionId] > 0 &&
+            generation < _sessionGeneration[sessionId]) {
+            return;
+        }
+        if (eof && _skipNextEof[sessionId]) {
+            _skipNextEof[sessionId] = false;
+            return;
+        }
+
+        // Find the tab for this session ID.
+        var tab = null;
+        _tabs.forEach(function (t) {
+            if (t.sessionId === sessionId) tab = t;
+        });
+        if (!tab || !tab.term) {
+            // Delegate panel-tab routing to SidebarManager (unchanged).
+            if (sessionId.startsWith('panel-tab-')) {
+                var panelTabId = sessionId.replace('panel-', '');
                 if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.writeToTab) {
-                    window.SidebarManager.writeToTab(tabId, data, eof);
+                    window.SidebarManager.writeToTab(panelTabId, data, eof);
                 }
             } else if (sessionId === 'panel') {
                 if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.writeToPanel) {
                     window.SidebarManager.writeToPanel(data, eof);
                 }
             }
-        };
-
-        term.onData((data) => {
-            if (window.monolithApi) {
-                try {
-                    window.monolithApi.send_input('main', data);
-                } catch (e) {}
-            }
-        });
-
-        window.MonolothApp.applyTerminalBg();
-
-        term.writeln('');
-        term.writeln('Monoloth Terminal');
-        term.writeln('Directory: ' + dir);
-        term.writeln('Starting ' + window.MonolothApp.getStartupLabel() + '...');
-        term.writeln('');
-
-        if (!window.monolithApi) {
-            term.writeln('Error: Bridge not available.');
             return;
         }
-    }
 
+        if (eof) {
+            tab.term.write(data);
+            startSessionExitCountdown(tab);
+            return;
+        }
+        tab.term.write(data);
+        if (tab.firstOutput) {
+            tab.firstOutput = false;
+            setTimeout(function () { if (tab === getActiveTab()) applyResize(); }, 1500);
+        }
+        if (typeof data === 'string' && data.indexOf('[session ended]') !== -1) {
+            startSessionExitCountdown(tab);
+        }
+        // Prompt detection: clear busy dot when shell returns to prompt.
+        if (/[A-Za-z]:\\[^\n]*>\s*$/.test(data) || /\nPS [^\n]*>\s*$/.test(data) || /\n[^\n]*\$\s*$/.test(data)) {
+            tab.busy = false;
+            updateBusyDot(tab);
+        }
+    };
+
+    // --- Public API (window.MonolithTerminal) ---
+    // Stays compatible with app.js callers. "initTerminal" now means:
+    // create the first main tab (if none exists) and activate it.
     window.MonolithTerminal = {
-        initTerminal: initTerminal,
-        getTerm: function () { return term; },
+        initTerminal: function (dir) {
+            // If we already have tabs (e.g., restoring persisted state), just
+            // activate the active one. Otherwise create the first tab.
+            if (_tabs.size > 0) {
+                var active = getActiveTab();
+                if (active) return activateTab(active.id);
+                var first = Array.from(_tabs.values())[0];
+                return activateTab(first.id);
+            }
+            return createTab(dir, true);
+        },
+        getTerm: function () {
+            var tab = getActiveTab();
+            return tab ? tab.term : null;
+        },
         refit: refit,
-        dispose: dispose,
+        refitActiveTab: refitActiveTab,
+        dispose: function () {
+            // Tear down ALL tabs: terminate PTYs, dispose xterms, remove DOM.
+            // Called from backToLanding. Must terminate PTYs BEFORE clearing
+            // or backend sessions leak.
+            var hadMain = false;
+            _tabs.forEach(function (tab) {
+                clearTabExitCountdown(tab);
+                if (window.monolithApi) {
+                    try { window.monolithApi.terminate_terminal(tab.sessionId).catch(function () {}); } catch (e) {}
+                }
+                if (tab.sessionId === 'main') hadMain = true;
+                if (tab.sessionId.startsWith('main-tab-') && window.monolithApi && typeof window.monolithApi.retire_panel_tab === 'function') {
+                    try { window.monolithApi.retire_panel_tab(tab.sessionId).catch(function () {}); } catch (e) {}
+                }
+                if (tab.term) {
+                    try { tab.term.dispose(); } catch (e) {}
+                    try { if (tab.fitAddon) tab.fitAddon.dispose(); } catch (e) {}
+                }
+                // Remove DOM elements (containers + tab bar items).
+                if (tab.container && tab.container.parentNode) tab.container.remove();
+                var tabItem = tabList && tabList.querySelector('.main-tab[data-tab-id="' + tab.id + '"]');
+                if (tabItem) tabItem.remove();
+                delete _sessionGeneration[tab.sessionId];
+                delete _skipNextEof[tab.sessionId];
+            });
+            // If the "main" tab was among those disposed, also kill hidden-* PTYs.
+            if (hadMain && window.monolithApi && typeof window.monolithApi.terminate_hidden === 'function') {
+                try { window.monolithApi.terminate_hidden().catch(function () {}); } catch (e) {}
+            }
+            _tabs.clear();
+            _activeTabId = null;
+            _nextTabId = 1;  // Reset so the next first tab gets session_id "main"
+            updateTabBarVisibility();
+        },
         setSkipNextEof: function (sessionId, val) { _skipNextEof[sessionId] = val; },
         setSessionGeneration: function (sessionId, gen) { _sessionGeneration[sessionId] = gen; },
-        // Generation/skip helpers used by showTerminal/restartSession which stay in app.js.
         incrementSessionGeneration: function (sessionId) {
             _sessionGeneration[sessionId] = (_sessionGeneration[sessionId] || 0) + 1;
         },
         deleteSessionGeneration: function (sessionId) { delete _sessionGeneration[sessionId]; },
         hasSkipNextEof: function (sessionId) { return _skipNextEof[sessionId] !== undefined; },
         deleteSkipNextEof: function (sessionId) { delete _skipNextEof[sessionId]; },
-        isRunning: function () { return _terminalRunning; },
-        setRunning: function (v) { _terminalRunning = v; },
-        setWindowsPtyInfo: function (info) { _windowsPtyInfo = info || null; }
+        isRunning: function () {
+            var tab = getActiveTab();
+            return tab ? tab.running : false;
+        },
+        anyRunning: function () {
+            var any = false;
+            _tabs.forEach(function (t) { if (t.running) any = true; });
+            return any;
+        },
+        anyBusy: function () {
+            var any = false;
+            _tabs.forEach(function (t) { if (t.running && t.busy) any = true; });
+            return any;
+        },
+        setRunning: function (v) {
+            var tab = getActiveTab();
+            if (tab) tab.running = v;
+        },
+        setWindowsPtyInfo: function (info) { _windowsPtyInfo = info || null; },
+        // New tab-manager API
+        createTab: createTab,
+        promptNewTab: promptNewTab,
+        activateTab: activateTab,
+        closeTab: closeTab,
+        getAllTabs: function () { return Array.from(_tabs.values()); },
+        getTab: function (id) { return _tabs.get(id) || null; },
+        getActiveTab: getActiveTab,
+        getActiveTabId: function () { return _activeTabId; },
+        getTabBySessionId: function (sessionId) {
+            var found = null;
+            _tabs.forEach(function (t) { if (t.sessionId === sessionId) found = t; });
+            return found;
+        },
+        hideTabExitBanner: hideTabExitBanner,
+        initTabXterm: initTabXterm,
+        updateTabBarVisibility: updateTabBarVisibility
     };
 })();
