@@ -75,6 +75,10 @@
         return callApi('retire_panel_tab', { sessionId: sessionId });
     };
 
+    api.terminate_hidden = function () {
+        return callApi('terminate_hidden', null, function () { return { success: true }; });
+    };
+
     api.terminate = function () {
         return api.terminate_terminal('main');
     };

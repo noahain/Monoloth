@@ -153,6 +153,11 @@ pub fn retire_panel_tab(pty: State<PtyManager>, history: State<HistoryManager>, 
     pty.retire_session(&session_id);
 }
 
+#[tauri::command]
+pub fn terminate_hidden(pty: State<PtyManager>) {
+    pty.terminate_by_prefix("hidden-");
+}
+
 pub fn run_parallel_command(cmd: String, cwd: String, shell: &str) -> Result<bool, String> {
     let mut command = shell_command(&cmd, shell);
     command.current_dir(&cwd);
