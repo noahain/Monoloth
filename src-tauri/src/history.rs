@@ -181,6 +181,33 @@ impl HistoryManager {
         }
     }
 
+    /// End all active `"main-tab-"` prefixed sessions (called on window close).
+    /// Does NOT touch the `"main"` session — that's ended via `session_end()`.
+    pub fn session_end_all_main_tabs(&self) {
+        let mut inner = self.inner.lock();
+        let prefix = "main-tab-";
+        let keys: Vec<String> = inner.active_sessions
+            .keys()
+            .filter(|k| k.starts_with(prefix))
+            .cloned()
+            .collect();
+        for key in &keys {
+            if let Some(active) = inner.active_sessions.remove(key) {
+                inner.data.sessions.push(SessionEntry {
+                    profile: active.profile,
+                    command: active.command,
+                    start_time: active.start_time,
+                    end_time: Some(iso_now()),
+                    directory: active.directory,
+                });
+            }
+        }
+        if !keys.is_empty() {
+            self.purge_inner(&mut inner);
+            save_json(&history_path(), &inner.data);
+        }
+    }
+
     fn purge_inner(&self, inner: &mut HistoryInner) {
         let retention = inner.data.retention.clone();
         apply_retention(&mut inner.data.sessions, &retention);
@@ -411,6 +438,37 @@ mod tests {
         }];
         apply_retention(&mut sessions, "9999999999d");
         assert_eq!(sessions.len(), 1, "unparseable retention must not drop sessions");
+    }
+
+    #[test]
+    fn session_end_all_main_tabs_ends_only_main_tab_prefixed_sessions() {
+        let mgr = HistoryManager::new();
+        // Start sessions with unique directories so we can identify them after ending.
+        mgr.session_start_with_id("main-tab-1", "p", "c1", "/dir-main-tab-1");
+        mgr.session_start_with_id("main-tab-2", "p", "c2", "/dir-main-tab-2");
+        mgr.session_start_with_id("panel-tab-1", "p", "c3", "/dir-panel-tab-1");
+        mgr.session_start_with_id("main", "p", "c4", "/dir-main");
+
+        mgr.session_end_all_main_tabs();
+
+        let data = mgr.get_data();
+        // The two main-tab-* sessions should have ended (have end_time).
+        let main_tab_ended: Vec<_> = data.sessions.iter()
+            .filter(|s| s.directory == "/dir-main-tab-1" || s.directory == "/dir-main-tab-2")
+            .collect();
+        assert_eq!(main_tab_ended.len(), 2, "both main-tab-* sessions should have ended");
+        assert!(main_tab_ended.iter().all(|s| s.end_time.is_some()), "main-tab-* sessions must have end_time");
+
+        // The "main" and panel-tab-1 sessions should NOT have ended yet.
+        let main_ended: Vec<_> = data.sessions.iter()
+            .filter(|s| s.directory == "/dir-main")
+            .collect();
+        assert!(main_ended.is_empty(), "\"main\" session should NOT be ended by session_end_all_main_tabs");
+
+        let panel_ended: Vec<_> = data.sessions.iter()
+            .filter(|s| s.directory == "/dir-panel-tab-1")
+            .collect();
+        assert!(panel_ended.is_empty(), "panel-tab-* sessions should NOT be ended by session_end_all_main_tabs");
     }
 }
 
