@@ -87,6 +87,12 @@ class FakeElement {
         this[name] = value;
     }
 
+    removeAttribute(name) {
+        delete this[name];
+    }
+
+    scrollIntoView() {}
+
     focus() {}
     select() {}
     click() {}
@@ -345,7 +351,10 @@ test('does not load WebGL when the terminal background is transparent', async ()
     assert.equal(harness.getWebglLoadCount(), 0);
 });
 
-test('showTerminal waits for previous main session termination before starting another', async () => {
+test('showTerminal creates a fresh first tab', async () => {
+    // In the tab-based model, showTerminal disposes existing tabs and then
+    // creates a new first tab. The new tab's start_terminal fires immediately,
+    // independent of any prior terminate state.
     const harness = createHarness({
         type: 'none',
         image: '',
@@ -357,25 +366,26 @@ test('showTerminal waits for previous main session termination before starting a
     });
 
     await flushAsync();
-    let releaseTerminate;
     let startCalls = 0;
-    harness.context.window.monolithApi.terminate_terminal = () => new Promise((resolve) => { releaseTerminate = resolve; });
-    harness.context.window.monolithApi.start_terminal = () => {
+    let startDir = null;
+    harness.context.window.monolithApi.terminate_terminal = () => Promise.resolve();
+    harness.context.window.monolithApi.start_terminal = (_sessionId, dir) => {
         startCalls += 1;
-        return Promise.resolve({ success: true, generation: 2 });
+        startDir = dir;
+        return Promise.resolve({ success: true, generation: 1 });
     };
-    harness.context.window.MonolithTerminal.setRunning(true);
 
     harness.context.window.MonolothApp.showTerminal('C:\\repo');
     await flushAsync();
-    assert.equal(startCalls, 0);
-
-    releaseTerminate();
-    await flushAsync();
-    assert.equal(startCalls, 1);
+    assert.equal(startCalls, 1, 'showTerminal must start one session');
+    assert.equal(startDir, 'C:\\repo');
 });
 
-test('showTerminal ignores stale delayed launches when a newer launch starts', async () => {
+test('showTerminal: latest dir wins when called twice in quick succession', async () => {
+    // In the tab-based model, the second showTerminal disposes the first tab
+    // (fire-and-forget) and creates a new one. The first tab's late start_terminal
+    // result must be discarded so a "Failed to start" banner does not appear on
+    // the active terminal.
     const harness = createHarness({
         type: 'none',
         image: '',
@@ -387,23 +397,31 @@ test('showTerminal ignores stale delayed launches when a newer launch starts', a
     });
 
     await flushAsync();
-    let releaseFirstTerminate;
     const startedDirs = [];
-    harness.context.window.monolithApi.terminate_terminal = () => new Promise((resolve) => { releaseFirstTerminate = resolve; });
+    harness.context.window.monolithApi.terminate_terminal = () => Promise.resolve();
+    let firstResolve;
     harness.context.window.monolithApi.start_terminal = (_sessionId, dir) => {
         startedDirs.push(dir);
-        return Promise.resolve({ success: true, generation: startedDirs.length + 1 });
+        if (dir === 'C:\\old') return new Promise((resolve) => { firstResolve = resolve; });
+        return Promise.resolve({ success: true, generation: 2 });
     };
     harness.context.window.MonolithTerminal.setRunning(true);
 
     harness.context.window.MonolothApp.showTerminal('C:\\old');
     harness.context.window.MonolothApp.showTerminal('C:\\new');
     await flushAsync();
-    assert.deepEqual(startedDirs, ['C:\\new']);
 
-    releaseFirstTerminate();
+    // The new tab is the active one. Resolving the OLD start_terminal with a
+    // failure must NOT cause the new terminal to display a "Failed to start" banner.
+    const T = harness.context.window.MonolithTerminal;
+    const newTerm = T.getTerm();
+    const writeSpy = [];
+    const origWrite = newTerm.write.bind(newTerm);
+    newTerm.write = function (data) { writeSpy.push(data); return origWrite(data); };
+    firstResolve({ success: false, error: 'late' });
     await flushAsync();
-    assert.deepEqual(startedDirs, ['C:\\new']);
+    const failed = writeSpy.filter((d) => /Failed to start/.test(d));
+    assert.equal(failed.length, 0, 'stale launch must not write to the active terminal');
 });
 
 test('titlebar refresh ignores late EOF from the previous main generation', async () => {
@@ -530,8 +548,9 @@ test('panel-tab restart ignores late EOF from the previous generation', async ()
 
 // Regression for bug 1: the async start_terminal callback inside initTerminal's
 // requestAnimationFrame must not write to a terminal instance that has been
-// replaced by a newer initTerminal call (e.g. titlebar refresh during slow spawn).
-test('initTerminal ignores late start_terminal result after a new terminal is created', async () => {
+// replaced by closing the current tab and creating a new one (e.g. titlebar
+// refresh during slow spawn closes the tab and starts a new one).
+test('start_terminal callback ignores a tab that was closed before it resolved', async () => {
     const harness = createHarness({
         type: 'none',
         image: '',
@@ -542,25 +561,29 @@ test('initTerminal ignores late start_terminal result after a new terminal is cr
         ctaButtonStyle: 'blur'
     });
     const T = harness.context.window.MonolithTerminal;
+    harness.context.window.monolithApi.get_config = (key) => {
+        if (key === 'persistMainTabs') return Promise.resolve(false);
+        return Promise.resolve(null);
+    };
     let resolveFirst;
     harness.context.window.monolithApi.start_terminal = () => new Promise((resolve) => { resolveFirst = resolve; });
     T.initTerminal('C:\\old');
     await flushAsync();
     const oldTerm = T.getTerm();
+    assert.ok(oldTerm, 'initTerminal should create a first tab');
 
-    // Start a second terminal while the first start_terminal is still pending.
-    harness.context.window.monolithApi.start_terminal = () => Promise.resolve({ success: true, generation: 2 });
-    T.initTerminal('C:\\new');
+    // Close the tab (force=true skips the busy confirm). This fires
+    // terminate_terminal and removes the tab from the manager.
+    T.closeTab(T.getActiveTab().id, true);
     await flushAsync();
-    const newTerm = T.getTerm();
-    assert.notStrictEqual(oldTerm, newTerm, 'initTerminal must replace the terminal instance');
 
     // The original RAF callback's start_terminal finally resolves with a failure.
-    // It must NOT call writeln on the new terminal (which would write "Failed to
-    // start" onto the live terminal after the user already started a new one).
+    // It must NOT call writeln on a now-detached tab.
     const writeSpyCalls = [];
-    const origWrite = newTerm.write.bind(newTerm);
-    newTerm.write = function (data) { writeSpyCalls.push(data); return origWrite(data); };
+    if (oldTerm.write) {
+        const origWrite = oldTerm.write.bind(oldTerm);
+        oldTerm.write = function (data) { writeSpyCalls.push(data); return origWrite(data); };
+    }
     resolveFirst({ success: false, error: 'late' });
     await flushAsync();
 

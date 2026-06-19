@@ -51,6 +51,8 @@ class FakeElement {
     querySelector() { return new FakeElement('nested'); }
     querySelectorAll() { return []; }
     setAttribute(name, value) { this[name] = value; }
+    removeAttribute(name) { delete this[name]; }
+    scrollIntoView() {}
     focus() {}
     select() {}
     click() {}
@@ -278,7 +280,11 @@ test('writeToTerm honors skipNextEof', async () => {
     assert.equal(term.writeCount, before + 1, 'skip flag must clear after one eof');
 });
 
-test('initTerminal cancels pending session-exit auto-return', async () => {
+test('closeTab cancels pending session-exit auto-return', async () => {
+    // In the tab-based model, closing a tab clears its exit countdown so
+    // the 5s setInterval does not fire. (Closing the LAST tab also calls
+    // backToLanding — that's expected, but the countdown timer itself
+    // must be cleared so it doesn't fire a second time.)
     const harness = createHarness({ type: 'none', layer: 'behind', transparency: 0 });
     const timers = installTimerControls(harness.context);
     const T = harness.context.window.MonolithTerminal;
@@ -288,12 +294,16 @@ test('initTerminal cancels pending session-exit auto-return', async () => {
     T.initTerminal('C:\\old');
     await flushAsync();
     harness.context.window.writeToTerm('', true, 'main', 0);
-    assert.equal(timers.count(), 1);
+    assert.equal(timers.count(), 1, 'EOF must arm an exit countdown');
 
-    T.initTerminal('C:\\new');
-    timers.tick(1, 5);
+    T.closeTab(T.getActiveTab().id, true);
+    await flushAsync();
+    const afterClose = backToLandingCalls;
+    timers.tick(1, 5);  // would fire the countdown 5x if not cleared
 
-    assert.equal(backToLandingCalls, 0, 'old exit countdown must not auto-return after a new terminal starts');
+    // The close itself called backToLanding (one call), but the countdown
+    // must NOT fire — so backToLanding count is unchanged after ticking.
+    assert.equal(backToLandingCalls, afterClose, 'exit countdown must not fire after tab close');
 });
 
 // --- Resize-corruption regression tests ---
@@ -322,8 +332,9 @@ test('refit resizes the PTY before xterm', async () => {
     const origResize = term.resize.bind(term);
     term.resize = function (cols, rows) { order.push('term:' + cols + 'x' + rows); origResize(cols, rows); };
 
-    // Force a size change: shrink the container, then refit.
-    const container = harness.context.document.getElementById('terminal');
+    // Force a size change: shrink the xterm's parent, then refit.
+    // The FakeFitAddon reads from parent.clientWidth/Height.
+    const container = term.element.parentNode;
     container.clientWidth = 360;   // 360/9 = 40 cols
     container.clientHeight = 170;  // 170/17 = 10 rows
     order.length = 0;
@@ -340,7 +351,7 @@ test('refit does not force a synchronous refresh', async () => {
     await flushAsync();
     const term = T.getTerm();
 
-    const container = harness.context.document.getElementById('terminal');
+    const container = term.element;
     container.clientWidth = 360;
     container.clientHeight = 170;
     term.refreshCount = 0;
