@@ -1008,6 +1008,21 @@ body.adaptive-light .form-group label {
     color: var(--modal-text-dim);
 }
 
+.settings-toggle { position: relative; display: inline-block; width: 40px; height: 22px; }
+.settings-toggle input { opacity: 0; width: 0; height: 0; }
+.settings-toggle-slider {
+    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255,255,255,0.15); border-radius: 22px; transition: 0.2s;
+}
+.settings-toggle-slider::before {
+    content: ''; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px;
+    background: #ccc; border-radius: 50%; transition: 0.2s;
+}
+.settings-toggle input:checked + .settings-toggle-slider { background: #4a90d9; }
+.settings-toggle input:checked + .settings-toggle-slider::before { transform: translateX(18px); }
+body.light-mode .settings-toggle-slider,
+body.adaptive-light .settings-toggle-slider { background: rgba(0,0,0,0.15); }
+
 .settings-input {
     width: 100%;
     background: rgba(255, 255, 255, 0.04);
