@@ -61,6 +61,39 @@
         }, 350);
     }
 
+    function applyProfileAppearance(appearance) {
+        if (!appearance) return;
+        document.body.classList.add('theme-transitioning');
+
+        var themeMode = appearance.theme_mode || 'dark';
+        _themeMode = themeMode;
+        document.body.classList.remove('light-mode', 'adaptive-light');
+        if (themeMode === 'light') {
+            document.body.classList.add('light-mode');
+        } else if (themeMode === 'auto') {
+            document.body.classList.add('adaptive-light');
+        }
+
+        var ctaStyle = appearance.cta_button_style || 'blur';
+        _ctaButtonStyle = ctaStyle;
+        document.body.classList.remove('cta-blur', 'cta-glass', 'cta-solid', 'cta-outline');
+        document.body.classList.add('cta-' + ctaStyle);
+
+        syncOutlineOnLightClass();
+
+        if (window.MonolothApp && window.MonolothApp.applyTerminalBg) {
+            window.MonolothApp.applyTerminalBg({
+                type: appearance.bg_type || 'none',
+                transparency: appearance.bg_transparency || 75,
+                bgLayer: appearance.bg_layer || 'behind'
+            });
+        }
+
+        setTimeout(function () {
+            document.body.classList.remove('theme-transitioning');
+        }, 400);
+    }
+
     function syncOutlineOnLightClass() {
         var isOutline = _ctaButtonStyle === 'outline';
         var isLight = document.body.classList.contains('light-mode') ||
@@ -145,6 +178,7 @@
     window.MonolithTheme = {
         applyTheme: applyTheme,
         applyCtaStyle: applyCtaStyle,
+        applyProfileAppearance: applyProfileAppearance,
         syncOutlineOnLightClass: syncOutlineOnLightClass,
         analyzeWallpaperBrightness: analyzeWallpaperBrightness,
         hexToLuminance: hexToLuminance,

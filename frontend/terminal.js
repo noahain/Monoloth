@@ -216,6 +216,17 @@
         updateBusyDot(tab);
         schedulePersistSave();
 
+        if (tab.profile && window.monolithApi && window.monolithApi.get_profile_appearance) {
+            window.monolithApi.get_profile_appearance(tab.profile).then(function (appearance) {
+                if (window.MonolithTheme && window.MonolithTheme.applyProfileAppearance) {
+                    window.MonolithTheme.applyProfileAppearance(appearance);
+                }
+                if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.refitActiveTab) {
+                    window.SidebarManager.refitActiveTab();
+                }
+            }).catch(function () {});
+        }
+
         if (!tab.term) {
             return initTabXterm(tab);
         }
