@@ -158,7 +158,7 @@
     };
 
     api.get_file_picker_type = function () {
-        return callApiValue('get_config', { key: 'file_picker_type' }, 'custom');
+        return callApiValue('get_config', { key: 'file_picker_type' }, 'native');
     };
 
     api.set_file_picker_type = function (type) {

@@ -88,7 +88,7 @@ fn defaults() -> Map<String, Value> {
     })).unwrap());
     m.insert("theme_mode".into(), Value::String("dark".into()));
     m.insert("cta_button_style".into(), Value::String("blur".into()));
-    m.insert("file_picker_type".into(), Value::String("custom".into()));
+    m.insert("file_picker_type".into(), Value::String("native".into()));
     m.insert("fp_last_dir_bg_image".into(), Value::String("".into()));
     m.insert("fp_last_dir_choose".into(), Value::String("".into()));
     m.insert("startup_command".into(), Value::String("opencode".into()));
@@ -422,7 +422,7 @@ mod tests {
         let config = AppConfig::new();
         assert_eq!(config.get("bg_type").as_str().unwrap(), "none");
         assert_eq!(config.get("theme_mode").as_str().unwrap(), "dark");
-        assert_eq!(config.get("file_picker_type").as_str().unwrap(), "custom");
+        assert_eq!(config.get("file_picker_type").as_str().unwrap(), "native");
         assert_eq!(config.get("window_width").as_i64().unwrap(), 1200);
         assert_eq!(config.get("window_height").as_i64().unwrap(), 700);
         assert_eq!(config.get("active_profile").as_str().unwrap(), "Default");

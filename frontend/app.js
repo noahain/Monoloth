@@ -14,7 +14,7 @@
     let _currentLaunchDir = '';
     var _keyDownHandler = null;
     var _mouseDownHandler = null;
-    var _useCustomTitlebar = false;
+    var _useCustomTitlebar = true;
     var _isMaximized = false;
     var _maximizeSyncTimer = null;
     var _panelRunning = false;

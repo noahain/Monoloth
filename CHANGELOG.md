@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Custom titlebar is now the default on fresh installs.
+- System-native file picker is now the default (the custom in-app picker
+  remains available as an opt-in choice).
+- History retention default increased from 7 days to 30 days.
+
 ## [2.1.10] - 2026-06-18
 
 ### Added

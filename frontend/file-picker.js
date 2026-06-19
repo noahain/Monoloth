@@ -13,7 +13,7 @@
     }
     function showStatus(id, message, isError) { _statusReporter(id, message, isError); }
 
-    var _filePickerType = 'custom';
+    var _filePickerType = 'native';
 
     // --- File Picker config (settings UI) ---
 
@@ -21,7 +21,7 @@
         if (!window.monolithApi) return;
         window.monolithApi.get_file_picker_type()
             .then(function (res) {
-                _filePickerType = res || 'custom';
+                _filePickerType = res || 'native';
                 updatePickerTypeUI(_filePickerType);
             })
             .catch(function () {});
@@ -161,7 +161,7 @@
         };
         return window.monolithApi.get_file_picker_type()
             .then(function (pickerType) {
-                _filePickerType = pickerType || 'custom';
+                _filePickerType = pickerType || 'native';
                 if (_filePickerType === 'native') {
                     var nativeMethod = opts.mode === 'file' ? 'native_pick_file' : 'native_pick_directory';
                     return window.monolithApi[nativeMethod](opts.filter)
