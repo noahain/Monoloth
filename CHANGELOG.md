@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.11] - 2026-06-19
+
 ### Changed
 - Custom titlebar is now the default on fresh installs.
 - System-native file picker is now the default (the custom in-app picker
@@ -326,7 +328,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release.
 
-[Unreleased]: https://github.com/noahain/Monoloth/compare/main...beta
+[Unreleased]: https://github.com/noahain/Monoloth/compare/v2.1.11...beta
+[2.1.11]: https://github.com/noahain/Monoloth/compare/v2.1.10...v2.1.11
 [2.1.10]: https://github.com/noahain/Monoloth/compare/v2.1.9...v2.1.10
 [2.1.9]: https://github.com/noahain/Monoloth/compare/v2.1.8...v2.1.9
 [2.1.8]: https://github.com/noahain/Monoloth/compare/v2.1.7...v2.1.8
