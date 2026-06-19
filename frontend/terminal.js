@@ -161,6 +161,10 @@
             e.stopPropagation();
             startRenameTab(tabId);
         });
+        tabItem.addEventListener('contextmenu', function (e) {
+            e.preventDefault();
+            showMainTabContextMenu(tabId, e.clientX, e.clientY);
+        });
 
         var tab = {
             id: tabId,
@@ -664,6 +668,78 @@
         // Show a lightweight profile selector modal.
         showProfileSelectorModal(profiles, activeProfile, function (selectedProfile) {
             createTab(dir, true, selectedProfile || activeProfile);
+        });
+    }
+
+    function showMainTabContextMenu(tabId, x, y) {
+        var tab = _tabs.get(tabId);
+        if (!tab) return;
+        // Remove any existing context menu.
+        var existing = document.querySelector('.main-tab-context-menu');
+        if (existing) existing.remove();
+
+        var menu = document.createElement('div');
+        menu.className = 'main-tab-context-menu';
+        menu.style.cssText = 'position:fixed;left:' + x + 'px;top:' + y + 'px;background:var(--modal-bg-glass,#1e1e1e);border:1px solid var(--modal-border,rgba(255,255,255,0.1));border-radius:8px;padding:4px;z-index:10000;min-width:160px;font-family:inherit;color:var(--modal-text,#e0e0e0);box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+
+        menu.innerHTML =
+            '<div class="main-tab-context-item" data-action="new">New Tab</div>' +
+            '<div class="main-tab-context-item" data-action="close">Close Tab</div>' +
+            '<div class="main-tab-context-divider" style="height:1px;background:rgba(255,255,255,0.08);margin:4px 0;"></div>' +
+            '<div class="main-tab-context-item" data-action="rename">Rename Tab</div>' +
+            '<div class="main-tab-context-item" data-action="profile">Switch Profile</div>';
+
+        // Style the menu items.
+        menu.querySelectorAll('.main-tab-context-item').forEach(function (item) {
+            item.style.cssText = 'padding:6px 12px;cursor:pointer;font-size:0.8rem;border-radius:4px;';
+            item.addEventListener('mouseenter', function () { item.style.background = 'rgba(255,255,255,0.08)'; });
+            item.addEventListener('mouseleave', function () { item.style.background = 'transparent'; });
+        });
+
+        menu.addEventListener('click', function (e) {
+            var action = e.target.getAttribute('data-action');
+            menu.remove();
+            if (action === 'new') promptNewTab();
+            if (action === 'close') closeTab(tabId);
+            if (action === 'rename') startRenameTab(tabId);
+            if (action === 'profile') showProfileSwitchForTab(tabId);
+        });
+
+        document.body.appendChild(menu);
+        // Dismiss on outside click.
+        setTimeout(function () {
+            document.addEventListener('click', function dismiss () {
+                menu.remove();
+                document.removeEventListener('click', dismiss);
+            });
+        }, 0);
+    }
+
+    function showProfileSwitchForTab(tabId) {
+        var tab = _tabs.get(tabId);
+        if (!tab) return;
+        if (typeof window.MonolithProfiles === 'undefined' || !window.MonolithProfiles.getProfilesList) return;
+        var profiles = window.MonolithProfiles.getProfilesList();
+        var currentProfile = tab.profile || (window.MonolithProfiles.getActiveProfileName ? window.MonolithProfiles.getActiveProfileName() : 'Default');
+        showProfileSelectorModal(profiles, currentProfile, function (selectedProfile) {
+            if (!selectedProfile) return;
+            tab.profile = selectedProfile;
+            // If this is the active tab, apply the new profile's appearance immediately.
+            if (_activeTabId === tabId) {
+                if (window.monolithApi && window.monolithApi.get_profile_appearance) {
+                    window.monolithApi.get_profile_appearance(selectedProfile).then(function (appearance) {
+                        if (window.MonolithTheme && window.MonolithTheme.applyProfileAppearance) {
+                            window.MonolithTheme.applyProfileAppearance(appearance);
+                        }
+                        if (tab.term && window.MonolithTheme) {
+                            var isLight = document.body.classList.contains('light-mode') || document.body.classList.contains('adaptive-light');
+                            var newTheme = isLight ? window.MonolithTheme.getTerminalLightTheme() : window.MonolithTheme.getTerminalDarkTheme();
+                            tab.term.setOption('theme', newTheme);
+                        }
+                    }).catch(function () {});
+                }
+            }
+            schedulePersistSave();
         });
     }
 
