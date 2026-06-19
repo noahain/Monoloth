@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
     'use strict';
 
     const landing = document.getElementById('landing');
@@ -170,7 +170,7 @@
         chooseBtn.addEventListener('click', () => {
             waitForBridge(3000, (ready) => {
                 if (!ready) {
-                    chooseBtn.querySelector('span').textContent = 'Failed to initialize â€” please restart the app';
+                    chooseBtn.querySelector('span').textContent = 'Failed to initialize Ã¢â‚¬â€ please restart the app';
                     chooseBtn.style.color = 'var(--accent-red)';
                     return;
                 }
@@ -1347,16 +1347,8 @@
                 terminalView.removeEventListener('animationend', handler);
             });
         }
-        // If persistence is on and we have saved tabs, restore them. Else create one fresh tab.
-        // Show a brief loading state while the async restore resolves to avoid an empty flash.
-        var restoreHost = document.getElementById('main-tab-host');
-        if (restoreHost) restoreHost.setAttribute('data-loading', 'true');
-        window.MonolithTerminal.restorePersistedTabs(function (restored) {
-            if (restoreHost) restoreHost.removeAttribute('data-loading');
-            if (!restored) {
-                window.MonolithTerminal.initTerminal(dir);
-            }
-        });
+        // Create a fresh tab with the chosen directory.
+        window.MonolithTerminal.initTerminal(dir);
         loadBackgroundConfig();
         if (typeof window.SidebarManager !== 'undefined') {
             window.SidebarManager.show();
@@ -1863,7 +1855,7 @@
         }
     }
 
-    // Add profile button — moved to profiles.js (window.MonolithProfiles)
+    // Add profile button â€” moved to profiles.js (window.MonolithProfiles)
 
     // Load profiles on init
     window.MonolithProfiles.loadProfiles();
@@ -2007,6 +1999,7 @@
                     }
                 }
             }
+
         },
         setSkipNextEof: function (sessionId, val) {
             window.MonolithTerminal.setSkipNextEof(sessionId, val);

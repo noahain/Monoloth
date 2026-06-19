@@ -123,9 +123,8 @@
         var sessionId = isFirst ? 'main' : 'main-tab-' + _nextTabId;
         _nextTabId++;
 
-        // Name the first tab from the dir basename; subsequent tabs default to "Terminal".
         var tabName = 'Terminal';
-        if (isFirst && dir) {
+        if (dir) {
             var base = dir.replace(/[\\/]+$/, '').split(/[\\/]/).pop();
             if (base) tabName = base;
         }
@@ -579,32 +578,174 @@
         ro.observe(tabHost);
     }
 
-    // New-tab button — opens the file picker modal (same one as the landing page)
-    // to choose a directory, then a profile picker. The new tab opens with the
-    // chosen directory and profile's appearance.
+    var _newTabCardOverlay = null;
+
     if (tabNewBtn) {
         tabNewBtn.addEventListener('click', function () {
-            promptNewTab();
+            showNewTabCard();
         });
     }
 
-    // Shared new-tab flow: file picker → profile picker → createTab.
-    // Also called from the Ctrl+T shortcut handler in app.js.
-    function promptNewTab() {
-        if (typeof window.MonolithFilePicker === 'undefined' || !window.MonolithFilePicker.pickPath) return;
-        window.MonolithFilePicker.pickPath({
-            id: 'opencode_dir',
-            title: 'Choose Directory for New Tab',
-            mode: 'folder'
-        }).then(function (path) {
-            if (!path) return;  // user cancelled the file picker
-            // After picking a directory, show the profile picker.
-            promptProfileForNewTab(path);
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && _newTabCardOverlay) {
+            var activeEl = document.activeElement;
+            if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) return;
+            hideNewTabCard();
+        }
+    });
+
+    function createTabFromCard(dir) {
+        var profile = (window.MonolithProfiles && window.MonolithProfiles.getActiveProfileName) ? window.MonolithProfiles.getActiveProfileName() : null;
+        hideNewTabCard();
+        createTab(dir, true, profile);
+    }
+
+    function showNewTabCard() {
+        if (_newTabCardOverlay) return;
+        var existing = tabHost && tabHost.querySelector('.new-tab-card-overlay');
+        if (existing) return;
+        var activeProfile = (window.MonolithProfiles && window.MonolithProfiles.getActiveProfileName) ? window.MonolithProfiles.getActiveProfileName() : 'Default';
+
+        var overlay = document.createElement('div');
+        overlay.className = 'new-tab-card-overlay';
+
+        var wrapper = document.createElement('div');
+        wrapper.className = 'new-tab-card-wrapper';
+
+        var card = document.createElement('div');
+        card.className = 'landing-card';
+
+        var toolbar = document.createElement('div');
+        toolbar.className = 'landing-card-toolbar';
+
+        var agentLabel = document.createElement('div');
+        agentLabel.className = 'landing-card-agent';
+        var label = (window.MonolothApp && window.MonolothApp.getStartupLabel) ? window.MonolothApp.getStartupLabel() : 'TUI';
+        agentLabel.innerHTML = '<span>' + escapeHtml(label) + '</span>';
+
+        var actions = document.createElement('div');
+        actions.className = 'landing-card-actions';
+
+        var profileBtn = document.createElement('button');
+        profileBtn.className = 'profile-selector-btn';
+        profileBtn.innerHTML = '<span id="new-tab-profile-name">' + escapeHtml(activeProfile) + '</span>' +
+            '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+        profileBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (window.MonolithProfiles && typeof window.MonolithProfiles.openProfileSwitcher === 'function') {
+                window.MonolithProfiles.openProfileSwitcher();
+            }
+            setTimeout(function () {
+                var nameEl = document.getElementById('new-tab-profile-name');
+                if (nameEl && window.MonolithProfiles && window.MonolithProfiles.getActiveProfileName) {
+                    nameEl.textContent = window.MonolithProfiles.getActiveProfileName();
+                }
+            }, 600);
         });
+        actions.appendChild(profileBtn);
+        toolbar.appendChild(agentLabel);
+        toolbar.appendChild(actions);
+        card.appendChild(toolbar);
+
+        var chooseBtn = document.createElement('button');
+        chooseBtn.className = 'dir-primary-btn';
+        chooseBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' +
+            '<span>Choose Project Directory</span>';
+        chooseBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (typeof window.MonolithFilePicker === 'undefined' || !window.MonolithFilePicker.pickPath) return;
+            window.MonolithFilePicker.pickPath({
+                id: 'opencode_dir',
+                title: 'Choose Directory for New Tab',
+                mode: 'folder'
+            }).then(function (path) {
+                if (!path) return;
+                createTabFromCard(path);
+            });
+        });
+        card.appendChild(chooseBtn);
+
+        var recentSection = document.createElement('div');
+        recentSection.className = 'recent-projects-section';
+        recentSection.innerHTML = '<div class="recent-section-label">Recent Projects</div>';
+        var recentList = document.createElement('div');
+        recentList.className = 'recent-projects-list';
+        recentList.id = 'new-tab-recent-list';
+        recentSection.appendChild(recentList);
+        card.appendChild(recentSection);
+
+        wrapper.appendChild(card);
+        overlay.appendChild(wrapper);
+
+        overlay.addEventListener('click', function (e) {
+            if (e.target === overlay) hideNewTabCard();
+        });
+
+        if (tabHost) tabHost.appendChild(overlay);
+        _newTabCardOverlay = overlay;
+
+        void overlay.offsetWidth;
+        overlay.classList.add('anim-enter');
+        wrapper.classList.add('anim-enter');
+        overlay.addEventListener('animationend', function onEnd(e) {
+            if (e.target === overlay) {
+                overlay.classList.remove('anim-enter');
+                overlay.removeEventListener('animationend', onEnd);
+            }
+        });
+        wrapper.addEventListener('animationend', function onEnd(e) {
+            if (e.target === wrapper) {
+                wrapper.classList.remove('anim-enter');
+                wrapper.removeEventListener('animationend', onEnd);
+            }
+        });
+
+        renderNewTabRecentDirs(recentList);
+    }
+
+    function hideNewTabCard() {
+        if (!_newTabCardOverlay) return;
+        var overlay = _newTabCardOverlay;
+        var wrapper = overlay.querySelector('.new-tab-card-wrapper');
+        overlay.classList.add('anim-exit');
+        if (wrapper) wrapper.classList.add('anim-exit');
+        overlay.addEventListener('animationend', function onEnd(e) {
+            if (e.target === overlay) {
+                overlay.removeEventListener('animationend', onEnd);
+                if (overlay.parentNode) overlay.remove();
+            }
+        });
+        _newTabCardOverlay = null;
+    }
+
+    function renderNewTabRecentDirs(listEl) {
+        if (!window.monolithApi) return;
+        window.monolithApi.get_recent_directories().then(function (dirs) {
+            if (!Array.isArray(dirs) || dirs.length === 0) {
+                var section = listEl.closest('.recent-projects-section');
+                if (section) section.style.display = 'none';
+                return;
+            }
+            dirs.slice(0, 7).forEach(function (dirPath) {
+                var item = document.createElement('div');
+                item.className = 'recent-project-item';
+                item.innerHTML = '<div class="recent-project-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>' +
+                    '<span class="recent-project-path">' + escapeHtml(dirPath) + '</span>' +
+                    '<div class="recent-project-arrow"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div>';
+                item.title = dirPath;
+                item.addEventListener('click', function () {
+                    createTabFromCard(dirPath);
+                });
+                listEl.appendChild(item);
+            });
+        }).catch(function () {});
+    }
+
+    function promptNewTab() {
+        showNewTabCard();
     }
 
     function showProfileSelectorModal(profiles, activeProfile, callback) {
-        // Build a simple modal overlay for profile selection.
         var overlay = document.createElement('div');
         overlay.className = 'main-tab-profile-modal-overlay';
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
@@ -654,21 +795,6 @@
         overlay.appendChild(modal);
         overlay.addEventListener('click', function (e) { if (e.target === overlay) { overlay.remove(); callback(null); } });
         document.body.appendChild(overlay);
-    }
-
-    // Shows a profile selection dropdown/modal, then creates the tab.
-    // Falls back to the global active profile if the user skips selection.
-    function promptProfileForNewTab(dir) {
-        if (typeof window.MonolithProfiles === 'undefined' || !window.MonolithProfiles.getProfilesList) {
-            createTab(dir, true, null);
-            return;
-        }
-        var profiles = window.MonolithProfiles.getProfilesList();
-        var activeProfile = window.MonolithProfiles.getActiveProfileName ? window.MonolithProfiles.getActiveProfileName() : 'Default';
-        // Show a lightweight profile selector modal.
-        showProfileSelectorModal(profiles, activeProfile, function (selectedProfile) {
-            createTab(dir, true, selectedProfile || activeProfile);
-        });
     }
 
     function showMainTabContextMenu(tabId, x, y) {
@@ -849,8 +975,10 @@
             }
             _tabs.clear();
             _activeTabId = null;
-            _nextTabId = 1;  // Reset so the next first tab gets session_id "main"
+            _nextTabId = 1;
+            hideNewTabCard();
             updateTabBarVisibility();
+            persistSaveNow();
         },
         setSkipNextEof: function (sessionId, val) { _skipNextEof[sessionId] = val; },
         setSessionGeneration: function (sessionId, gen) { _sessionGeneration[sessionId] = gen; },

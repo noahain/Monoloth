@@ -8104,9 +8104,62 @@ body.light-mode.cta-glass .update-pill {
 }
 .main-tab-container.active { display: block; }
 
+/* --- New Tab Card (landing-card replica within terminal view) --- */
+.new-tab-card-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+.new-tab-card-wrapper {
+    width: 100%;
+    max-width: 500px;
+    padding: 0 1rem;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+}
+
+.new-tab-card-overlay.anim-enter {
+    animation: fadeIn 0.2s ease forwards;
+}
+.new-tab-card-overlay.anim-exit {
+    animation: fadeOut 0.15s ease forwards;
+}
+.new-tab-card-wrapper.anim-enter {
+    animation: landingFadeIn 0.25s ease forwards;
+}
+.new-tab-card-wrapper.anim-exit {
+    animation: landingFadeOut 0.2s ease forwards;
+}
+@media (prefers-reduced-transparency: reduce) {
+    .new-tab-card-overlay {
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+}
+
 /* Reduced motion: disable hover transitions */
 @media (prefers-reduced-motion: reduce) {
     .main-tab, .main-tab-close, .main-tab-new { transition: none; }
+    .new-tab-card-overlay { transition: none; }
+}
+
+body.light-mode .new-tab-card-overlay,
+body.adaptive-light .new-tab-card-overlay {
+    background: rgba(240, 240, 240, 0.6);
 }
 
 .cmd-panel-tab-container {

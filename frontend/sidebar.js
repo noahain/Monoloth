@@ -1084,14 +1084,6 @@
         }
         html += '</select></div>';
 
-        html += '<div class="settings-row">';
-        html += '<label class="settings-label">Persist terminal tabs</label>';
-        html += '<label class="settings-toggle">';
-        html += '<input type="checkbox" id="setting-persist-main-tabs">';
-        html += '<span class="settings-toggle-slider"></span>';
-        html += '</label>';
-        html += '</div>';
-
         html += '</div></div>';
 
         html += '<div id="sidebar-status" class="appearance-status"></div>';
@@ -1197,29 +1189,6 @@
                 _panelShell = this.value;
                 if (window.monolithApi) {
                     window.monolithApi.set_config('panelShell', _panelShell).catch(function () {});
-                }
-            });
-        }
-
-        // Persist main tabs toggle
-        var persistToggle = document.getElementById('setting-persist-main-tabs');
-        if (persistToggle && window.monolithApi) {
-            window.monolithApi.get_config('persistMainTabs').then(function (val) {
-                persistToggle.checked = (val === false) ? false : true;
-            }).catch(function () {
-                persistToggle.checked = true;
-            });
-            persistToggle.addEventListener('change', function () {
-                var enabled = this.checked;
-                if (window.monolithApi) {
-                    window.monolithApi.set_config('persistMainTabs', enabled).catch(function () {});
-                    if (!enabled) {
-                        window.monolithApi.set_config('mainTabs', []).catch(function () {});
-                        window.monolithApi.set_config('mainTabActive', '').catch(function () {});
-                    }
-                }
-                if (window.MonolithTerminal && typeof window.MonolithTerminal.loadPersistenceSetting === 'function') {
-                    window.MonolithTerminal.loadPersistenceSetting(function () {});
                 }
             });
         }
