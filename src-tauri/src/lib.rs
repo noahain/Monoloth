@@ -287,6 +287,7 @@ pub fn run() {
             commands::rename_profile,
             commands::get_profile_config,
             commands::set_profile_setting,
+            commands::get_profile_appearance,
             commands::set_background_config,
             commands::toggle_custom_titlebar,
             commands::minimize_window,

@@ -329,6 +329,10 @@
         return callApi('set_profile_setting', { key: key, value: value });
     };
 
+    api.get_profile_appearance = function (profileName) {
+        return callApiValue('get_profile_appearance', { profileName: profileName }, null);
+    };
+
     // --- PTY Output Events ---
     function setupPtyListener() {
         listen('pty-output', function (event) {

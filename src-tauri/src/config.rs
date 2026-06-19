@@ -153,6 +153,11 @@ fn load_json(path: &Path) -> Map<String, Value> {
     Map::new()
 }
 
+/// Public wrapper around load_json for use by profile commands.
+pub fn load_json_pub(path: &Path) -> Map<String, Value> {
+    load_json(path)
+}
+
 fn save_json(path: &Path, map: &Map<String, Value>) {
     if let Some(parent) = path.parent() {
         if let Err(e) = fs::create_dir_all(parent) {
