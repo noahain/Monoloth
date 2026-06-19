@@ -267,6 +267,8 @@
         renameProfileInline: renameProfileInline,
         openProfileSwitcher: openProfileSwitcher,
         closeProfileSwitcher: closeProfileSwitcher,
-        isSwitcherActive: function () { return !!(profileSwitcher && profileSwitcher.classList.contains('active')); }
+        isSwitcherActive: function () { return !!(profileSwitcher && profileSwitcher.classList.contains('active')); },
+        getProfilesList: function () { return _profiles || []; },
+        getActiveProfileName: function () { return _activeProfile || 'Default'; }
     };
 })();

@@ -588,10 +588,57 @@
         });
     }
 
-    // Minimal stub — full implementation in Task 5.2.
-    // For now, just use the active profile (no picker UI).
     function showProfileSelectorModal(profiles, activeProfile, callback) {
-        callback(activeProfile);
+        // Build a simple modal overlay for profile selection.
+        var overlay = document.createElement('div');
+        overlay.className = 'main-tab-profile-modal-overlay';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+
+        var modal = document.createElement('div');
+        modal.className = 'main-tab-profile-modal';
+        modal.style.cssText = 'background:var(--modal-bg-glass,#1e1e1e);border:1px solid var(--modal-border,rgba(255,255,255,0.1));border-radius:12px;padding:20px;min-width:300px;max-width:400px;font-family:inherit;color:var(--modal-text,#e0e0e0);';
+
+        modal.innerHTML = '<h3 style="margin:0 0 12px;font-size:1rem;">Select Profile for New Tab</h3>';
+
+        var list = document.createElement('div');
+        list.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin-bottom:16px;';
+
+        profiles.forEach(function (p) {
+            var name = (typeof p === 'string') ? p : (p.name || p);
+            var item = document.createElement('div');
+            item.className = 'main-tab-profile-option';
+            item.style.cssText = 'padding:8px 12px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:0.85rem;';
+            item.style.background = (name === activeProfile) ? 'rgba(255,255,255,0.1)' : 'transparent';
+            item.textContent = name;
+            if (name === activeProfile) {
+                var check = document.createElement('span');
+                check.textContent = '\u2713';
+                check.style.marginLeft = 'auto';
+                item.appendChild(check);
+            }
+            item.addEventListener('mouseenter', function () { item.style.background = 'rgba(255,255,255,0.08)'; });
+            item.addEventListener('mouseleave', function () { item.style.background = (name === activeProfile) ? 'rgba(255,255,255,0.1)' : 'transparent'; });
+            item.addEventListener('click', function () {
+                overlay.remove();
+                callback(name);
+            });
+            list.appendChild(item);
+        });
+
+        modal.appendChild(list);
+
+        var btnRow = document.createElement('div');
+        btnRow.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
+        var cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.style.cssText = 'padding:6px 14px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:inherit;border-radius:6px;cursor:pointer;font-size:0.8rem;';
+        cancelBtn.addEventListener('click', function () { overlay.remove(); callback(null); });
+        btnRow.appendChild(cancelBtn);
+        modal.appendChild(btnRow);
+
+        overlay.appendChild(modal);
+        overlay.addEventListener('click', function (e) { if (e.target === overlay) { overlay.remove(); callback(null); } });
+        document.body.appendChild(overlay);
     }
 
     // Shows a profile selection dropdown/modal, then creates the tab.
