@@ -58,9 +58,58 @@
         if (dot) dot.style.display = tab.busy ? '' : 'none';
     }
 
-    // No-op stub — real persistence wiring lands in Task 3.x.
-    // Without this, createTab/_doCloseTab/startRenameTab throw ReferenceError.
-    function schedulePersistSave() {}
+    // --- Tab Persistence ---
+    var _persistSaveTimer = null;
+    var _persistenceEnabled = null;  // null = not yet loaded
+
+    function schedulePersistSave() {
+        if (_persistenceEnabled === null) return;  // not loaded yet
+        if (!_persistenceEnabled) return;
+        clearTimeout(_persistSaveTimer);
+        _persistSaveTimer = setTimeout(persistSaveNow, 300);
+    }
+
+    function persistSaveNow() {
+        if (!_persistenceEnabled) return;
+        if (!window.monolithApi) return;
+        var tabsArr = Array.from(_tabs.values());
+        var tabsData = tabsArr.map(function (t) {
+            return { name: t.name, dir: t.dir || '' };
+        });
+        // Save active tab by INDEX (stable across sessions), not by ephemeral tabId.
+        var activeIndex = -1;
+        if (_activeTabId) {
+            var i = 0;
+            tabsArr.forEach(function (t) {
+                if (t.id === _activeTabId) activeIndex = i;
+                i++;
+            });
+        }
+        try {
+            window.monolithApi.set_config('mainTabs', tabsData).catch(function () {});
+            window.monolithApi.set_config('mainTabActive', String(activeIndex)).catch(function () {});
+        } catch (e) {}
+    }
+
+    function loadPersistenceSetting(callback) {
+        if (!window.monolithApi) { _persistenceEnabled = false; if (callback) callback(false); return; }
+        window.monolithApi.get_config('persistMainTabs').then(function (val) {
+            // Bridge contract: get_config returns the RAW backend value via callApiValue.
+            // Returns true/false (Value::Bool), null (Value::Null or error fallback), or a string.
+            // Default ON when null/undefined (key not set or error) — matches config default.
+            _persistenceEnabled = (val === false || val === 'false') ? false : true;
+            if (callback) callback(_persistenceEnabled);
+        }).catch(function () {
+            _persistenceEnabled = true;  // default ON
+            if (callback) callback(true);
+        });
+    }
+
+    // Synchronous save on window close (beforeunload). The 300ms debounce
+    // schedulePersistSave may not have fired before the webview dies.
+    window.addEventListener('beforeunload', function () {
+        if (_persistenceEnabled) persistSaveNow();
+    });
 
     // Create a tab. The FIRST tab created uses session_id "main" (so the Rust
     // backend runs secondary commands on it). Subsequent tabs use "main-tab-N".
@@ -165,6 +214,7 @@
         }
         _activeTabId = tabId;
         updateBusyDot(tab);
+        schedulePersistSave();
 
         if (!tab.term) {
             return initTabXterm(tab);
@@ -710,6 +760,59 @@
         },
         hideTabExitBanner: hideTabExitBanner,
         initTabXterm: initTabXterm,
-        updateTabBarVisibility: updateTabBarVisibility
+        updateTabBarVisibility: updateTabBarVisibility,
+        // Tab persistence (Task 3.2)
+        schedulePersistSave: schedulePersistSave,
+        loadPersistenceSetting: loadPersistenceSetting,
+        restorePersistedTabs: function (callback) {
+            if (!window.monolithApi) { if (callback) callback(false); return; }
+            loadPersistenceSetting(function (enabled) {
+                if (!enabled) { if (callback) callback(false); return; }
+                window.monolithApi.get_config('mainTabs').then(function (tabsArr) {
+                    if (!Array.isArray(tabsArr) || tabsArr.length === 0) {
+                        if (callback) callback(false);
+                        return;
+                    }
+                    // Validate tab entries: skip malformed items (non-object, missing dir).
+                    var validTabs = tabsArr.filter(function (td) {
+                        return td && typeof td === 'object' && typeof (td.dir || '') === 'string';
+                    });
+                    if (validTabs.length === 0) { if (callback) callback(false); return; }
+
+                    window.monolithApi.get_config('mainTabActive').then(function (activeIdxStr) {
+                        var activeIdx = parseInt(activeIdxStr, 10);
+                        if (isNaN(activeIdx)) activeIdx = 0;
+                        // Create all tabs without activating.
+                        var promises = validTabs.map(function (td) {
+                            return createTab(td.dir || '', false).then(function (tab) {
+                                if (td.name && typeof td.name === 'string' && td.name !== 'Terminal') {
+                                    tab.name = td.name;
+                                    var item = tabList && tabList.querySelector('.main-tab[data-tab-id="' + tab.id + '"] .main-tab-name');
+                                    if (item) item.textContent = td.name;
+                                }
+                            });
+                        });
+                        Promise.all(promises).then(function () {
+                            var tabsArr2 = Array.from(_tabs.values());
+                            var clampedIdx = Math.max(0, Math.min(activeIdx, tabsArr2.length - 1));
+
+                            // ALWAYS activate tab 0 (session "main") first so secondary
+                            // commands run at launch (Design Decision 1). Then switch to
+                            // the saved active tab if it's different. The loading overlay
+                            // covers the brief visual transition.
+                            activateTab(tabsArr2[0].id).then(function () {
+                                if (clampedIdx !== 0) {
+                                    activateTab(tabsArr2[clampedIdx].id).then(function () {
+                                        if (callback) callback(true);
+                                    });
+                                } else {
+                                    if (callback) callback(true);
+                                }
+                            });
+                        });
+                    }).catch(function () { if (callback) callback(false); });
+                }).catch(function () { if (callback) callback(false); });
+            });
+        }
     };
 })();

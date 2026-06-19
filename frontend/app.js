@@ -1347,8 +1347,16 @@
                 terminalView.removeEventListener('animationend', handler);
             });
         }
-        // initTerminal now creates the first main tab.
-        window.MonolithTerminal.initTerminal(dir);
+        // If persistence is on and we have saved tabs, restore them. Else create one fresh tab.
+        // Show a brief loading state while the async restore resolves to avoid an empty flash.
+        var restoreHost = document.getElementById('main-tab-host');
+        if (restoreHost) restoreHost.setAttribute('data-loading', 'true');
+        window.MonolithTerminal.restorePersistedTabs(function (restored) {
+            if (restoreHost) restoreHost.removeAttribute('data-loading');
+            if (!restored) {
+                window.MonolithTerminal.initTerminal(dir);
+            }
+        });
         loadBackgroundConfig();
         if (typeof window.SidebarManager !== 'undefined') {
             window.SidebarManager.show();

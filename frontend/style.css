@@ -8077,6 +8077,11 @@ body.light-mode.cta-glass .update-pill {
     overflow: hidden;
     min-height: 0;
 }
+.main-tab-host[data-loading="true"]::after {
+    content: 'Restoring terminal tabs...';
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    color: var(--modal-text, #808080); font-family: monospace; font-size: 0.85rem;
+}
 .main-tab-container {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
