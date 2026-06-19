@@ -74,7 +74,7 @@
         if (!window.monolithApi) return;
         var tabsArr = Array.from(_tabs.values());
         var tabsData = tabsArr.map(function (t) {
-            return { name: t.name, dir: t.dir || '' };
+            return { name: t.name, dir: t.dir || '', profile: t.profile || null };
         });
         // Save active tab by INDEX (stable across sessions), not by ephemeral tabId.
         var activeIndex = -1;
@@ -919,11 +919,14 @@
                         if (isNaN(activeIdx)) activeIdx = 0;
                         // Create all tabs without activating.
                         var promises = validTabs.map(function (td) {
-                            return createTab(td.dir || '', false).then(function (tab) {
+                            return createTab(td.dir || '', false, td.profile || null).then(function (tab) {
                                 if (td.name && typeof td.name === 'string' && td.name !== 'Terminal') {
                                     tab.name = td.name;
                                     var item = tabList && tabList.querySelector('.main-tab[data-tab-id="' + tab.id + '"] .main-tab-name');
                                     if (item) item.textContent = td.name;
+                                }
+                                if (td.profile) {
+                                    tab.profile = td.profile;
                                 }
                             });
                         });
