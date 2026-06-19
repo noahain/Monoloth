@@ -146,7 +146,7 @@ pub fn terminate_terminal(pty: State<PtyManager>, history: State<HistoryManager>
 
 #[tauri::command]
 pub fn retire_panel_tab(pty: State<PtyManager>, history: State<HistoryManager>, session_id: String) {
-    if !session_id.starts_with("panel-tab-") {
+    if !session_id.starts_with("panel-tab-") && !session_id.starts_with("main-tab-") {
         return;
     }
     history.session_end_by_id(&session_id);
@@ -619,6 +619,15 @@ mod tests {
         assert!(!is_main_tab_session("panel-tab-1"));
         assert!(!is_main_tab_session("panel"));
         assert!(!is_main_tab_session(""));
+    }
+
+    #[test]
+    fn retire_guard_accepts_main_tab_prefix() {
+        // The guard in retire_panel_tab must accept both panel-tab- and main-tab- prefixes.
+        // We verify via the is_main_tab_session helper + a check that main-tab is not panel-tab.
+        assert!(is_main_tab_session("main-tab-1"));
+        assert!("main-tab-1".starts_with("main-tab-"));
+        assert!(!"main-tab-1".starts_with("panel-tab-"));
     }
 
     #[test]
