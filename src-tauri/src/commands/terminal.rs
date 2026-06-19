@@ -7,6 +7,10 @@ use tauri::State;
 
 use super::{expand_env_vars, shell_command};
 
+fn is_main_tab_session(session_id: &str) -> bool {
+    session_id.starts_with("main-tab-")
+}
+
 #[tauri::command]
 pub fn start_terminal(
     pty: State<PtyManager>,
@@ -21,6 +25,7 @@ pub fn start_terminal(
 ) -> Result<u64, String> {
     let record = record_history.unwrap_or(true);
     let is_panel = session_id == "panel" || session_id.starts_with("panel-tab-");
+    let is_main_tab = is_main_tab_session(&session_id);
     let directory = expand_env_vars(&directory);
 
     if is_panel {
@@ -76,7 +81,11 @@ pub fn start_terminal(
 
     if record {
         let display_command = if cmd_type == "custom" { &startup_cmd } else { &cmd };
-        history.session_start(&active_profile, display_command, &directory);
+        if is_main_tab {
+            history.session_start_with_id(&session_id, &active_profile, display_command, &directory);
+        } else {
+            history.session_start(&active_profile, display_command, &directory);
+        }
     }
 
     if session_id == "main" {
@@ -600,6 +609,16 @@ mod tests {
             assert!(is_safe_binary_name(preset));
         }
         assert!(!is_unix_preset("bash"));
+    }
+
+    #[test]
+    fn is_main_tab_session_detected_by_prefix() {
+        assert!(is_main_tab_session("main-tab-1"));
+        assert!(is_main_tab_session("main-tab-42"));
+        assert!(!is_main_tab_session("main"));
+        assert!(!is_main_tab_session("panel-tab-1"));
+        assert!(!is_main_tab_session("panel"));
+        assert!(!is_main_tab_session(""));
     }
 
     #[test]
