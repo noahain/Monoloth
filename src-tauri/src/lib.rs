@@ -244,6 +244,7 @@ pub fn run() {
                         cfg_for_events.set_window_maximized(is_max);
 
                         history_for_close.session_end();
+                        history_for_close.session_end_all_main_tabs();
                         history_for_close.session_end_by_id("panel");
                         history_for_close.session_end_all_panel_tabs();
                         pty_clone.terminate_all();
