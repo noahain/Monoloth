@@ -18,7 +18,9 @@
         cmd_panel: 'Ctrl+J',
         clear_terminal: 'Ctrl+K',
         switch_profile: 'Ctrl+Shift+P',
-        back_to_launcher: 'Ctrl+Shift+W'
+        back_to_launcher: 'Ctrl+Shift+W',
+        new_main_tab: 'Ctrl+T',
+        new_panel_tab: 'Ctrl+Shift+T'
     };
 
     var _shortcuts = {};

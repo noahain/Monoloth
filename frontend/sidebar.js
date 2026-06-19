@@ -532,6 +532,9 @@
             if (e.ctrlKey && e.shiftKey && e.code === 'KeyW') {
                 return false;
             }
+            if (window.MonolithShortcuts && window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('new_panel_tab'))) {
+                return false;
+            }
             return true;
         });
 
@@ -1471,6 +1474,18 @@
         setTimeout(function () {
             setupSettingsTab();
         }, 500);
+
+        // Panel new-tab shortcut (default Ctrl+Shift+T). Opens the panel if
+        // it isn't already open, then creates a fresh tab.
+        document.addEventListener('keydown', function (e) {
+            if (window.MonolithFilePicker && window.MonolithFilePicker.isActive()) return;
+            if (window.MonolithShortcuts && window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('new_panel_tab'))) {
+                e.preventDefault();
+                if (!_cmdPanelOpen) showCmdPanel();
+                createTab();
+                return;
+            }
+        });
 
         window.addEventListener('resize', function () {
             if (window._sidebarResizeTimer) clearTimeout(window._sidebarResizeTimer);

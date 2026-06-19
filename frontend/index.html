@@ -7,8 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=166">
-    <link rel="stylesheet" href="lib/xterm.css?v=166">
+    <link rel="stylesheet" href="style.css?v=167">
+    <link rel="stylesheet" href="lib/xterm.css?v=167">
     <style>
         .landing-brand, .landing-card, .landing-status-bar {
             visibility: hidden;
@@ -421,6 +421,26 @@
                                         <button class="shortcut-reset-btn" data-key="back_to_launcher" data-tooltip="Reset to default">Reset</button>
                                     </div>
                                 </div>
+                                <div class="shortcut-row" data-key="new_main_tab">
+                                    <div class="shortcut-info">
+                                        <span class="shortcut-name">New Main Tab</span>
+                                        <span class="shortcut-description">Open the file picker and create a new main terminal tab</span>
+                                    </div>
+                                    <div class="shortcut-keys">
+                                        <span class="shortcut-current" id="shortcut-new_main_tab"></span>
+                                        <button class="shortcut-reset-btn" data-key="new_main_tab" data-tooltip="Reset to default">Reset</button>
+                                    </div>
+                                </div>
+                                <div class="shortcut-row" data-key="new_panel_tab">
+                                    <div class="shortcut-info">
+                                        <span class="shortcut-name">New CMD Panel Tab</span>
+                                        <span class="shortcut-description">Open a new tab in the command panel</span>
+                                    </div>
+                                    <div class="shortcut-keys">
+                                        <span class="shortcut-current" id="shortcut-new_panel_tab"></span>
+                                        <button class="shortcut-reset-btn" data-key="new_panel_tab" data-tooltip="Reset to default">Reset</button>
+                                    </div>
+                                </div>
                             </div>
                             <div class="shortcut-edit-mode" id="shortcut-edit-mode" style="display:none;">
                                 <div class="shortcut-edit-prompt">
@@ -551,7 +571,7 @@
     <!-- Tab Bar (segmented control, matches .settings-tab) -->
     <div class="cmd-panel-tab-bar" id="cmd-panel-tab-bar">
         <div class="cmd-panel-tabs" id="cmd-panel-tabs">
-            <button class="cmd-panel-new-tab" id="cmd-panel-new-tab" data-tooltip="New Tab (Ctrl+T)">+</button>
+            <button class="cmd-panel-new-tab" id="cmd-panel-new-tab" data-tooltip="New Tab (Ctrl+Shift+T)">+</button>
         </div>
         <button class="cmd-panel-close" id="cmd-panel-close" data-tooltip="Close Panel">&times;</button>
     </div>
@@ -697,26 +717,26 @@
             setTimeout(fontsReady, 1500);
         })();
     </script>
-    <script src="lib/xterm.js?v=166"></script>
-    <script src="lib/xterm-addon-fit.js?v=166"></script>
-    <script src="lib/xterm-addon-webgl.js?v=166"></script>
-    <script src="tauri-bridge.js?v=166"></script>
+    <script src="lib/xterm.js?v=167"></script>
+    <script src="lib/xterm-addon-fit.js?v=167"></script>
+    <script src="lib/xterm-addon-webgl.js?v=167"></script>
+    <script src="tauri-bridge.js?v=167"></script>
 
-    <script src="lib/dom-utils.js?v=166"></script>
-    <script src="lib/plugin-updater.js?v=166"></script>
-    <script src="lib/plugin-process.js?v=166"></script>
-    <script src="lib/updater-toast.js?v=166"></script>
-    <script src="tooltip.js?v=166"></script>
-    <script src="shortcuts.js?v=166"></script>
-    <script src="theme.js?v=166"></script>
-    <script src="dialog.js?v=166"></script>
-    <script src="file-picker.js?v=166"></script>
-    <script src="command-palette.js?v=166"></script>
-    <script src="profiles.js?v=166"></script>
-    <script src="terminal.js?v=166"></script>
+    <script src="lib/dom-utils.js?v=167"></script>
+    <script src="lib/plugin-updater.js?v=167"></script>
+    <script src="lib/plugin-process.js?v=167"></script>
+    <script src="lib/updater-toast.js?v=167"></script>
+    <script src="tooltip.js?v=167"></script>
+    <script src="shortcuts.js?v=167"></script>
+    <script src="theme.js?v=167"></script>
+    <script src="dialog.js?v=167"></script>
+    <script src="file-picker.js?v=167"></script>
+    <script src="command-palette.js?v=167"></script>
+    <script src="profiles.js?v=167"></script>
+    <script src="terminal.js?v=167"></script>
 
-    <script src="app.js?v=166"></script>
+    <script src="app.js?v=167"></script>
 
-    <script src="sidebar.js?v=166"></script>
+    <script src="sidebar.js?v=167"></script>
 </body>
 </html>

@@ -1459,13 +1459,17 @@
             e.preventDefault();
             if (typeof window.SidebarManager !== 'undefined') window.SidebarManager.toggleCmdPanel();
         }
-        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key === 't') {
-            if (typeof window.SidebarManager !== 'undefined') {
-                if (isTypingInMainTerminalOrInput()) return;
-                e.preventDefault();
-                if (!window.SidebarManager.isPanelOpen()) window.SidebarManager.toggleCmdPanel();
-                window.SidebarManager.createTab();
+        if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('new_main_tab'))) {
+            // Only create main tabs when the terminal view is active.
+            var isTermView = document.getElementById('terminal-view');
+            if (!isTermView || !isTermView.classList.contains('active')) return;
+            if (isTypingInMainTerminalOrInput()) return;
+            e.preventDefault();
+            // Open the file picker + profile picker flow (shared with the + button).
+            if (typeof window.MonolithTerminal !== 'undefined' && typeof window.MonolithTerminal.promptNewTab === 'function') {
+                window.MonolithTerminal.promptNewTab();
             }
+            return;
         }
         if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key === 'w') {
             if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.isPanelOpen() && window.SidebarManager.getTabCount() > 0) {

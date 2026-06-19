@@ -84,7 +84,9 @@ fn defaults() -> Map<String, Value> {
         "cmd_panel": "Ctrl+J",
         "clear_terminal": "Ctrl+K",
         "switch_profile": "Ctrl+Shift+P",
-        "back_to_launcher": "Ctrl+Shift+W"
+        "back_to_launcher": "Ctrl+Shift+W",
+        "new_main_tab": "Ctrl+T",
+        "new_panel_tab": "Ctrl+Shift+T"
     })).unwrap());
     m.insert("theme_mode".into(), Value::String("dark".into()));
     m.insert("cta_button_style".into(), Value::String("blur".into()));
@@ -194,6 +196,15 @@ impl AppConfig {
             let defs = defaults();
             for (k, v) in defs {
                 map.entry(k).or_insert(v);
+            }
+            // Deep-merge: ensure new shortcut keys exist in the saved shortcuts object.
+            if let Some(Value::Object(saved_shortcuts)) = map.get_mut("shortcuts") {
+                let default_shortcuts = defaults().get("shortcuts").cloned();
+                if let Some(Value::Object(def)) = default_shortcuts {
+                    for (sk, sv) in def {
+                        saved_shortcuts.entry(sk).or_insert(sv);
+                    }
+                }
             }
             map
         } else {
@@ -575,6 +586,44 @@ mod tests {
         assert_eq!(config.get("window_height").as_i64().unwrap(), 700);
         assert!(config.get("window_x").is_null());
         assert!(config.get("window_y").is_null());
+
+        cleanup_test_env(&test_dir);
+    }
+
+    #[test]
+    fn test_shortcut_keys_deep_merged_into_existing_config() {
+        let (test_dir, _lock) = setup_test_env();
+
+        // Simulate an older user config that lacks the new shortcut keys
+        // AND has a customized Ctrl+P shortcut that the migration must preserve.
+        let mut existing = serde_json::Map::new();
+        existing.insert("active_profile".into(), Value::String("Default".into()));
+        existing.insert(
+            "shortcuts".into(),
+            serde_json::json!({
+                "command_palette": "Ctrl+Alt+P",
+                "settings": "Ctrl+,",
+                "toggle_sidebar": "Ctrl+B",
+                "cmd_panel": "Ctrl+J",
+                "clear_terminal": "Ctrl+K",
+                "switch_profile": "Ctrl+Shift+P",
+                "back_to_launcher": "Ctrl+Shift+W"
+            }),
+        );
+        save_json(&config_path(), &existing);
+
+        let config = AppConfig::new();
+        let merged = config.get("shortcuts");
+        let obj = merged.as_object().expect("shortcuts must be an object");
+
+        // The customized shortcut must survive the migration.
+        assert_eq!(obj.get("command_palette").and_then(|v| v.as_str()), Some("Ctrl+Alt+P"));
+        // The two new keys must be present with their defaults.
+        assert_eq!(obj.get("new_main_tab").and_then(|v| v.as_str()), Some("Ctrl+T"));
+        assert_eq!(obj.get("new_panel_tab").and_then(|v| v.as_str()), Some("Ctrl+Shift+T"));
+        // Pre-existing keys must be untouched.
+        assert_eq!(obj.get("settings").and_then(|v| v.as_str()), Some("Ctrl+,"));
+        assert_eq!(obj.get("back_to_launcher").and_then(|v| v.as_str()), Some("Ctrl+Shift+W"));
 
         cleanup_test_env(&test_dir);
     }
