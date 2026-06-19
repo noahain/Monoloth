@@ -1331,17 +1331,9 @@
         var launchToken = ++_launchToken;
         setCurrentView('terminal');
         _currentLaunchDir = dir;
-        var terminatePromise = Promise.resolve();
-        window.MonolithTerminal.setSkipNextEof('main', false);
-        if (window.MonolithTerminal.isRunning() && window.monolithApi) {
-            window.MonolithTerminal.setSkipNextEof('main', true);
-            terminatePromise = window.monolithApi.terminate_terminal('main').catch(function () {});
-        }
-        window.MonolithTerminal.setRunning(false);
-        window.MonolithTerminal.incrementSessionGeneration('main');
-        if (landing) {
-            landing.classList.add('hidden');
-        }
+        // Dispose any existing main tabs (fresh launch).
+        window.MonolithTerminal.dispose();
+        if (landing) landing.classList.add('hidden');
         if (settingsPage) {
             settingsPage.classList.remove('active');
             settingsPage.classList.remove('anim-exit');
@@ -1355,23 +1347,21 @@
                 terminalView.removeEventListener('animationend', handler);
             });
         }
-        terminatePromise.finally(function () {
-            if (launchToken !== _launchToken) return;
-            window.MonolithTerminal.setSkipNextEof('main', false);
-            window.MonolithTerminal.initTerminal(dir);
-            loadBackgroundConfig();
-            if (typeof window.SidebarManager !== 'undefined') {
-                window.SidebarManager.show();
-                setTimeout(function () {
-                    window.SidebarManager.restorePanelState();
-                }, 200);
-            }
-        });
+        // initTerminal now creates the first main tab.
+        window.MonolithTerminal.initTerminal(dir);
+        loadBackgroundConfig();
+        if (typeof window.SidebarManager !== 'undefined') {
+            window.SidebarManager.show();
+            setTimeout(function () {
+                window.SidebarManager.restorePanelState();
+            }, 200);
+        }
     }
 
     // --- Back to Landing ---
     function backToLanding() {
         setCurrentView('landing');
+        // Close all panel tabs (unchanged).
         if (typeof window.SidebarManager !== 'undefined') {
             if (typeof window.SidebarManager.getAllTabs === 'function') {
                 var tabsSnap = window.SidebarManager.getAllTabs().slice();
@@ -1379,9 +1369,8 @@
             }
             window.SidebarManager.hideCmdPanel(false);
         }
-        if (window.monolithApi) {
-            window.monolithApi.terminate_terminal('main').catch(function () {});
-        }
+        // Dispose all main tabs (terminates PTYs + disposes xterms).
+        window.MonolithTerminal.dispose();
         if (settingsPage) {
             settingsPage.classList.remove('active');
             settingsPage.classList.remove('anim-exit');
@@ -1400,7 +1389,6 @@
                 landing.removeEventListener('animationend', handler);
             });
         }
-        window.MonolithTerminal.dispose();
         var existingGif = document.getElementById('bg-gif-img');
         if (existingGif) existingGif.remove();
         var terminalGif = document.getElementById('terminal-bg-gif-img');
@@ -1412,7 +1400,7 @@
     var terminalBackBtn = document.getElementById('terminal-back-btn');
     if (terminalBackBtn) {
         terminalBackBtn.addEventListener('click', function () {
-            if (window.MonolithTerminal.isRunning()) {
+            if (window.MonolithTerminal.anyRunning()) {
                 window.MonolithDialog.confirmBackToLauncher()
                     .then(function () { backToLanding(); })
                     .catch(function () {});
@@ -1790,16 +1778,24 @@
         if (tbRefresh) {
             tbRefresh.addEventListener('click', function() {
                 if (_currentLaunchDir) {
-                    window.MonolithTerminal.incrementSessionGeneration('main');
-                    window.MonolithTerminal.setSkipNextEof('main', true);
-                    var terminatePromise = window.MonolithTerminal.isRunning() && window.monolithApi
-                        ? window.monolithApi.terminate()
+                    var tab = window.MonolithTerminal.getActiveTab();
+                    if (!tab) return;
+                    window.MonolithTerminal.incrementSessionGeneration(tab.sessionId);
+                    window.MonolithTerminal.setSkipNextEof(tab.sessionId, true);
+                    var terminatePromise = (tab.running && window.monolithApi)
+                        ? window.monolithApi.terminate_terminal(tab.sessionId)
                         : Promise.resolve();
-
                     terminatePromise.finally(function () {
-                        window.MonolithTerminal.setSkipNextEof('main', false);
-                        window.MonolithTerminal.setRunning(false);
-                        window.MonolithTerminal.initTerminal(_currentLaunchDir);
+                        window.MonolithTerminal.setSkipNextEof(tab.sessionId, false);
+                        tab.running = false;
+                        // Re-init the xterm for this tab (dispose + recreate).
+                        if (tab.term) { try { tab.term.dispose(); } catch (e) {} tab.term = null; }
+                        if (tab.fitAddon) { try { tab.fitAddon.dispose(); } catch (e) {} tab.fitAddon = null; }
+                        tab.termDiv.innerHTML = '';
+                        tab.firstOutput = true;
+                        tab.busy = false;
+                        window.MonolithTerminal.hideTabExitBanner(tab);
+                        window.MonolithTerminal.initTabXterm(tab);
                         loadBackgroundConfig();
                     });
                 }
@@ -1834,7 +1830,7 @@
         var tbClose = document.getElementById('tb-close');
         if (tbClose) {
             tbClose.addEventListener('click', function() {
-                if (window.MonolithTerminal.isRunning()) {
+                if (window.MonolithTerminal.anyRunning()) {
                     window.MonolithDialog.showConfirm('Exit Monoloth', 'A terminal session is running. Exit anyway?', 'exit_monoloth')
                         .then(function() { if (window.monolithApi) window.monolithApi.close_window(); })
                         .catch(function() {});
@@ -1920,15 +1916,36 @@
         showConfirm: function (t, m, k) { return window.MonolithDialog.showConfirm(t, m, k); },
         restartSession: function (sessionId) {
             sessionId = sessionId || 'main';
-            if (sessionId === 'main') {
-                window.MonolithTerminal.incrementSessionGeneration('main');
-                if (window.MonolithTerminal.isRunning()) {
-                    window.MonolithTerminal.setSkipNextEof('main', true);
-                    window.monolithApi.terminate_terminal('main')
+            if (sessionId === 'main' || sessionId.startsWith('main-tab-')) {
+                var tab = window.MonolithTerminal.getTabBySessionId(sessionId);
+                if (!tab) {
+                    // Fallback: if no exact match for 'main', use active tab.
+                    if (sessionId === 'main') tab = window.MonolithTerminal.getActiveTab();
+                    if (!tab) return;
+                }
+                window.MonolithTerminal.incrementSessionGeneration(tab.sessionId);
+                if (tab.running) {
+                    window.MonolithTerminal.setSkipNextEof(tab.sessionId, true);
+                    window.monolithApi.terminate_terminal(tab.sessionId)
                         .catch(function () {})
-                        .finally(function () { window.MonolithTerminal.setSkipNextEof('main', false); window.MonolithTerminal.setRunning(false); window.MonolithTerminal.initTerminal(_currentLaunchDir); });
+                        .finally(function () {
+                            window.MonolithTerminal.setSkipNextEof(tab.sessionId, false);
+                            tab.running = false;
+                            if (tab.term) { try { tab.term.dispose(); } catch (e) {} tab.term = null; }
+                            if (tab.fitAddon) { try { tab.fitAddon.dispose(); } catch (e) {} tab.fitAddon = null; }
+                            tab.termDiv.innerHTML = '';
+                            tab.firstOutput = true;
+                            tab.busy = false;
+                            window.MonolithTerminal.hideTabExitBanner(tab);
+                            window.MonolithTerminal.initTabXterm(tab);
+                        });
                 } else {
-                    window.MonolithTerminal.initTerminal(_currentLaunchDir);
+                    if (tab.term) { try { tab.term.dispose(); } catch (e) {} tab.term = null; }
+                    if (tab.fitAddon) { try { tab.fitAddon.dispose(); } catch (e) {} tab.fitAddon = null; }
+                    tab.termDiv.innerHTML = '';
+                    tab.firstOutput = true;
+                    window.MonolithTerminal.hideTabExitBanner(tab);
+                    window.MonolithTerminal.initTabXterm(tab);
                 }
             } else if (sessionId.startsWith('panel-tab-')) {
                 if (typeof window.SidebarManager === 'undefined' || typeof window.SidebarManager.getTab !== 'function') return;
@@ -1987,8 +2004,11 @@
         },
         refitTerminals: function () {
             window.MonolithTerminal.refit();
+            if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.refitActiveTab === 'function') {
+                window.SidebarManager.refitActiveTab();
+            }
         },
-        isMainActive: function () { return window.MonolithTerminal.isRunning(); },
+        isMainActive: function () { return window.MonolithTerminal.anyRunning(); },
         switchTab: switchTab,
         backToLanding: function () { backToLanding(); },
         showTerminal: function (dir) { showTerminal(dir); },
