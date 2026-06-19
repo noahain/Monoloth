@@ -97,7 +97,6 @@
         tabItem.setAttribute('data-tab-id', tabId);
         if (activate) tabItem.classList.add('active');
         tabItem.innerHTML = '<span class="main-tab-name">' + escapeHtml(tabName) + '</span>' +
-            '<span class="main-tab-dirty" style="display:none;">\u25CF</span>' +
             '<button class="main-tab-close" data-tab-id="' + tabId + '" aria-label="Close tab">&times;</button>';
         if (tabList) tabList.appendChild(tabItem);
 
