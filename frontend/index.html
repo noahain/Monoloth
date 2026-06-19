@@ -7,8 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=158">
-    <link rel="stylesheet" href="lib/xterm.css?v=158">
+    <link rel="stylesheet" href="style.css?v=159">
+    <link rel="stylesheet" href="lib/xterm.css?v=159">
     <style>
         .landing-brand, .landing-card, .landing-status-bar {
             visibility: hidden;
@@ -536,8 +536,13 @@
             </button>
         </div>
         <div class="terminal-container" id="terminal-container">
-            <div id="terminal"></div>
-            <div id="terminal-bg-overlay"></div>
+            <div class="main-tab-bar" id="main-tab-bar">
+                <div class="main-tab-tabs" id="main-tab-tabs"></div>
+                <button class="main-tab-new" id="main-tab-new" title="New Tab" aria-label="New main terminal tab">+</button>
+            </div>
+            <div class="main-tab-host" id="main-tab-host">
+                <div id="terminal-bg-overlay"></div>
+            </div>
         </div>
         <!-- CMD Panel -->
         <div id="cmd-panel" class="cmd-panel">
@@ -692,26 +697,26 @@
             setTimeout(fontsReady, 1500);
         })();
     </script>
-    <script src="lib/xterm.js?v=158"></script>
-    <script src="lib/xterm-addon-fit.js?v=158"></script>
-    <script src="lib/xterm-addon-webgl.js?v=158"></script>
-    <script src="tauri-bridge.js?v=158"></script>
+    <script src="lib/xterm.js?v=159"></script>
+    <script src="lib/xterm-addon-fit.js?v=159"></script>
+    <script src="lib/xterm-addon-webgl.js?v=159"></script>
+    <script src="tauri-bridge.js?v=159"></script>
 
-    <script src="lib/dom-utils.js?v=158"></script>
-    <script src="lib/plugin-updater.js?v=158"></script>
-    <script src="lib/plugin-process.js?v=158"></script>
-    <script src="lib/updater-toast.js?v=158"></script>
-    <script src="tooltip.js?v=158"></script>
-    <script src="shortcuts.js?v=158"></script>
-    <script src="theme.js?v=158"></script>
-    <script src="dialog.js?v=158"></script>
-    <script src="file-picker.js?v=158"></script>
-    <script src="command-palette.js?v=158"></script>
-    <script src="profiles.js?v=158"></script>
-    <script src="terminal.js?v=158"></script>
+    <script src="lib/dom-utils.js?v=159"></script>
+    <script src="lib/plugin-updater.js?v=159"></script>
+    <script src="lib/plugin-process.js?v=159"></script>
+    <script src="lib/updater-toast.js?v=159"></script>
+    <script src="tooltip.js?v=159"></script>
+    <script src="shortcuts.js?v=159"></script>
+    <script src="theme.js?v=159"></script>
+    <script src="dialog.js?v=159"></script>
+    <script src="file-picker.js?v=159"></script>
+    <script src="command-palette.js?v=159"></script>
+    <script src="profiles.js?v=159"></script>
+    <script src="terminal.js?v=159"></script>
 
-    <script src="app.js?v=158"></script>
+    <script src="app.js?v=159"></script>
 
-    <script src="sidebar.js?v=158"></script>
+    <script src="sidebar.js?v=159"></script>
 </body>
 </html>

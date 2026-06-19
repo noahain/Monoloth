@@ -2520,7 +2520,7 @@ body.cta-blur .terminal-back-btn:hover {
     border-color: var(--modal-border-active);
 }
 
-#terminal {
+.main-tab-terminal {
     height: 100%;
     width: 100%;
 }
@@ -2540,7 +2540,7 @@ body.cta-blur .terminal-back-btn:hover {
     display: block;
 }
 
-#terminal {
+.main-tab-terminal {
     height: 100%;
     width: 100%;
     overflow: hidden;
@@ -2582,7 +2582,7 @@ body.cta-blur .terminal-back-btn:hover {
 
 .landing,
 .settings-page,
-#terminal {
+.main-tab-terminal {
     position: relative;
     z-index: 1;
 }
@@ -2644,7 +2644,7 @@ body.cta-blur .terminal-back-btn:hover {
     background: transparent;
 }
 
-#terminal {
+.main-tab-terminal {
     overflow: hidden !important;
     background: transparent;
 }
@@ -6260,7 +6260,7 @@ body:not(.custom-titlebar-active) { --titlebar-height: 0px; }
     overflow: hidden !important;
 }
 
-#terminal {
+.main-tab-terminal {
     flex: 1;
     min-height: 0;
     padding: 0 !important;
