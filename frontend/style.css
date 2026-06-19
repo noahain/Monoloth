@@ -7978,7 +7978,7 @@ body.light-mode.cta-glass .update-pill {
 
 /* ---- Main Terminal Tab Bar ---- */
 .main-tab-bar {
-    display: none;
+    display: flex;
     flex-direction: row;
     align-items: center;
     gap: 2px;
