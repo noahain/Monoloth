@@ -7976,6 +7976,117 @@ body.light-mode.cta-glass .update-pill {
     margin-left: auto;
 }
 
+/* ---- Main Terminal Tab Bar ---- */
+.main-tab-bar {
+    display: none;
+    flex-direction: row;
+    align-items: center;
+    gap: 2px;
+    padding: 0 4px;
+    height: 30px;
+    background: rgba(20, 20, 20, 0.6);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    flex-shrink: 0;
+    z-index: 5;
+}
+.main-tab-bar.visible { display: flex; }
+
+.main-tab-tabs {
+    display: flex;
+    flex-direction: row;
+    gap: 2px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex: 1;
+    scrollbar-width: thin;
+}
+.main-tab-tabs::-webkit-scrollbar { height: 3px; }
+.main-tab-tabs::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+.main-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px 6px 0 0;
+    font-size: 0.75rem;
+    font-family: var(--font-ui, inherit);
+    color: var(--modal-text, #b0b0b0);
+    cursor: pointer;
+    white-space: nowrap;
+    max-width: 160px;
+    user-select: none;
+    transition: background 0.15s, color 0.15s;
+}
+.main-tab:hover { background: rgba(255,255,255,0.05); }
+.main-tab.active {
+    background: rgba(255,255,255,0.1);
+    color: var(--modal-text, #e0e0e0);
+}
+.main-tab-name { overflow: hidden; text-overflow: ellipsis; }
+.main-tab-dirty { color: #6fa8dc; font-size: 0.6rem; }
+.main-tab-close {
+    border: none;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 2px;
+    border-radius: 3px;
+    opacity: 0.5;
+}
+.main-tab-close:hover { opacity: 1; background: rgba(255,255,255,0.1); }
+.main-tab-new {
+    border: none;
+    background: transparent;
+    color: var(--modal-text, #b0b0b0);
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 0 8px;
+    border-radius: 4px;
+    opacity: 0.6;
+}
+.main-tab-new:hover { opacity: 1; background: rgba(255,255,255,0.08); }
+
+.main-tab-host {
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+}
+.main-tab-container {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: none;
+}
+.main-tab-container.active { display: block; }
+
+/* Light mode overrides */
+body.light-mode .main-tab-bar,
+body.adaptive-light .main-tab-bar {
+    background: rgba(240, 240, 240, 0.7);
+    border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+body.light-mode .main-tab,
+body.adaptive-light .main-tab { color: #404040; }
+body.light-mode .main-tab.active,
+body.adaptive-light .main-tab.active { background: rgba(0,0,0,0.08); color: #1a1a1a; }
+body.light-mode .main-tab:hover,
+body.adaptive-light .main-tab:hover { background: rgba(0,0,0,0.04); }
+
+/* Reduced motion: disable hover transitions */
+@media (prefers-reduced-motion: reduce) {
+    .main-tab, .main-tab-close, .main-tab-new { transition: none; }
+}
+/* Reduced transparency: solid background */
+@media (prefers-reduced-transparency: reduce) {
+    .main-tab-bar { background: #1a1a1a; backdrop-filter: none; -webkit-backdrop-filter: none; }
+    body.light-mode .main-tab-bar,
+    body.adaptive-light .main-tab-bar { background: #e8e8e8; }
+}
+
 .cmd-panel-tab-container {
     width: 100%;
     height: 100%;
