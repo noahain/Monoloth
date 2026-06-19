@@ -622,6 +622,12 @@ mod tests {
     }
 
     #[test]
+    fn terminate_routes_main_tab_to_session_end_by_id() {
+        assert!(is_main_tab_session("main-tab-1"));
+        assert!(!is_main_tab_session("main"));
+    }
+
+    #[test]
     fn unsafe_binary_names_are_rejected() {
         for bin in ["", "-claude", "../claude", "claude beta", "claude;rm", "claude/bin"] {
             assert!(!is_safe_binary_name(bin));
