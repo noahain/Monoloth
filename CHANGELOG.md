@@ -8,12 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Multi-tab main terminal. The main session can now hold multiple tabs,
+  each with its own profile. Add a tab via the `+` button or `Ctrl+T`
+  (which opens a profile picker first); each tab remembers its profile,
+  and switching tabs reapplies that tab's appearance (theme, CTA style,
+  background) with a cross-fade. A right-click context menu on any tab
+  lets you switch its profile on the fly (appearance only — terminal
+  settings stay per-profile).
+- Main tab persistence (opt-in via Settings). When enabled, open tabs
+  and the active tab restore on the next launch. The per-tab profile
+  selection is always persisted.
+- New-tab landing card uses the command palette's styling with full
+  CTA theme support (glass / blur / solid / outline variants), and the
+  main tab bar carries the same CTA variants when shown outside the
+  titlebar.
+- Per-profile config overrides. Profiles can now override terminal,
+  startup, shortcuts, and appearance keys; switching profiles swaps the
+  active values without touching global config, and reads get the
+  merged view.
 - Main terminal tabs now animate: new tabs pop in with a centered scale
   and fade (no horizontal slide), closing tabs fade + collapse their
   width so the remaining tabs (and the `+` button) slide smoothly to
   fill the gap in parallel — no snap. The active content fades in when
   switching. Pressing the `+` button gives a quick scale-down for
   tactile feedback. All motion respects `prefers-reduced-motion`.
+
+### Fixed
+- The titlebar center toolbar now shows on the landing and settings
+  views (it was previously hidden there).
+- The main tab bar stays visible even with a single tab.
+- The main tab bar layout matches the CMD panel (column layout, no
+  dirty-dot indicator) for visual consistency.
+- Hidden PTY sessions now end when their owning main tab closes
+  (previously they only ended at window close).
 
 ## [2.1.11] - 2026-06-19
 
