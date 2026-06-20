@@ -8113,6 +8113,10 @@ body.light-mode.cta-glass .update-pill {
 /* --- Tab Bar Position: Titlebar --- */
 body.tabbar-titlebar .titlebar-center { display: none; }
 body.tabbar-titlebar .titlebar-left { flex: 1; }
+body.tabbar-titlebar[data-current-view="landing"] .titlebar-center,
+body.tabbar-titlebar[data-current-view="settings"] .titlebar-center {
+    display: flex;
+}
 
 .main-tab-bar.in-titlebar {
     display: flex;
