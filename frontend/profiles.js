@@ -225,21 +225,31 @@
                 item.appendChild(checkSpan);
             }
             item.addEventListener('click', function () {
-                switchToProfile(profile.name);
+                if (_onSelectCallback) {
+                    var cb = _onSelectCallback;
+                    _onSelectCallback = null;
+                    cb(profile.name);
+                } else {
+                    switchToProfile(profile.name);
+                }
                 closeProfileSwitcher();
             });
             psBody.appendChild(item);
         });
     }
 
-    function openProfileSwitcher() {
+    var _onSelectCallback = null;
+
+    function openProfileSwitcher(onSelect) {
         if (!profileSwitcher) return;
+        _onSelectCallback = onSelect || null;
         renderProfileSwitcher();
         openModal(profileSwitcher);
     }
 
     function closeProfileSwitcher() {
         if (!profileSwitcher) return;
+        _onSelectCallback = null;
         closeModal(profileSwitcher);
     }
 

@@ -263,6 +263,7 @@ pub fn run() {
             commands::get_config,
             commands::set_config,
             commands::get_all_config,
+            commands::get_all_config_for_profile,
             commands::set_many_config,
             commands::pick_directory,
             commands::pick_file,

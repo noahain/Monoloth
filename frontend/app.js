@@ -24,6 +24,7 @@
     var _currentGradient = '';
     var _bgLayer = 'behind';
     var _launchToken = 0;
+    var _editingProfile = null;
 
     function isGifUrl(url) {
         if (!url) return false;
@@ -588,6 +589,49 @@
         } catch (e) { /* ignore */ }
     }
 
+    function applyProfileBackground(appearance) {
+        if (!appearance) return;
+        var config = {
+            type: appearance.bg_type || 'none',
+            image: appearance.bg_image || '',
+            imageUrl: '',
+            dataUrl: '',
+            color: appearance.bg_color || '#0a0a0a',
+            gradient: appearance.bg_gradient || '',
+            transparency: appearance.bg_transparency != null ? appearance.bg_transparency : 75,
+            bgLayer: appearance.bg_layer || 'behind'
+        };
+        var applyNow = function () {
+            applyBackground(config);
+            if (config.type === 'image' && config.image) {
+                window.MonolithTheme.setWallpaperBrightness(null);
+                window.MonolithTheme.analyzeWallpaperBrightness(config.image);
+            } else if (config.type === 'color' && config.color) {
+                window.MonolithTheme.setWallpaperBrightness(window.MonolithTheme.hexToLuminance(config.color));
+            } else if (config.type === 'gradient' && config.gradient) {
+                window.MonolithTheme.setWallpaperBrightness(window.MonolithTheme.computeAverageBrightnessFromGradient(config.gradient));
+            } else {
+                window.MonolithTheme.setWallpaperBrightness(null);
+            }
+        };
+        if (config.type === 'image' && config.image) {
+            var core = window.__TAURI__ && window.__TAURI__.core;
+            if (core && typeof core.invoke === 'function') {
+                core.invoke('read_image_as_data_url', { imagePath: config.image })
+                    .then(function (dataUrl) {
+                        config.dataUrl = dataUrl;
+                        config.imageUrl = dataUrl;
+                        applyNow();
+                    })
+                    .catch(function () { applyNow(); });
+            } else {
+                applyNow();
+            }
+        } else {
+            applyNow();
+        }
+    }
+
     function applyTerminalOverlay(config) {
         if (!terminalBgOverlay) return;
         var layer = config.bgLayer || 'behind';
@@ -747,7 +791,10 @@
             return Promise.resolve();
         }
         _loadBackgroundConfigRetries = 0;
-        return window.monolithApi.get_background_config()
+        var configPromise = _editingProfile
+            ? window.monolithApi.get_background_config_for_profile(_editingProfile)
+            : window.monolithApi.get_background_config();
+        return configPromise
             .then(function (config) {
                 if (!config) return;
                 applyBackground(config);
@@ -858,7 +905,7 @@
         if (!window.monolithApi) return;
         var slider = document.getElementById('bg-transparency-slider');
         var transparency = slider ? parseInt(slider.value, 10) : 75;
-        var args = [type, extras.image, extras.color, extras.gradient, transparency, window.MonolithTheme.getThemeMode(), window.MonolithTheme.getCtaStyle(), _bgLayer];
+        var args = [type, extras.image, extras.color, extras.gradient, transparency, window.MonolithTheme.getThemeMode(), window.MonolithTheme.getCtaStyle(), _bgLayer, _editingProfile];
         window.monolithApi.set_background_config.apply(null, args)
             .then(function (result) {
                 if (result && result.success === false) {
@@ -1017,7 +1064,7 @@
 
     function loadStartupConfig() {
         if (!window.monolithApi) return Promise.resolve();
-        return window.monolithApi.get_startup_config()
+        return window.monolithApi.get_startup_config(_editingProfile)
             .then(function (res) {
                 _startupConfig = res || { command: 'opencode', type: 'preset' };
                 updateStartupTypeUI(_startupConfig.type, _startupConfig.command);
@@ -1055,7 +1102,7 @@
             showStatus('startup-status', 'Please enter a custom command.', true);
             return;
         }
-        window.monolithApi.set_startup_config(cmd, _startupConfig.type)
+        window.monolithApi.set_startup_config(cmd, _startupConfig.type, _editingProfile)
             .then(function () {
                 updateMainUILabels();
                 var label = getStartupLabel();
@@ -1097,7 +1144,7 @@
 
     function loadSecondaryCommands() {
         if (!window.monolithApi) return;
-        window.monolithApi.get_secondary_commands()
+        window.monolithApi.get_secondary_commands(_editingProfile)
             .then(function (res) {
                 _secondaryCommands = (res && res.commands) || [];
                 renderSecondaryCommands();
@@ -1186,7 +1233,7 @@
 
     function saveSecondaryCommands() {
         if (!window.monolithApi) return;
-        window.monolithApi.set_secondary_commands(_secondaryCommands)
+        window.monolithApi.set_secondary_commands(_secondaryCommands, _editingProfile)
             .then(function () {
                 showStatus('secondary-cmd-status', 'Secondary commands saved.', false);
             })
@@ -1361,6 +1408,7 @@
     // --- Back to Landing ---
     function backToLanding() {
         setCurrentView('landing');
+        _editingProfile = null;
         // Close all panel tabs (unchanged).
         if (typeof window.SidebarManager !== 'undefined') {
             if (typeof window.SidebarManager.getAllTabs === 'function') {
@@ -1395,6 +1443,7 @@
         if (terminalGif) terminalGif.remove();
         window.MonolithTerminal.setRunning(false);
         _panelRunning = false;
+        loadBackgroundConfig();
     }
 
     var terminalBackBtn = document.getElementById('terminal-back-btn');
@@ -1729,6 +1778,10 @@
         if (persist !== false && window.monolithApi) {
             window.monolithApi.toggle_custom_titlebar(enable).catch(function () {});
         }
+
+        if (window.SidebarManager && window.SidebarManager.applyTabBarPosition) {
+            window.SidebarManager.applyTabBarPosition();
+        }
     }
 
     function syncTitlebarToggleState() {
@@ -1917,6 +1970,9 @@
         getBgState: function () { return { type: _bgType, layer: _bgLayer, transparency: _bgTransparency }; },
         computeTerminalBg: function (cfg) { return computeTerminalBg(cfg); },
         applyTerminalBg: function (cfg) { applyTerminalBg(cfg); },
+        applyProfileBackground: function (appearance) { applyProfileBackground(appearance); },
+        setEditingProfile: function (name) { _editingProfile = name || null; },
+        getEditingProfile: function () { return _editingProfile; },
         showConfirm: function (t, m, k) { return window.MonolithDialog.showConfirm(t, m, k); },
         restartSession: function (sessionId) {
             sessionId = sessionId || 'main';
@@ -2022,6 +2078,7 @@
         copyToClipboard: function (t) { copyToClipboard(t); },
         openProfileSwitcher: function () { window.MonolithProfiles.openProfileSwitcher(); },
         showStatus: function (id, msg, isError) { showStatus(id, msg, isError); },
+        addToRecentDirectories: function (path) { addToRecentDirectories(path); },
         reloadProfileSettings: function () {
             loadBackgroundConfig();
             loadStartupConfig();

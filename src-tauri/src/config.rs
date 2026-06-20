@@ -105,6 +105,7 @@ fn defaults() -> Map<String, Value> {
     m.insert("persistMainTabs".into(), Value::Bool(true));
     m.insert("mainTabs".into(), Value::Array(vec![]));
     m.insert("mainTabActive".into(), Value::String("".into()));
+    m.insert("tabBarPosition".into(), Value::String("standard".into()));
     m
 }
 
@@ -137,7 +138,7 @@ const GLOBAL_KEYS: &[&str] = &[
     "use_custom_titlebar", "window_x", "window_y",
     "cmdPanelHeight", "panelShell", "cmdPanelOpen", "sidebar_config",
     "recent_directories", "confirm_dialog_prefs",
-    "persistMainTabs", "mainTabs", "mainTabActive",
+    "persistMainTabs", "mainTabs", "mainTabActive", "tabBarPosition",
 ];
 
 fn is_global_key(key: &str) -> bool {
@@ -288,6 +289,39 @@ impl AppConfig {
             }
         }
         result
+    }
+
+    /// Read merged config for a specific profile without switching the active profile.
+    /// Global keys always come from the global config; non-global keys are overlaid
+    /// from the named profile's override file. "Default" returns global-only config.
+    pub fn get_all_for_profile(&self, profile_name: &str) -> Map<String, Value> {
+        let inner = self.inner.lock();
+        let mut result = inner.global.clone();
+        if profile_name != "Default" {
+            let overrides = load_json(&profile_path(profile_name));
+            for (k, v) in &overrides {
+                if is_global_key(k) {
+                    continue;
+                }
+                result.insert(k.clone(), v.clone());
+            }
+        }
+        result
+    }
+
+    /// Write a single key to a specific profile's file without switching the active
+    /// profile. Global keys always go to the global config. "Default" writes to global.
+    pub fn set_for_profile(&self, key: &str, value: Value, profile_name: &str) {
+        if is_global_key(key) || profile_name == "Default" {
+            let mut inner = self.inner.lock();
+            inner.global.insert(key.to_string(), value);
+            save_json(&config_path(), &inner.global);
+        } else {
+            let path = profile_path(profile_name);
+            let mut overrides = load_json(&path);
+            overrides.insert(key.to_string(), value);
+            save_json(&path, &overrides);
+        }
     }
 
     #[allow(dead_code)]

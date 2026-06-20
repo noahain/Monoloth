@@ -81,7 +81,9 @@
 
         syncOutlineOnLightClass();
 
-        if (window.MonolothApp && window.MonolothApp.applyTerminalBg) {
+        if (window.MonolothApp && window.MonolothApp.applyProfileBackground) {
+            window.MonolothApp.applyProfileBackground(appearance);
+        } else if (window.MonolothApp && window.MonolothApp.applyTerminalBg) {
             window.MonolothApp.applyTerminalBg({
                 type: appearance.bg_type || 'none',
                 transparency: appearance.bg_transparency || 75,

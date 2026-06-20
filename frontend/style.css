@@ -5955,6 +5955,11 @@ body[data-current-view="settings"] #tb-menu {
     display: none;
 }
 
+body[data-current-view="landing"] .main-tab-bar.in-titlebar,
+body[data-current-view="settings"] .main-tab-bar.in-titlebar {
+    display: none !important;
+}
+
 /* Content Offset */
 body.custom-titlebar-active .landing { padding-top: 30px; }
 body.custom-titlebar-active #terminal-container { padding-top: 30px; }
@@ -6739,7 +6744,8 @@ body.adaptive-light .cmd-panel-exit-banner {
 }
 
 .sidebar-toggle-btn,
-.sidebar-pos-btn {
+.sidebar-pos-btn,
+.sidebar-tabbar-btn {
     background: transparent;
     border: 1px solid var(--modal-border);
     color: rgba(255, 255, 255, 0.35);
@@ -6754,14 +6760,16 @@ body.adaptive-light .cmd-panel-exit-banner {
 }
 
 .sidebar-toggle-btn:hover,
-.sidebar-pos-btn:hover {
+.sidebar-pos-btn:hover,
+.sidebar-tabbar-btn:hover {
     border-color: rgba(255, 255, 255, 0.15);
     color: rgba(255, 255, 255, 0.85);
     background: rgba(255, 255, 255, 0.05);
 }
 
 .sidebar-toggle-btn.active,
-.sidebar-pos-btn.active {
+.sidebar-pos-btn.active,
+.sidebar-tabbar-btn.active {
     border-color: var(--modal-border-active);
     color: rgba(255, 255, 255, 0.95);
     background: rgba(255, 255, 255, 0.08);
@@ -6770,7 +6778,9 @@ body.adaptive-light .cmd-panel-exit-banner {
 body.light-mode .sidebar-toggle-btn,
 body.adaptive-light .sidebar-toggle-btn,
 body.light-mode .sidebar-pos-btn,
-body.adaptive-light .sidebar-pos-btn {
+body.adaptive-light .sidebar-pos-btn,
+body.light-mode .sidebar-tabbar-btn,
+body.adaptive-light .sidebar-tabbar-btn {
     border-color: var(--modal-border);
     color: var(--modal-text-dim);
 }
@@ -6778,7 +6788,9 @@ body.adaptive-light .sidebar-pos-btn {
 body.light-mode .sidebar-toggle-btn:hover,
 body.adaptive-light .sidebar-toggle-btn:hover,
 body.light-mode .sidebar-pos-btn:hover,
-body.adaptive-light .sidebar-pos-btn:hover {
+body.adaptive-light .sidebar-pos-btn:hover,
+body.light-mode .sidebar-tabbar-btn:hover,
+body.adaptive-light .sidebar-tabbar-btn:hover {
     border-color: rgba(0, 0, 0, 0.2);
     color: rgba(0, 0, 0, 0.85);
     background: rgba(0, 0, 0, 0.04);
@@ -6787,7 +6799,9 @@ body.adaptive-light .sidebar-pos-btn:hover {
 body.light-mode .sidebar-toggle-btn.active,
 body.adaptive-light .sidebar-toggle-btn.active,
 body.light-mode .sidebar-pos-btn.active,
-body.adaptive-light .sidebar-pos-btn.active {
+body.adaptive-light .sidebar-pos-btn.active,
+body.light-mode .sidebar-tabbar-btn.active,
+body.adaptive-light .sidebar-tabbar-btn.active {
     border-color: var(--modal-border-active);
     color: var(--modal-text);
     background: rgba(0, 0, 0, 0.06);
@@ -7461,6 +7475,13 @@ body.theme-transitioning *::after {
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, background 0.3s ease, backdrop-filter 0.3s ease !important;
 }
 
+/* --- Per-Tab Theme Fade --- */
+
+.main-tab-container.tab-theme-transitioning,
+.main-tab-container.tab-theme-transitioning * {
+    transition: background-color 0.3s ease, color 0.3s ease, background 0.3s ease !important;
+}
+
 /* --- Slider Thumb Glow --- */
 
 input[type="range"]:hover::-webkit-slider-thumb,
@@ -7995,11 +8016,14 @@ body.light-mode.cta-glass .update-pill {
 /* ---- Main Terminal Tab Bar ----
    Matches the .cmd-panel-tab-bar segmented-control style. */
 .main-tab-bar {
-    display: flex;
+    display: none;
     align-items: center;
     gap: 6px;
     padding: 6px 8px;
     flex-shrink: 0;
+}
+.main-tab-bar.visible {
+    display: flex;
 }
 
 .main-tab-tabs {
@@ -8084,6 +8108,60 @@ body.light-mode.cta-glass .update-pill {
 .main-tab-close:focus-visible {
     outline: 1px solid var(--modal-text, #e0e0e0);
     outline-offset: 0;
+}
+
+/* --- Tab Bar Position: Titlebar --- */
+body.tabbar-titlebar .titlebar-center { display: none; }
+body.tabbar-titlebar .titlebar-left { flex: 1; }
+
+.main-tab-bar.in-titlebar {
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+    padding: 0 0 0 8px;
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+}
+.main-tab-bar.in-titlebar .main-tab-tabs {
+    align-items: stretch;
+}
+.main-tab-bar.in-titlebar .main-tab-spacer {
+    flex: 1;
+    height: 100%;
+    cursor: default;
+}
+.main-tab-bar.in-titlebar .main-tab {
+    padding: 0.35rem 0.85rem;
+    font-size: 0.65rem;
+    max-width: 180px;
+    border-radius: 6px;
+    align-items: center;
+}
+.main-tab-bar.in-titlebar .main-tab-new {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.85rem;
+    align-self: center;
+}
+.main-tab-bar.in-titlebar .main-tab-close {
+    font-size: 0.85rem;
+}
+
+/* --- Tab Bar Position: Hidden --- */
+body.tabbar-hidden .main-tab-bar:not(.in-titlebar) {
+    display: none !important;
+}
+
+/* --- Tab Bar Position: Titlebar (light mode) --- */
+body.light-mode .main-tab-bar.in-titlebar .main-tab,
+body.adaptive-light .main-tab-bar.in-titlebar .main-tab {
+    color: var(--modal-text-dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .main-tab-bar.in-titlebar .main-tab,
+    .main-tab-bar.in-titlebar .main-tab-close,
+    .main-tab-bar.in-titlebar .main-tab-new { transition: none; }
 }
 
 .main-tab-host {

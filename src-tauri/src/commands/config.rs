@@ -50,13 +50,21 @@ pub fn get_config(config: State<AppConfig>, key: String) -> Value {
 }
 
 #[tauri::command]
-pub fn set_config(config: State<AppConfig>, key: String, value: Value) {
-    config.set(&key, value);
+pub fn set_config(config: State<AppConfig>, key: String, value: Value, profile_name: Option<String>) {
+    match profile_name.as_deref() {
+        Some(name) if !name.is_empty() => config.set_for_profile(&key, value, name),
+        _ => config.set(&key, value),
+    }
 }
 
 #[tauri::command]
 pub fn get_all_config(config: State<AppConfig>) -> Map<String, Value> {
     config.get_all()
+}
+
+#[tauri::command]
+pub fn get_all_config_for_profile(config: State<AppConfig>, profile_name: String) -> Map<String, Value> {
+    config.get_all_for_profile(&profile_name)
 }
 
 #[tauri::command]
@@ -85,6 +93,7 @@ pub fn set_background_config(
     theme_mode: Option<String>,
     cta_button_style: Option<String>,
     bg_layer: Option<String>,
+    profile_name: Option<String>,
 ) -> Result<(), String> {
     let mut entries: Map<String, Value> = Map::new();
     entries.insert("bg_type".into(), Value::String(bg_type));
@@ -105,8 +114,17 @@ pub fn set_background_config(
         validate_background_entry(key, value)?;
     }
 
-    let pairs: Vec<(&str, Value)> = entries.iter().map(|(k, v)| (k.as_str(), v.clone())).collect();
-    config.set_many(&pairs);
+    match profile_name.as_deref() {
+        Some(name) if !name.is_empty() => {
+            for (key, value) in &entries {
+                config.set_for_profile(key, value.clone(), name);
+            }
+        }
+        _ => {
+            let pairs: Vec<(&str, Value)> = entries.iter().map(|(k, v)| (k.as_str(), v.clone())).collect();
+            config.set_many(&pairs);
+        }
+    }
     Ok(())
 }
 

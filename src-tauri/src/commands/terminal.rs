@@ -22,6 +22,7 @@ pub fn start_terminal(
     shell: Option<String>,
     cols: u16,
     rows: u16,
+    profile_name: Option<String>,
 ) -> Result<u64, String> {
     let record = record_history.unwrap_or(true);
     let is_panel = session_id == "panel" || session_id.starts_with("panel-tab-");
@@ -40,9 +41,28 @@ pub fn start_terminal(
         return Ok(gen);
     }
 
-    let startup_cmd = config.get("startup_command").as_str().unwrap_or("opencode").to_string();
-    let cmd_type = config.get("startup_command_type").as_str().unwrap_or("preset").to_string();
-    let active_profile = config.get_active_profile();
+    let (startup_cmd, cmd_type) = match profile_name.as_deref() {
+        Some(name) if !name.is_empty() && name != "Default" => {
+            let overrides = crate::config::load_json_pub(&crate::config::profile_path(name));
+            let global_cmd = config.get("startup_command");
+            let global_cmd_type = config.get("startup_command_type");
+            let cmd = overrides.get("startup_command").and_then(|v| v.as_str())
+                .or_else(|| global_cmd.as_str())
+                .unwrap_or("opencode").to_string();
+            let ctype = overrides.get("startup_command_type").and_then(|v| v.as_str())
+                .or_else(|| global_cmd_type.as_str())
+                .unwrap_or("preset").to_string();
+            (cmd, ctype)
+        }
+        _ => (
+            config.get("startup_command").as_str().unwrap_or("opencode").to_string(),
+            config.get("startup_command_type").as_str().unwrap_or("preset").to_string(),
+        ),
+    };
+    let active_profile = match profile_name.as_deref() {
+        Some(n) if !n.is_empty() => n.to_string(),
+        _ => config.get_active_profile(),
+    };
     let panel_shell = config.get("panelShell").as_str().unwrap_or("cmd").to_string();
 
     let (cmd, args): (String, Vec<String>) = if cmd_type == "custom" {

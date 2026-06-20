@@ -46,17 +46,19 @@
     }
 
     // --- Terminal ---
-    api.start_terminal = function (sessionId, dir, recordHistory, shell, cols, rows) {
+    api.start_terminal = function (sessionId, dir, recordHistory, shell, cols, rows, profileName) {
         cols = cols || 80;
         rows = rows || 24;
-        return callApi('start_terminal', {
+        var args = {
             sessionId: sessionId,
             directory: dir,
             recordHistory: recordHistory,
             shell: shell,
             cols: cols,
             rows: rows
-        }, function (gen) { return { generation: gen }; });
+        };
+        if (profileName) args.profileName = profileName;
+        return callApi('start_terminal', args, function (gen) { return { generation: gen }; });
     };
 
     api.send_input = function (sessionId, data) {
@@ -143,12 +145,19 @@
     };
 
     // --- Config getters/setters ---
-    api.get_shortcuts = function () {
+    api.get_shortcuts = function (profileName) {
+        if (profileName) {
+            return invoke('get_all_config_for_profile', { profileName: profileName }).then(function (all) {
+                return { shortcuts: all.shortcuts || {} };
+            }).catch(function () { return { shortcuts: {} }; });
+        }
         return callApi('get_config', { key: 'shortcuts' }, function (val) { return { shortcuts: val || {} }; });
     };
 
-    api.save_shortcuts = function (shortcuts) {
-        return callApi('set_config', { key: 'shortcuts', value: shortcuts });
+    api.save_shortcuts = function (shortcuts, profileName) {
+        var args = { key: 'shortcuts', value: shortcuts };
+        if (profileName) args.profileName = profileName;
+        return callApi('set_config', args);
     };
 
     api.get_last_directory = function () {
@@ -180,8 +189,11 @@
         return callApi('set_config', { key: pickerDirKey(id), value: dir });
     };
 
-    api.get_startup_config = function () {
-        return invoke('get_all_config', {}).then(function (all) {
+    api.get_startup_config = function (profileName) {
+        var promise = profileName
+            ? invoke('get_all_config_for_profile', { profileName: profileName })
+            : invoke('get_all_config', {});
+        return promise.then(function (all) {
             return {
                 command: all.startup_command || 'opencode',
                 type: all.startup_command_type || 'preset'
@@ -191,21 +203,27 @@
         });
     };
 
-    api.set_startup_config = function (command, type) {
-        return invoke('set_config', { key: 'startup_command', value: command })
-            .then(function () {
-                return invoke('set_config', { key: 'startup_command_type', value: type });
-            })
+    api.set_startup_config = function (command, type, profileName) {
+        var p1 = invoke('set_config', { key: 'startup_command', value: command, profileName: profileName || undefined });
+        var p2 = invoke('set_config', { key: 'startup_command_type', value: type, profileName: profileName || undefined });
+        return p1.then(function () { return p2; })
             .then(function () { return { success: true }; })
             .catch(function (err) { return { success: false, error: String(err) }; });
     };
 
-    api.get_secondary_commands = function () {
+    api.get_secondary_commands = function (profileName) {
+        if (profileName) {
+            return invoke('get_all_config_for_profile', { profileName: profileName }).then(function (all) {
+                return { commands: all.secondary_commands || [] };
+            }).catch(function () { return { commands: [] }; });
+        }
         return callApi('get_config', { key: 'secondary_commands' }, function (val) { return { commands: val || [] }; });
     };
 
-    api.set_secondary_commands = function (cmds) {
-        return callApi('set_config', { key: 'secondary_commands', value: cmds });
+    api.set_secondary_commands = function (cmds, profileName) {
+        var args = { key: 'secondary_commands', value: cmds };
+        if (profileName) args.profileName = profileName;
+        return callApi('set_config', args);
     };
 
     api.get_background_config = function () {
@@ -241,7 +259,7 @@
         });
     };
 
-    api.set_background_config = function (bg_type, image_path, color, gradient, transparency, theme_mode, cta_button_style, bg_layer) {
+    api.set_background_config = function (bg_type, image_path, color, gradient, transparency, theme_mode, cta_button_style, bg_layer, profileName) {
         var args = { bg_type: bg_type };
         if (image_path !== undefined) args.bg_image = image_path || '';
         if (color !== undefined) args.bg_color = color;
@@ -250,6 +268,7 @@
         if (theme_mode !== undefined) args.theme_mode = theme_mode;
         if (cta_button_style !== undefined) args.cta_button_style = cta_button_style;
         if (bg_layer !== undefined) args.bg_layer = bg_layer;
+        if (profileName) args.profileName = profileName;
 
         var dataUrlPromise = (image_path && bg_type === 'image')
             ? invoke('read_image_as_data_url', { imagePath: image_path }).catch(function () {})
@@ -356,8 +375,47 @@
         return callApiValue('get_config', { key: key }, null);
     };
 
-    api.set_config = function (key, value) {
-        return callApiValue('set_config', { key: key, value: value }, null);
+    api.get_all_config_for_profile = function (profileName) {
+        return invoke('get_all_config_for_profile', { profileName: profileName });
+    };
+
+    api.get_background_config_for_profile = function (profileName) {
+        return invoke('get_all_config_for_profile', { profileName: profileName }).then(function (all) {
+            var config = {
+                type: all.bg_type || 'none',
+                image: all.bg_image || '',
+                imageUrl: '',
+                dataUrl: '',
+                color: all.bg_color || '#0a0a0a',
+                gradient: all.bg_gradient || '',
+                transparency: all.bg_transparency != null ? all.bg_transparency : 75,
+                bgLayer: all.bg_layer || 'behind',
+                themeMode: all.theme_mode || 'dark',
+                ctaButtonStyle: all.cta_button_style || 'blur'
+            };
+            if (config.type === 'image' && config.image) {
+                return invoke('read_image_as_data_url', { imagePath: config.image })
+                    .then(function (dataUrl) {
+                        config.dataUrl = dataUrl;
+                        config.imageUrl = dataUrl;
+                        return config;
+                    })
+                    .catch(function () { return config; });
+            }
+            return config;
+        }).catch(function () {
+            return {
+                type: 'none', image: '', imageUrl: '', dataUrl: '',
+                color: '#0a0a0a', gradient: '', transparency: 75,
+                bgLayer: 'behind', themeMode: 'dark', ctaButtonStyle: 'blur'
+            };
+        });
+    };
+
+    api.set_config = function (key, value, profileName) {
+        var args = { key: key, value: value };
+        if (profileName) args.profileName = profileName;
+        return callApiValue('set_config', args, null);
     };
 
     // --- Window Control Commands ---

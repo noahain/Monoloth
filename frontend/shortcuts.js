@@ -34,7 +34,8 @@
             if (callback) callback({});
             return;
         }
-        window.monolithApi.get_shortcuts()
+        var profileName = (window.MonolothApp && window.MonolothApp.getEditingProfile) ? window.MonolothApp.getEditingProfile() : null;
+        window.monolithApi.get_shortcuts(profileName)
             .then(function (result) {
                 try {
                     _shortcuts = (result && result.shortcuts) || {};
@@ -69,7 +70,8 @@
             if (callback) callback();
             return;
         }
-        window.monolithApi.save_shortcuts(_shortcuts)
+        var profileName = (window.MonolothApp && window.MonolothApp.getEditingProfile) ? window.MonolothApp.getEditingProfile() : null;
+        window.monolithApi.save_shortcuts(_shortcuts, profileName)
             .then(function () {
                 if (callback) callback();
             })
