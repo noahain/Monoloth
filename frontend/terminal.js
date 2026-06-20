@@ -150,6 +150,7 @@
         tabItem.innerHTML = '<span class="main-tab-name">' + escapeHtml(tabName) + '</span>' +
             '<button class="main-tab-close" data-tab-id="' + tabId + '" aria-label="Close tab">&times;</button>';
         if (tabList) tabList.appendChild(tabItem);
+        tabItem.classList.add('entering');
 
         tabItem.addEventListener('click', function (e) {
             if (e.target.classList.contains('main-tab-close')) {
@@ -223,6 +224,9 @@
         schedulePersistSave();
         if (window.MonolothApp && window.MonolothApp.setEditingProfile) {
             window.MonolothApp.setEditingProfile(tab.profile);
+        }
+        if (window.MonolothApp && window.MonolothApp.reloadStartupConfig) {
+            window.MonolothApp.reloadStartupConfig();
         }
 
         if (window.monolithApi && window.monolithApi.get_profile_appearance) {
@@ -340,6 +344,21 @@
         var fitAddon = (typeof FitAddon !== 'undefined') ? new FitAddon.FitAddon() : null;
         if (fitAddon) term.loadAddon(fitAddon);
         term.open(termDiv);
+        if (fitAddon) {
+            requestAnimationFrame(function () {
+                if (tab.closing || !_tabs.has(tab.id)) return;
+                fitAddon.fit();
+                refitActiveTab();
+                if (typeof WebglAddon !== 'undefined' && !tab.webglAddon) {
+                    try {
+                        var gl = new WebglAddon.WebglAddon();
+                        gl.onContextLoss(function () { gl.dispose(); });
+                        term.loadAddon(gl);
+                        tab.webglAddon = gl;
+                    } catch (e) {}
+                }
+            });
+        }
         term.focus();
 
         tab.term = term;
@@ -445,6 +464,14 @@
                     requestAnimationFrame(function () {
                         if (fitAddon) fitAddon.fit();
                         refitActiveTab();
+                        if (typeof WebglAddon !== 'undefined' && !tab.webglAddon) {
+                            try {
+                                var gl = new WebglAddon.WebglAddon();
+                                gl.onContextLoss(function () { gl.dispose(); });
+                                term.loadAddon(gl);
+                                tab.webglAddon = gl;
+                            } catch (e) {}
+                        }
                     });
                 } else {
                     tab.running = false;
@@ -541,9 +568,25 @@
             window.monolithApi.retire_panel_tab(tab.sessionId).catch(function () {});
         }
 
-        tab.container.remove();
         var tabItem = tabList && tabList.querySelector('.main-tab[data-tab-id="' + tabId + '"]');
-        if (tabItem) tabItem.remove();
+        var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        if (reducedMotion) {
+            tab.container.remove();
+            if (tabItem) tabItem.remove();
+        } else {
+            if (tabItem) {
+                var currentWidth = tabItem.getBoundingClientRect().width;
+                tabItem.style.width = currentWidth + 'px';
+                void document.body.offsetWidth;
+            }
+            tab.container.classList.add('closing');
+            if (tabItem) tabItem.classList.add('closing');
+            setTimeout(function () {
+                if (tab.container.parentNode) tab.container.remove();
+                if (tabItem && tabItem.parentNode) tabItem.remove();
+            }, 240);
+        }
         _tabs.delete(tabId);
 
         // If no tabs left, go back to landing.
@@ -829,7 +872,7 @@
             item.textContent = name;
             if (name === activeProfile) {
                 var check = document.createElement('span');
-                check.textContent = '\u2713';
+                check.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
                 check.style.marginLeft = 'auto';
                 item.appendChild(check);
             }
@@ -982,7 +1025,7 @@
                     if (!el.querySelector('.ps-item-check')) {
                         var checkSpan = document.createElement('span');
                         checkSpan.className = 'ps-item-check';
-                        checkSpan.innerHTML = '&#10003;';
+                        checkSpan.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
                         el.appendChild(checkSpan);
                     }
                 } else {

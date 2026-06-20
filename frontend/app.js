@@ -583,9 +583,6 @@
             }
 
             term.setOption('theme', existing);
-            if (term.rows > 0) {
-                term.refresh(0, term.rows - 1);
-            }
         } catch (e) { /* ignore */ }
     }
 
@@ -1409,6 +1406,7 @@
     function backToLanding() {
         setCurrentView('landing');
         _editingProfile = null;
+        loadStartupConfig();
         // Close all panel tabs (unchanged).
         if (typeof window.SidebarManager !== 'undefined') {
             if (typeof window.SidebarManager.getAllTabs === 'function') {
@@ -2084,6 +2082,9 @@
             loadStartupConfig();
             loadSecondaryCommands();
             window.MonolithShortcuts.loadShortcuts(function () { window.MonolithShortcuts.renderShortcutUI(); window.MonolithShortcuts.updateKbdHint(); });
+        },
+        reloadStartupConfig: function () {
+            loadStartupConfig();
         }
     };
 

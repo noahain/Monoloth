@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Main terminal tabs now animate: new tabs pop in with a centered scale
+  and fade (no horizontal slide), closing tabs fade + collapse their
+  width so the remaining tabs (and the `+` button) slide smoothly to
+  fill the gap in parallel — no snap. The active content fades in when
+  switching. Pressing the `+` button gives a quick scale-down for
+  tactile feedback. All motion respects `prefers-reduced-motion`.
+
 ## [2.1.11] - 2026-06-19
 
 ### Changed

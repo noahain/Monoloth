@@ -218,12 +218,12 @@
             nameSpan.className = 'ps-item-name';
             nameSpan.textContent = profile.name;
             item.appendChild(nameSpan);
-            if (profile.name === _activeProfile) {
-                var checkSpan = document.createElement('span');
-                checkSpan.className = 'ps-item-check';
-                checkSpan.innerHTML = '&#10003;';
-                item.appendChild(checkSpan);
-            }
+        if (profile.name === _activeProfile) {
+            var checkSpan = document.createElement('span');
+            checkSpan.className = 'ps-item-check';
+            checkSpan.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+            item.appendChild(checkSpan);
+        }
             item.addEventListener('click', function () {
                 if (_onSelectCallback) {
                     var cb = _onSelectCallback;

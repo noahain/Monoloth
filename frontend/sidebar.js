@@ -25,7 +25,7 @@
     var _nextTabId = 1;
     var _panelShell = 'cmd';
     var _tabBarPosition = 'standard';
-    var _panelHeight = 250;
+    var _panelHeight = 200;
     var _cmdPanelOpen = false;
 
     var _isDragging = false;
@@ -356,6 +356,7 @@
         window.monolithApi.get_config('cmdPanelHeight').then(function (val) {
             _panelHeight = (typeof val === 'number') ? val : 200;
             applyPanelHeight(_panelHeight);
+            refitActiveTab();
         }).catch(function () {});
         window.monolithApi.get_config('panelShell').then(function (val) {
             _panelShell = (typeof val === 'string') ? val : 'cmd';
@@ -480,10 +481,12 @@
             container: container,
             term: null,
             fitAddon: null,
+            webglAddon: null,
             generation: null,
             busy: false,
             closing: false,
             exitBanner: null,
+            firstOutput: true,
             dir: dir
         };
         _panelTabs.set(tabId, tab);
@@ -560,6 +563,7 @@
         var fitAddon = new FitAddon.FitAddon();
         term.loadAddon(fitAddon);
         term.open(terminalDiv);
+        try { fitAddon.fit(); } catch (e) {}
 
         term.attachCustomKeyEventHandler(function (e) {
             if (e.ctrlKey && !e.shiftKey && e.code === 'KeyC' && term.hasSelection()) {
@@ -624,47 +628,78 @@
         tab.fitAddon = fitAddon;
 
         var dir = tab.dir || (getCurrentDir() || getDefaultHomeDir());
-        var cols = term.cols || 80;
-        var rows = term.rows || 24;
 
-        var initPromise = window.monolithApi.start_terminal(tab.sessionId, dir, false, _panelShell, cols, rows)
-            .then(function (result) {
-                if (tab.closing || !_panelTabs.has(tab.id)) {
-                    if (result && result.success && window.monolithApi) {
-                        window.monolithApi.terminate_terminal(tab.sessionId).catch(function () {});
-                    }
-                    return tab;
-                }
-                if (result && result.success) {
-                    tab.running = true;
-                    tab.generation = result.generation;
-                    if (window.MonolothApp && window.MonolothApp.setSessionGeneration) {
-                        window.MonolothApp.setSessionGeneration(tab.sessionId, result.generation);
-                    }
-                    setTimeout(function () {
-                        try {
-                            fitAddon.fit();
-                            window.monolithApi.resize_terminal(tab.sessionId, term.cols, term.rows);
-                            term.refresh(0, term.rows - 1);
-                            term.focus();
-                        } catch (e) {}
-                    }, 100);
-                } else {
-                    tab.running = false;
-                    showTabExitBanner(tab);
+        // Wait for fitAddon to produce valid dimensions before starting the PTY.
+        // fit() silently no-ops when the renderer hasn't measured cell dimensions
+        // yet (css.cell.width === 0 right after term.open()). Starting the PTY at
+        // 80x24 causes TUI apps to render their banner at the wrong width, which a
+        // later resize scatters into garbled box-drawing characters.
+        var initPromise = new Promise(function (resolve) {
+            var attempts = 0;
+            function tryFit() {
+                if (tab.closing || !_panelTabs.has(tab.id)) { resolve(null); return; }
+                try { fitAddon.fit(); } catch (e) {}
+                var dims;
+                try { dims = fitAddon.proposeDimensions(); } catch (e) {}
+                if (dims && dims.cols > 0 && dims.rows > 0) { resolve(dims); return; }
+                if (++attempts > 30) { resolve(null); return; }
+                requestAnimationFrame(tryFit);
+            }
+            tryFit();
+        }).then(function (dims) {
+            if (tab.closing || !_panelTabs.has(tab.id)) return tab;
+            var cols = dims ? dims.cols : (term.cols || 80);
+            var rows = dims ? dims.rows : (term.rows || 24);
+            return window.monolithApi.start_terminal(tab.sessionId, dir, false, _panelShell, cols, rows);
+        })
+        .then(function (result) {
+            if (result === tab) return tab;
+            if (tab.closing || !_panelTabs.has(tab.id)) {
+                if (result && result.success && window.monolithApi) {
+                    window.monolithApi.terminate_terminal(tab.sessionId).catch(function () {});
                 }
                 return tab;
-            })
-            .catch(function (err) {
-                if (tab.closing || !_panelTabs.has(tab.id)) return tab;
-                console.error('Failed to start tab PTY:', err);
+            }
+            if (result && result.success) {
+                tab.running = true;
+                tab.generation = result.generation;
+                if (window.MonolothApp && window.MonolothApp.setSessionGeneration) {
+                    window.MonolothApp.setSessionGeneration(tab.sessionId, result.generation);
+                }
+                requestAnimationFrame(function () {
+                    if (tab.closing || !_panelTabs.has(tab.id)) return;
+                    try {
+                        fitAddon.fit();
+                        if (window.monolithApi) {
+                            window.monolithApi.resize_terminal(tab.sessionId, term.cols, term.rows).catch(function () {});
+                        }
+                        if (typeof WebglAddon !== 'undefined' && !tab.webglAddon) {
+                            try {
+                                var gl = new WebglAddon.WebglAddon();
+                                gl.onContextLoss(function () { gl.dispose(); });
+                                term.loadAddon(gl);
+                                tab.webglAddon = gl;
+                            } catch (e) {}
+                        }
+                        term.focus();
+                    } catch (e) {}
+                });
+            } else {
                 tab.running = false;
                 showTabExitBanner(tab);
-                return tab;
-            })
-            .finally(function () {
-                if (_panelTabs.has(tab.id)) tab.initializing = false;
-            });
+            }
+            return tab;
+        })
+        .catch(function (err) {
+            if (tab.closing || !_panelTabs.has(tab.id)) return tab;
+            console.error('Failed to start tab PTY:', err);
+            tab.running = false;
+            showTabExitBanner(tab);
+            return tab;
+        })
+        .finally(function () {
+            if (_panelTabs.has(tab.id)) tab.initializing = false;
+        });
 
         tab.initPromise = initPromise;
         return initPromise;
@@ -1515,6 +1550,7 @@
     function init() {
         if (_initialized) return;
         _initialized = true;
+        applyPanelHeight(_panelHeight);
         loadSidebarConfig();
         loadPanelConfig();
 
@@ -1538,6 +1574,11 @@
             if (window._sidebarResizeTimer) clearTimeout(window._sidebarResizeTimer);
             window._sidebarResizeTimer = setTimeout(onWindowResize, 100);
         });
+
+        if (cmdPanelTerminal && typeof ResizeObserver !== 'undefined') {
+            var ro = new ResizeObserver(function () { scheduleRefitActiveTab(); });
+            ro.observe(cmdPanelTerminal);
+        }
 
         window.addEventListener('beforeunload', function () {
             _panelTabs.forEach(function (tab) {
@@ -1588,6 +1629,18 @@
                 showTabExitBanner(tab);
             } else {
                 tab.term.write(data);
+                if (tab.firstOutput) {
+                    tab.firstOutput = false;
+                    setTimeout(function () {
+                        if (tab.closing || !_panelTabs.has(tab.id) || !tab.fitAddon || !tab.term) return;
+                        try {
+                            tab.fitAddon.fit();
+                            if (window.monolithApi) {
+                                window.monolithApi.resize_terminal(tab.sessionId, tab.term.cols, tab.term.rows).catch(function () {});
+                            }
+                        } catch (e) {}
+                    }, 300);
+                }
                 // Shell returned to a prompt → command finished, clear busy.
                 // ponytail: matches cmd.exe "C:\...>" and PowerShell "PS ...>"
                 // prompts at the tail of an output chunk. Upgrade path: OSC 133.
