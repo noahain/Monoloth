@@ -669,18 +669,15 @@
 
     function showNewTabCard() {
         if (_newTabCardOverlay) return;
-        var existing = tabHost && tabHost.querySelector('.new-tab-card-overlay');
+        var existing = document.querySelector('.new-tab-card-overlay');
         if (existing) return;
         _newTabCardProfile = (window.MonolithProfiles && window.MonolithProfiles.getActiveProfileName) ? window.MonolithProfiles.getActiveProfileName() : 'Default';
 
         var overlay = document.createElement('div');
         overlay.className = 'new-tab-card-overlay';
 
-        var wrapper = document.createElement('div');
-        wrapper.className = 'new-tab-card-wrapper';
-
         var card = document.createElement('div');
-        card.className = 'landing-card';
+        card.className = 'command-palette-modal new-tab-card-modal';
 
         var toolbar = document.createElement('div');
         toolbar.className = 'landing-card-toolbar';
@@ -739,29 +736,28 @@
         recentSection.appendChild(recentList);
         card.appendChild(recentSection);
 
-        wrapper.appendChild(card);
-        overlay.appendChild(wrapper);
+        overlay.appendChild(card);
 
         overlay.addEventListener('click', function (e) {
             if (e.target === overlay) hideNewTabCard();
         });
 
-        if (tabHost) tabHost.appendChild(overlay);
+        document.body.appendChild(overlay);
         _newTabCardOverlay = overlay;
 
         void overlay.offsetWidth;
         overlay.classList.add('anim-enter');
-        wrapper.classList.add('anim-enter');
+        card.classList.add('anim-enter');
         overlay.addEventListener('animationend', function onEnd(e) {
             if (e.target === overlay) {
                 overlay.classList.remove('anim-enter');
                 overlay.removeEventListener('animationend', onEnd);
             }
         });
-        wrapper.addEventListener('animationend', function onEnd(e) {
-            if (e.target === wrapper) {
-                wrapper.classList.remove('anim-enter');
-                wrapper.removeEventListener('animationend', onEnd);
+        card.addEventListener('animationend', function onEnd(e) {
+            if (e.target === card) {
+                card.classList.remove('anim-enter');
+                card.removeEventListener('animationend', onEnd);
             }
         });
 
@@ -771,9 +767,9 @@
     function hideNewTabCard() {
         if (!_newTabCardOverlay) return;
         var overlay = _newTabCardOverlay;
-        var wrapper = overlay.querySelector('.new-tab-card-wrapper');
+        var card = overlay.querySelector('.new-tab-card-modal');
         overlay.classList.add('anim-exit');
-        if (wrapper) wrapper.classList.add('anim-exit');
+        if (card) card.classList.add('anim-exit');
         overlay.addEventListener('animationend', function onEnd(e) {
             if (e.target === overlay) {
                 overlay.removeEventListener('animationend', onEnd);

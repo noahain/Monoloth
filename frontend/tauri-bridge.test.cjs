@@ -40,12 +40,12 @@ test('set_background_config calls set_background_config IPC with validated args'
     assert.equal(setBg.length, 1, 'set_background_config must call set_background_config exactly once');
     assert.equal(setMany.length, 0, 'set_background_config must not call set_many_config');
     const args = setBg[0].args;
-    assert.equal(args.bg_type, 'color');
-    assert.equal(args.bg_color, '#112233');
-    assert.equal(args.bg_transparency, 80);
-    assert.equal(args.theme_mode, 'light');
-    assert.equal(args.cta_button_style, 'glass');
-    assert.equal(args.bg_layer, 'behind');
+    assert.equal(args.bgType, 'color');
+    assert.equal(args.bgColor, '#112233');
+    assert.equal(args.bgTransparency, 80);
+    assert.equal(args.themeMode, 'light');
+    assert.equal(args.ctaButtonStyle, 'glass');
+    assert.equal(args.bgLayer, 'behind');
 });
 
 test('set_background_config handles undefined args without writing them', () => {
@@ -54,8 +54,8 @@ test('set_background_config handles undefined args without writing them', () => 
     const setBg = calls.filter((c) => c.cmd === 'set_background_config');
     assert.equal(setBg.length, 1);
     const args = setBg[0].args;
-    assert.deepEqual(Object.keys(args), ['bg_type']);
-    assert.equal(args.bg_type, 'none');
+    assert.deepEqual(Object.keys(args), ['bgType']);
+    assert.equal(args.bgType, 'none');
 });
 
 test('retire_panel_tab is exposed on the bridge', () => {

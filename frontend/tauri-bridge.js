@@ -260,14 +260,14 @@
     };
 
     api.set_background_config = function (bg_type, image_path, color, gradient, transparency, theme_mode, cta_button_style, bg_layer, profileName) {
-        var args = { bg_type: bg_type };
-        if (image_path !== undefined) args.bg_image = image_path || '';
-        if (color !== undefined) args.bg_color = color;
-        if (gradient !== undefined) args.bg_gradient = gradient;
-        if (transparency !== undefined) args.bg_transparency = transparency;
-        if (theme_mode !== undefined) args.theme_mode = theme_mode;
-        if (cta_button_style !== undefined) args.cta_button_style = cta_button_style;
-        if (bg_layer !== undefined) args.bg_layer = bg_layer;
+        var args = { bgType: bg_type };
+        if (image_path !== undefined) args.bgImage = image_path || '';
+        if (color !== undefined) args.bgColor = color;
+        if (gradient !== undefined) args.bgGradient = gradient;
+        if (transparency !== undefined) args.bgTransparency = transparency;
+        if (theme_mode !== undefined) args.themeMode = theme_mode;
+        if (cta_button_style !== undefined) args.ctaButtonStyle = cta_button_style;
+        if (bg_layer !== undefined) args.bgLayer = bg_layer;
         if (profileName) args.profileName = profileName;
 
         var dataUrlPromise = (image_path && bg_type === 'image')

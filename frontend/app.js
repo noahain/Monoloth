@@ -673,11 +673,11 @@
                 terminalBgOverlay.style.opacity = style.opacity !== undefined ? style.opacity : 1;
                 terminalBgOverlay.style.display = 'block';
             }
-            var tc = document.getElementById('terminal-container');
-            if (tc) tc.style.backgroundColor = '#000000';
+            var host = document.getElementById('main-tab-host');
+            if (host) host.style.backgroundColor = '#000000';
         } else {
             terminalBgOverlay.style.display = 'none';
-            var tc2 = document.getElementById('terminal-container');
+            var tc2 = document.getElementById('main-tab-host');
             if (tc2) tc2.style.backgroundColor = '';
             var terminalGifCleanup = document.getElementById('terminal-bg-gif-img');
             if (terminalGifCleanup) { terminalGifCleanup.remove(); }
