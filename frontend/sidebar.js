@@ -636,13 +636,20 @@
         // later resize scatters into garbled box-drawing characters.
         var initPromise = new Promise(function (resolve) {
             var attempts = 0;
+            var prevDims = null;
             function tryFit() {
                 if (tab.closing || !_panelTabs.has(tab.id)) { resolve(null); return; }
                 try { fitAddon.fit(); } catch (e) {}
                 var dims;
                 try { dims = fitAddon.proposeDimensions(); } catch (e) {}
-                if (dims && dims.cols > 0 && dims.rows > 0) { resolve(dims); return; }
-                if (++attempts > 30) { resolve(null); return; }
+                if (dims && dims.cols > 0 && dims.rows > 0) {
+                    if (prevDims && prevDims.cols === dims.cols && prevDims.rows === dims.rows) {
+                        resolve(dims);
+                        return;
+                    }
+                    prevDims = { cols: dims.cols, rows: dims.rows };
+                }
+                if (++attempts > 30) { resolve(prevDims || null); return; }
                 requestAnimationFrame(tryFit);
             }
             tryFit();

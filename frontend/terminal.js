@@ -433,10 +433,9 @@
             }
         });
 
-        // Start the PTY session
+        // Start the PTY session — wait for fitAddon to produce stable dimensions
+        // before starting, so TUI apps see the correct size from the first byte.
         var startGen = _sessionGeneration[tab.sessionId] || 0;
-        var cols = term.cols || 80;
-        var rows = term.rows || 24;
 
         term.writeln('');
         term.writeln('Monoloth Terminal');
@@ -449,46 +448,72 @@
             return Promise.resolve(tab);
         }
 
-        return window.monolithApi.start_terminal(tab.sessionId, tab.dir, true, null, cols, rows, tab.profile)
-            .then(function (result) {
-                if (tab.closing || !_tabs.has(tab.id)) {
-                    if (result && result.success && window.monolithApi) {
-                        window.monolithApi.terminate_terminal(tab.sessionId).catch(function () {});
+        return new Promise(function (resolve) {
+            if (!fitAddon) { resolve({ cols: term.cols || 80, rows: term.rows || 24 }); return; }
+            var attempts = 0;
+            var prevDims = null;
+            function tryFit() {
+                if (tab.closing || !_tabs.has(tab.id)) { resolve(null); return; }
+                try { fitAddon.fit(); } catch (e) {}
+                var dims;
+                try { dims = fitAddon.proposeDimensions(); } catch (e) {}
+                if (dims && dims.cols > 0 && dims.rows > 0) {
+                    if (prevDims && prevDims.cols === dims.cols && prevDims.rows === dims.rows) {
+                        resolve(dims);
+                        return;
                     }
-                    return tab;
+                    prevDims = { cols: dims.cols, rows: dims.rows };
                 }
-                if (result && result.success) {
-                    tab.running = true;
-                    tab.generation = result.generation;
-                    if (result.generation) _sessionGeneration[tab.sessionId] = result.generation;
-                    requestAnimationFrame(function () {
-                        if (fitAddon) fitAddon.fit();
-                        refitActiveTab();
-                        if (typeof WebglAddon !== 'undefined' && !tab.webglAddon) {
-                            try {
-                                var gl = new WebglAddon.WebglAddon();
-                                gl.onContextLoss(function () { gl.dispose(); });
-                                term.loadAddon(gl);
-                                tab.webglAddon = gl;
-                            } catch (e) {}
-                        }
-                    });
-                } else {
-                    tab.running = false;
-                    term.writeln('');
-                    term.writeln('Failed to start ' + window.MonolothApp.getStartupLabel() + '. ' + (result && result.error ? result.error : 'Check that it is installed and in your PATH.'));
-                    showTabExitBanner(tab);
+                if (++attempts > 30) { resolve(prevDims || { cols: term.cols || 80, rows: term.rows || 24 }); return; }
+                requestAnimationFrame(tryFit);
+            }
+            tryFit();
+        }).then(function (dims) {
+            if (tab.closing || !_tabs.has(tab.id)) return tab;
+            var cols = dims ? dims.cols : (term.cols || 80);
+            var rows = dims ? dims.rows : (term.rows || 24);
+            return window.monolithApi.start_terminal(tab.sessionId, tab.dir, true, null, cols, rows, tab.profile);
+        })
+        .then(function (result) {
+            if (!result || result === tab) return tab;
+            if (tab.closing || !_tabs.has(tab.id)) {
+                if (result.success && window.monolithApi) {
+                    window.monolithApi.terminate_terminal(tab.sessionId).catch(function () {});
                 }
                 return tab;
-            })
-            .catch(function (err) {
-                if (tab.closing || !_tabs.has(tab.id)) return tab;
+            }
+            if (result.success) {
+                tab.running = true;
+                tab.generation = result.generation;
+                if (result.generation) _sessionGeneration[tab.sessionId] = result.generation;
+                requestAnimationFrame(function () {
+                    if (fitAddon) fitAddon.fit();
+                    refitActiveTab();
+                    if (typeof WebglAddon !== 'undefined' && !tab.webglAddon) {
+                        try {
+                            var gl = new WebglAddon.WebglAddon();
+                            gl.onContextLoss(function () { gl.dispose(); });
+                            term.loadAddon(gl);
+                            tab.webglAddon = gl;
+                        } catch (e) {}
+                    }
+                });
+            } else {
                 tab.running = false;
                 term.writeln('');
-                term.writeln('Error starting ' + window.MonolothApp.getStartupLabel() + ': ' + err);
+                term.writeln('Failed to start ' + window.MonolothApp.getStartupLabel() + '. ' + (result.error ? result.error : 'Check that it is installed and in your PATH.'));
                 showTabExitBanner(tab);
-                return tab;
-            });
+            }
+            return tab;
+        })
+        .catch(function (err) {
+            if (tab.closing || !_tabs.has(tab.id)) return tab;
+            tab.running = false;
+            term.writeln('');
+            term.writeln('Error starting ' + window.MonolothApp.getStartupLabel() + ': ' + err);
+            showTabExitBanner(tab);
+            return tab;
+        });
     }
 
     function startSessionExitCountdown(tab) {

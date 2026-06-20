@@ -211,6 +211,7 @@ function createHarness(backgroundConfig) {
         monolithApi,
         addEventListener() {},
         removeEventListener() {},
+        matchMedia: () => ({ matches: true }),
         __TAURI__: null
     };
     window.window = window;
