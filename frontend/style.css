@@ -8007,6 +8007,37 @@ body.light-mode.cta-glass .update-pill {
     to   { opacity: 1; transform: scale(1); }
 }
 
+@keyframes cmdPanelTabEnter {
+    from { opacity: 0; transform: scale(0.5); }
+    to   { opacity: 1; transform: scale(1); }
+}
+@keyframes cmdPanelTabExit {
+    from {
+        opacity: 1;
+        transform: scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: scale(0.5);
+        width: 0;
+        padding-left: 0;
+        padding-right: 0;
+    }
+}
+.cmd-panel-tab.entering {
+    animation: cmdPanelTabEnter 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    transform-origin: center;
+}
+.cmd-panel-tab.closing {
+    animation: cmdPanelTabExit 240ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    transform-origin: center;
+    pointer-events: none;
+    overflow: hidden;
+}
+.cmd-panel-tab.closing .cmd-panel-tab-name {
+    text-overflow: clip;
+}
+
 .cmd-panel-tab-close {
     display: flex;
     align-items: center;
@@ -8038,12 +8069,16 @@ body.light-mode.cta-glass .update-pill {
     line-height: 1;
     font-family: var(--font-mono);
     border-radius: 6px;
-    transition: color 0.15s ease, background 0.15s ease;
+    transition: color 0.15s ease, background 0.15s ease, transform 0.12s ease;
 }
 
 .cmd-panel-new-tab:hover {
     color: var(--modal-text);
     background: var(--modal-hover-bg);
+}
+
+.cmd-panel-new-tab:active {
+    transform: scale(0.9);
 }
 
 .cmd-panel-tab:focus-visible,
@@ -8423,6 +8458,12 @@ body.adaptive-light.cta-outline .new-tab-card-overlay {
     .main-tab.closing,
     .main-tab-container.active { animation: none; }
     .main-tab-new:active { transform: none; }
+
+    .cmd-panel-tab, .cmd-panel-tab-close, .cmd-panel-new-tab { transition: none; }
+    .cmd-panel-tab.entering,
+    .cmd-panel-tab.closing,
+    .cmd-panel-tab-container.active { animation: none; }
+    .cmd-panel-new-tab:active { transform: none; }
 }
 
 .cmd-panel-tab-container {
@@ -8435,6 +8476,7 @@ body.adaptive-light.cta-outline .new-tab-card-overlay {
 
 .cmd-panel-tab-container.active {
     display: flex;
+    animation: fadeIn 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .cmd-panel-tab-terminal {

@@ -1393,12 +1393,12 @@
         }
         // Create a fresh tab with the chosen directory.
         window.MonolithTerminal.initTerminal(dir);
-        loadBackgroundConfig();
+        var bgConfigReady = loadBackgroundConfig();
         if (typeof window.SidebarManager !== 'undefined') {
             window.SidebarManager.show();
-            setTimeout(function () {
+            Promise.resolve(bgConfigReady).then(function () {
                 window.SidebarManager.restorePanelState();
-            }, 200);
+            });
         }
     }
 

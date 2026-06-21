@@ -453,6 +453,7 @@
             '<button class="cmd-panel-tab-close" data-tab-id="' + tabId + '">&times;</button>';
 
         document.getElementById('cmd-panel-tabs').appendChild(tabItem);
+        tabItem.classList.add('entering');
 
         tabItem.addEventListener('click', function (e) {
             if (e.target.classList.contains('cmd-panel-tab-close')) {
@@ -481,7 +482,6 @@
             container: container,
             term: null,
             fitAddon: null,
-            webglAddon: null,
             generation: null,
             busy: false,
             closing: false,
@@ -546,6 +546,7 @@
 
         var term = new Terminal(Object.assign({
             theme: { background: 'transparent', foreground: '#b8b8b8', cursor: '#c0c0c0' },
+            allowTransparency: true,
             fontFamily: '"Cascadia Mono", "Consolas", "Lucida Console", "Courier New", monospace',
             fontSize: 13,
             cursorBlink: true,
@@ -680,14 +681,6 @@
                         if (window.monolithApi) {
                             window.monolithApi.resize_terminal(tab.sessionId, term.cols, term.rows).catch(function () {});
                         }
-                        if (typeof WebglAddon !== 'undefined' && !tab.webglAddon) {
-                            try {
-                                var gl = new WebglAddon.WebglAddon();
-                                gl.onContextLoss(function () { gl.dispose(); });
-                                term.loadAddon(gl);
-                                tab.webglAddon = gl;
-                            } catch (e) {}
-                        }
                         term.focus();
                     } catch (e) {}
                 });
@@ -758,9 +751,24 @@
             window.monolithApi.retire_panel_tab(tab.sessionId).catch(function () {});
         }
 
-        tab.container.remove();
         var tabItem = document.querySelector('.cmd-panel-tab[data-tab-id="' + tabId + '"]');
-        if (tabItem) tabItem.remove();
+        var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        if (reducedMotion) {
+            tab.container.remove();
+            if (tabItem) tabItem.remove();
+        } else {
+            if (tabItem) {
+                var currentWidth = tabItem.getBoundingClientRect().width;
+                tabItem.style.width = currentWidth + 'px';
+                void document.body.offsetWidth;
+                tabItem.classList.add('closing');
+            }
+            setTimeout(function () {
+                if (tab.container.parentNode) tab.container.remove();
+                if (tabItem && tabItem.parentNode) tabItem.remove();
+            }, 240);
+        }
 
         var nextTab = null;
         if (_activeTabId === tabId) {
