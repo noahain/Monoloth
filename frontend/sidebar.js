@@ -28,6 +28,34 @@
     var _panelHeight = 200;
     var _cmdPanelOpen = false;
 
+    var _mainTabPanels = new Map();
+    var _activeMainTabId = null;
+
+    function _ensurePanelGroup(mainTabId) {
+        if (!_mainTabPanels.has(mainTabId)) {
+            _mainTabPanels.set(mainTabId, {
+                tabs: new Map(),
+                activeTabId: null,
+                nextTabId: 1,
+                isOpen: false
+            });
+        }
+        return _mainTabPanels.get(mainTabId);
+    }
+
+    function _getActiveGroup() {
+        if (!_activeMainTabId) return null;
+        return _mainTabPanels.get(_activeMainTabId) || null;
+    }
+
+    function _getActiveMainTabId() {
+        if (typeof window.MonolithTerminal !== 'undefined' && typeof window.MonolithTerminal.getActiveTabId === 'function') {
+            var id = window.MonolithTerminal.getActiveTabId();
+            if (id) return id;
+        }
+        return 'mtab-1';
+    }
+
     var _isDragging = false;
     var _resizeStartY = 0;
     var _resizeStartHeight = 0;
@@ -35,6 +63,8 @@
     var _configSaveTimer = null;
     var _panelRestoreNeeded = false;
     var _activeContextMenuCleanup = null;
+
+    _ensurePanelGroup('mtab-1');
 
     // ---- SVG Icons ----
     var ICONS = {
