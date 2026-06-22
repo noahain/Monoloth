@@ -653,12 +653,16 @@
             if (cmdPanel) {
                 cmdPanel.classList.add('open');
             }
+            var panelBtn = sidebarButtons.querySelector('[data-btn-id="open_cmd_panel"]');
+            if (panelBtn) panelBtn.classList.add('active');
             setTimeout(function () { refitActiveTab(); }, 50);
         } else if (!group.isOpen && _cmdPanelOpen) {
             _cmdPanelOpen = false;
             if (cmdPanel) {
                 cmdPanel.classList.remove('open');
             }
+            var panelBtn = sidebarButtons.querySelector('[data-btn-id="open_cmd_panel"]');
+            if (panelBtn) panelBtn.classList.remove('active');
         }
     }
 
