@@ -1,6 +1,18 @@
 (function () {
     'use strict';
 
+    function stripAnsi(str) {
+        if (typeof str !== 'string') return str;
+        return str.replace(/\x1B\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\x1B\][0-9]*;[^\x07]*\x07?/g, '');
+    }
+    function looksLikePrompt(data) {
+        if (typeof data !== 'string') return false;
+        var text = stripAnsi(data);
+        return /(?:^|[\n\r])[A-Za-z]:\\[^\n]*>\s*$/.test(text) ||
+               /(?:^|[\n\r])PS [^\n]*>\s*$/.test(text) ||
+               /(?:^|[\n\r])[^\n]*[$#]\s*$/.test(text);
+    }
+
     // --- Main Terminal Tab Manager ---
     // Depends on: window.MonolithTheme, window.MonolithShortcuts, window.MonolothApp
     // Mirrors the sidebar.js panel-tab pattern but for the MAIN terminal view.
@@ -1122,8 +1134,7 @@
         if (typeof data === 'string' && data.indexOf('[session ended]') !== -1) {
             startSessionExitCountdown(tab);
         }
-        // Prompt detection: clear busy dot when shell returns to prompt.
-        if (/[A-Za-z]:\\[^\n]*>\s*$/.test(data) || /\nPS [^\n]*>\s*$/.test(data) || /\n[^\n]*\$\s*$/.test(data)) {
+        if (looksLikePrompt(data)) {
             tab.busy = false;
             updateBusyDot(tab);
         }

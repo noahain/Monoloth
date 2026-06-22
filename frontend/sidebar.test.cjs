@@ -294,3 +294,13 @@ test('switchToMainTab hides the OLD group containers (regression: panel tabs fro
     assert.equal(mtab2Container.style.display, '',
         'mtab-2 panel container should be visible after switching to mtab-2');
 });
+
+test('looksLikePrompt clears busy dot with ANSI-colored prompt at start of chunk', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    await harness.context.window.SidebarManager.createTab(null, true, 'C:\\test');
+    const tabs = harness.context.window.SidebarManager.getAllTabs();
+    const tab = tabs[0];
+    tab.busy = true;
+    harness.context.window.SidebarManager.writeToTab(tab.id, '\x1B[32mPS C:\\test> \x1B[0m', false);
+    assert.equal(tab.busy, false, 'busy should be cleared after ANSI-colored prompt');
+});

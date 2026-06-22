@@ -1,6 +1,18 @@
 (function () {
     'use strict';
 
+    function stripAnsi(str) {
+        if (typeof str !== 'string') return str;
+        return str.replace(/\x1B\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\x1B\][0-9]*;[^\x07]*\x07?/g, '');
+    }
+    function looksLikePrompt(data) {
+        if (typeof data !== 'string') return false;
+        var text = stripAnsi(data);
+        return /(?:^|[\n\r])[A-Za-z]:\\[^\n]*>\s*$/.test(text) ||
+               /(?:^|[\n\r])PS [^\n]*>\s*$/.test(text) ||
+               /(?:^|[\n\r])[^\n]*[$#]\s*$/.test(text);
+    }
+
     var UI = window.MonolothUI;
     var escapeHtml = UI.escapeHtml;
     var silent = UI.silent;
@@ -1821,10 +1833,7 @@
                         } catch (e) {}
                     }, 300);
                 }
-                // Shell returned to a prompt → command finished, clear busy.
-                // ponytail: matches cmd.exe "C:\...>" and PowerShell "PS ...>"
-                // prompts at the tail of an output chunk. Upgrade path: OSC 133.
-                if (/[A-Za-z]:\\[^\n]*>\s*$/.test(data) || /\nPS [^\n]*>\s*$/.test(data) || /\n[^\n]*\$\s*$/.test(data)) {
+                if (looksLikePrompt(data)) {
                     if (tab._busyTimer) { clearTimeout(tab._busyTimer); tab._busyTimer = null; }
                     tab.busy = false;
                     updateBusyDot(tab);
