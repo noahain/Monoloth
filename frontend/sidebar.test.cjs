@@ -216,6 +216,9 @@ function createHarness(bgState) {
     context.globalThis = context;
     vm.createContext(context);
 
+    const terminalViewSource = fs.readFileSync('frontend/lib/terminal-view.js', 'utf8');
+    vm.runInContext(terminalViewSource, context, { filename: 'frontend/lib/terminal-view.js' });
+
     const sidebarSource = fs.readFileSync('frontend/sidebar.js', 'utf8');
     vm.runInContext(sidebarSource, context, { filename: 'frontend/sidebar.js' });
 

@@ -211,6 +211,9 @@ function createHarness(bgState) {
     const themeSource = fs.readFileSync('frontend/theme.js', 'utf8');
     vm.runInContext(themeSource, context, { filename: 'frontend/theme.js' });
 
+    const terminalViewSource = fs.readFileSync('frontend/lib/terminal-view.js', 'utf8');
+    vm.runInContext(terminalViewSource, context, { filename: 'frontend/lib/terminal-view.js' });
+
     const terminalSource = fs.readFileSync('frontend/terminal.js', 'utf8');
     vm.runInContext(terminalSource, context, { filename: 'frontend/terminal.js' });
 

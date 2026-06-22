@@ -276,200 +276,133 @@
         initTheme.background = terminalBg;
         initTheme.black = terminalBlack;
 
-        var termOptions = {
-            allowTransparency: true,
+        return window.MonolithTerminalView.create({
+            terminalDiv: termDiv,
             theme: initTheme,
-            fontFamily: '"Cascadia Mono", "Consolas", "Lucida Console", "Courier New", monospace',
-            fontSize: 14,
-            letterSpacing: 0,
-            lineHeight: 1.0,
-            cursorBlink: true,
-            cursorStyle: 'block',
-            scrollback: 2000,
-            smoothScrollDuration: 0,
-            scrollSensitivity: 1,
-            allowProposedApi: true,
-            macOptionIsMeta: true,
-            macOptionClickForcesSelection: true,
-            minimumContrastRatio: 1,
-            fastScrollModifier: 'alt',
-            fastScrollSensitivity: 5,
-            scrollOnUserInput: true
-        };
-        Object.assign(termOptions, buildTerminalWindowsOptions());
-
-        var term = new Terminal(termOptions);
-        var fitAddon = (typeof FitAddon !== 'undefined') ? new FitAddon.FitAddon() : null;
-        if (fitAddon) term.loadAddon(fitAddon);
-        term.open(termDiv);
-        if (fitAddon) {
-            requestAnimationFrame(function () {
-                if (tab.closing || !_tabs.has(tab.id)) return;
-                fitAddon.fit();
-                refitActiveTab();
-                if (typeof WebglAddon !== 'undefined' && !tab.webglAddon) {
-                    try {
-                        var gl = new WebglAddon.WebglAddon();
-                        gl.onContextLoss(function () { gl.dispose(); });
-                        term.loadAddon(gl);
-                        tab.webglAddon = gl;
-                    } catch (e) {}
+            extraTermOptions: {
+                letterSpacing: 0,
+                lineHeight: 1.0,
+                macOptionIsMeta: true,
+                macOptionClickForcesSelection: true
+            },
+            startLabel: window.MonolothApp.getStartupLabel(),
+            dir: tab.dir,
+            busyOnEnter: 'immediate',
+            sessionId: tab.sessionId,
+            customKeyHandler: function (e) {
+                if (e.ctrlKey && !e.shiftKey && e.code === 'KeyC' && tab.term.hasSelection()) {
+                    window.MonolothApp.copyToClipboard(tab.term.getSelection());
+                    tab.term.clearSelection();
+                    return false;
                 }
-            });
-        }
-        term.focus();
-
-        tab.term = term;
-        tab.fitAddon = fitAddon;
-
-        // Keyboard copy/paste/shortcut interception (same as original terminal.js)
-        term.attachCustomKeyEventHandler(function (e) {
-            if (e.ctrlKey && !e.shiftKey && e.code === 'KeyC' && term.hasSelection()) {
-                window.MonolothApp.copyToClipboard(term.getSelection());
-                term.clearSelection();
-                return false;
-            }
-            if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
-                if (term.hasSelection()) {
-                    window.MonolothApp.copyToClipboard(term.getSelection());
-                    term.clearSelection();
+                if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
+                    if (tab.term.hasSelection()) {
+                        window.MonolothApp.copyToClipboard(tab.term.getSelection());
+                        tab.term.clearSelection();
+                    }
+                    return false;
                 }
-                return false;
-            }
-            if ((e.ctrlKey && e.code === 'KeyV') || (e.shiftKey && e.code === 'Insert')) return false;
-            if (e.ctrlKey && e.shiftKey && e.code === 'KeyW') return false;
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('command_palette'))) return false;
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('settings'))) return false;
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('toggle_sidebar'))) return false;
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('cmd_panel'))) return false;
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('clear_terminal'))) return false;
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('switch_profile'))) return false;
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('back_to_launcher'))) return false;
-            if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('new_main_tab'))) return false;
-            return true;
-        });
-
-        term.element.addEventListener('paste', function (e) {
-            var text = e.clipboardData.getData('text');
-            if (text && window.monolithApi) {
+                if ((e.ctrlKey && e.code === 'KeyV') || (e.shiftKey && e.code === 'Insert')) return false;
+                if (e.ctrlKey && e.shiftKey && e.code === 'KeyW') return false;
+                if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('command_palette'))) return false;
+                if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('settings'))) return false;
+                if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('toggle_sidebar'))) return false;
+                if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('cmd_panel'))) return false;
+                if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('clear_terminal'))) return false;
+                if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('switch_profile'))) return false;
+                if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('back_to_launcher'))) return false;
+                if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('new_main_tab'))) return false;
+                return true;
+            },
+            pasteHandler: function (e) {
+                var text = e.clipboardData.getData('text');
+                if (text && window.monolithApi) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    try { window.monolithApi.send_input(tab.sessionId, text); } catch (err) {}
+                }
+            },
+            contextMenuHandler: function (e) {
                 e.preventDefault();
-                e.stopPropagation();
-                try { window.monolithApi.send_input(tab.sessionId, text); } catch (err) {}
-            }
-        });
-
-        termDiv.addEventListener('contextmenu', function (e) {
-            e.preventDefault();
-            var selection = term.getSelection();
-            if (selection) {
-                window.MonolothApp.copyToClipboard(selection);
-                var indicator = document.createElement('div');
-                indicator.className = 'copied-toast';
-                indicator.textContent = 'Copied!';
-                indicator.style.cssText = 'position:fixed;top:' + e.clientY + 'px;left:' + e.clientX + 'px;background:#4a4a4a;color:#e0e0e0;padding:4px 8px;border-radius:4px;font-size:12px;font-family:monospace;pointer-events:none;z-index:9999;';
-                document.body.appendChild(indicator);
-                setTimeout(function () {
-                    indicator.classList.add('anim-exit');
-                    setTimeout(function () { indicator.remove(); }, 300);
-                }, 500);
-            } else {
-                navigator.clipboard.readText().then(function (text) {
-                    if (window.monolithApi && text) {
-                        window.monolithApi.send_input(tab.sessionId, text).catch(function () {});
-                    }
-                }).catch(function () {});
-            }
-        });
-
-        term.onData(function (data) {
-            if (window.monolithApi) {
-                try { window.monolithApi.send_input(tab.sessionId, data); } catch (e) {}
-            }
-            if (data.indexOf('\r') !== -1) {
-                tab.busy = true;
-                updateBusyDot(tab);
-            }
-        });
-
-        // Start the PTY session — wait for fitAddon to produce stable dimensions
-        // before starting, so TUI apps see the correct size from the first byte.
-        var startGen = _sessionGeneration[tab.sessionId] || 0;
-
-        term.writeln('');
-        term.writeln('Monoloth Terminal');
-        term.writeln('Directory: ' + (tab.dir || ''));
-        term.writeln('Starting ' + window.MonolothApp.getStartupLabel() + '...');
-        term.writeln('');
-
-        if (!window.monolithApi) {
-            term.writeln('Error: Bridge not available.');
-            return Promise.resolve(tab);
-        }
-
-        return new Promise(function (resolve) {
-            if (!fitAddon) { resolve({ cols: term.cols || 80, rows: term.rows || 24 }); return; }
-            var attempts = 0;
-            var prevDims = null;
-            function tryFit() {
-                if (tab.closing || !_tabs.has(tab.id)) { resolve(null); return; }
-                try { fitAddon.fit(); } catch (e) {}
-                var dims;
-                try { dims = fitAddon.proposeDimensions(); } catch (e) {}
-                if (dims && dims.cols > 0 && dims.rows > 0) {
-                    if (prevDims && prevDims.cols === dims.cols && prevDims.rows === dims.rows) {
-                        resolve(dims);
-                        return;
-                    }
-                    prevDims = { cols: dims.cols, rows: dims.rows };
+                var selection = tab.term.getSelection();
+                if (selection) {
+                    window.MonolothApp.copyToClipboard(selection);
+                    var indicator = document.createElement('div');
+                    indicator.className = 'copied-toast';
+                    indicator.textContent = 'Copied!';
+                    indicator.style.cssText = 'position:fixed;top:' + e.clientY + 'px;left:' + e.clientX + 'px;background:#4a4a4a;color:#e0e0e0;padding:4px 8px;border-radius:4px;font-size:12px;font-family:monospace;pointer-events:none;z-index:9999;';
+                    document.body.appendChild(indicator);
+                    setTimeout(function () {
+                        indicator.classList.add('anim-exit');
+                        setTimeout(function () { indicator.remove(); }, 300);
+                    }, 500);
+                } else {
+                    navigator.clipboard.readText().then(function (text) {
+                        if (window.monolithApi && text) {
+                            window.monolithApi.send_input(tab.sessionId, text).catch(function () {});
+                        }
+                    }).catch(function () {});
                 }
-                if (++attempts > 30) { resolve(prevDims || { cols: term.cols || 80, rows: term.rows || 24 }); return; }
-                requestAnimationFrame(tryFit);
-            }
-            tryFit();
-        }).then(function (dims) {
-            if (tab.closing || !_tabs.has(tab.id)) return tab;
-            var cols = dims ? dims.cols : (term.cols || 80);
-            var rows = dims ? dims.rows : (term.rows || 24);
-            return window.monolithApi.start_terminal(tab.sessionId, tab.dir, true, null, cols, rows, tab.profile);
-        })
-        .then(function (result) {
-            if (!result || result === tab) return tab;
-            if (tab.closing || !_tabs.has(tab.id)) {
-                if (result.success && window.monolithApi) {
-                    window.monolithApi.terminate_terminal(tab.sessionId).catch(function () {});
+            },
+            onData: function (data) {
+                if (window.monolithApi) {
+                    try { window.monolithApi.send_input(tab.sessionId, data); } catch (e) {}
                 }
-                return tab;
-            }
-            if (result.success) {
-                tab.running = true;
-                tab.generation = result.generation;
-                if (result.generation) _sessionGeneration[tab.sessionId] = result.generation;
-                requestAnimationFrame(function () {
-                    if (fitAddon) fitAddon.fit();
-                    refitActiveTab();
-                    if (typeof WebglAddon !== 'undefined' && !tab.webglAddon) {
-                        try {
-                            var gl = new WebglAddon.WebglAddon();
-                            gl.onContextLoss(function () { gl.dispose(); });
-                            term.loadAddon(gl);
-                            tab.webglAddon = gl;
-                        } catch (e) {}
+                if (data.indexOf('\r') !== -1) {
+                    tab.busy = true;
+                    updateBusyDot(tab);
+                }
+            },
+            onTermCreated: function (refs) {
+                tab.term = refs.term;
+                tab.fitAddon = refs.fitAddon;
+            },
+            abortCheck: function () { return tab.closing || !_tabs.has(tab.id); },
+            startPty: function (cols, rows) {
+                return window.monolithApi.start_terminal(tab.sessionId, tab.dir, true, null, cols, rows, tab.profile);
+            },
+            onPtyResult: function (result) {
+                if (tab.closing || !_tabs.has(tab.id)) {
+                    if (result.success && window.monolithApi) {
+                        window.monolithApi.terminate_terminal(tab.sessionId).catch(function () {});
                     }
-                });
-            } else {
+                    return;
+                }
+                if (result.success) {
+                    tab.running = true;
+                    tab.generation = result.generation;
+                    if (result.generation) _sessionGeneration[tab.sessionId] = result.generation;
+                    requestAnimationFrame(function () {
+                        if (tab.fitAddon) tab.fitAddon.fit();
+                        refitActiveTab();
+                        if (typeof WebglAddon !== 'undefined' && !tab.webglAddon) {
+                            try {
+                                var gl = new WebglAddon.WebglAddon();
+                                gl.onContextLoss(function () { gl.dispose(); });
+                                tab.term.loadAddon(gl);
+                                tab.webglAddon = gl;
+                            } catch (e) {}
+                        }
+                    });
+                } else {
+                    tab.running = false;
+                    tab.term.writeln('');
+                    tab.term.writeln('Failed to start ' + window.MonolothApp.getStartupLabel() + '. ' + (result.error ? result.error : 'Check that it is installed and in your PATH.'));
+                    showTabExitBanner(tab);
+                }
+            },
+            onPtyError: function (err) {
+                if (tab.closing || !_tabs.has(tab.id)) return;
                 tab.running = false;
-                term.writeln('');
-                term.writeln('Failed to start ' + window.MonolothApp.getStartupLabel() + '. ' + (result.error ? result.error : 'Check that it is installed and in your PATH.'));
+                tab.term.writeln('');
+                tab.term.writeln('Error starting ' + window.MonolothApp.getStartupLabel() + ': ' + err);
                 showTabExitBanner(tab);
-            }
-            return tab;
-        })
-        .catch(function (err) {
-            if (tab.closing || !_tabs.has(tab.id)) return tab;
-            tab.running = false;
-            term.writeln('');
-            term.writeln('Error starting ' + window.MonolothApp.getStartupLabel() + ': ' + err);
-            showTabExitBanner(tab);
+            },
+            focus: true
+        }).then(function (refs) {
+            if (!refs) return tab;
+            tab.term = refs.term || tab.term;
+            tab.fitAddon = refs.fitAddon || tab.fitAddon;
             return tab;
         });
     }
@@ -536,12 +469,7 @@
             }
         }
         clearTabExitCountdown(tab);
-        if (tab.term) {
-            try { tab.term.dispose(); } catch (e) {}
-            try { if (tab.fitAddon) tab.fitAddon.dispose(); } catch (e) {}
-            tab.term = null;
-            tab.fitAddon = null;
-        }
+        window.MonolithTerminalView.disposeTerminals(tab);
         delete _sessionGeneration[tab.sessionId];
         delete _skipNextEof[tab.sessionId];
 
@@ -1116,10 +1044,7 @@
                 if (tab.sessionId.startsWith('main-tab-') && window.monolithApi && typeof window.monolithApi.retire_panel_tab === 'function') {
                     try { window.monolithApi.retire_panel_tab(tab.sessionId).catch(function () {}); } catch (e) {}
                 }
-                if (tab.term) {
-                    try { tab.term.dispose(); } catch (e) {}
-                    try { if (tab.fitAddon) tab.fitAddon.dispose(); } catch (e) {}
-                }
+                window.MonolithTerminalView.disposeTerminals(tab);
                 // Remove DOM elements (containers + tab bar items).
                 if (tab.container && tab.container.parentNode) tab.container.remove();
                 var tabItem = tabList && tabList.querySelector('.main-tab[data-tab-id="' + tab.id + '"]');

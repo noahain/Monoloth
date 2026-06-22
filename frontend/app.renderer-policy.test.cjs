@@ -297,6 +297,9 @@ function createHarness(backgroundConfig) {
     const profilesSource = fs.readFileSync('frontend/profiles.js', 'utf8');
     vm.runInContext(profilesSource, context, { filename: 'frontend/profiles.js' });
 
+    const terminalViewSource = fs.readFileSync('frontend/lib/terminal-view.js', 'utf8');
+    vm.runInContext(terminalViewSource, context, { filename: 'frontend/lib/terminal-view.js' });
+
     const terminalSource = fs.readFileSync('frontend/terminal.js', 'utf8');
     vm.runInContext(terminalSource, context, { filename: 'frontend/terminal.js' });
 
