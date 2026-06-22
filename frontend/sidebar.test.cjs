@@ -237,3 +237,60 @@ test('CMD panel always uses transparent canvas with no WebGL', async () => {
     assert.equal(term.options.allowTransparency, true, 'panel must allow transparency');
     assert.equal(term.options.theme.background, 'transparent', 'panel bg must be transparent');
 });
+
+test('switchToMainTab hides the OLD group containers (regression: panel tabs from previous main tab were leaking)', async () => {
+    // Bug: switchToMainTab read the "old group" via _getActiveGroup(), which calls
+    // MonolithTerminal.getActiveTabId(). By the time terminal.js's hook calls
+    // switchToMainTab (terminal.js:231-233), terminal.js has already updated its
+    // own _activeTabId to the NEW main tab. So _getActiveGroup() returned the NEW
+    // group (or null for a not-yet-created group), and the OLD group's containers
+    // were never hidden. New panel tabs created in the NEW group visually overlapped
+    // with the still-visible OLD group containers.
+    //
+    // Fix: read sidebar.js's own _activeMainTabId (still the OLD value here) instead
+    // of asking terminal.js.
+
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+
+    // Mimic app.js bootstrap: sidebar.js's _activeMainTabId starts as the initial main tab.
+    harness.context.window.SidebarManager.initForMainTab('mtab-1');
+
+    // Simulate terminal.js reporting the current active main tab.
+    // Start with mtab-1 so createTab (without explicit mainTabId) puts tabs in mtab-1.
+    let terminalActiveTab = 'mtab-1';
+    harness.context.window.MonolithTerminal.getActiveTabId = function () { return terminalActiveTab; };
+
+    // Create 2 panel tabs in mtab-1.
+    await harness.context.window.SidebarManager.createTab(null, true, 'C:\\repo');
+    await harness.context.window.SidebarManager.createTab(null, true, 'C:\\repo');
+
+    // Create 1 panel tab in mtab-2 (passing mainTabId explicitly).
+    await harness.context.window.SidebarManager.createTab(null, true, 'C:\\repo', 'mtab-2');
+
+    // Save container references while terminal.js still says mtab-1 is active.
+    const mtab1Tabs = harness.context.window.SidebarManager.getAllTabs();
+    assert.equal(mtab1Tabs.length, 2, 'expected 2 panel tabs in mtab-1');
+    const mtab1ContainerA = mtab1Tabs[0].container;
+    const mtab1ContainerB = mtab1Tabs[1].container;
+
+    // Get mtab-2's tab via getTab (uses tabId, not active main tab).
+    const mtab2Container = harness.context.window.SidebarManager.getTab('ptab-mtab-2-1').container;
+
+    // Simulate terminal.js having already switched its active tab to mtab-2.
+    // This is the production order: terminal.js sets _activeTabId, then calls
+    // SidebarManager.switchToMainTab(tabId) at terminal.js:232.
+    terminalActiveTab = 'mtab-2';
+
+    // Trigger the switch.
+    harness.context.window.SidebarManager.switchToMainTab('mtab-2');
+
+    // The OLD group (mtab-1) containers must be hidden.
+    assert.equal(mtab1ContainerA.style.display, 'none',
+        'mtab-1 first panel container should be hidden after switching to mtab-2');
+    assert.equal(mtab1ContainerB.style.display, 'none',
+        'mtab-1 second panel container should be hidden after switching to mtab-2');
+
+    // The NEW group (mtab-2) container must be visible.
+    assert.equal(mtab2Container.style.display, '',
+        'mtab-2 panel container should be visible after switching to mtab-2');
+});

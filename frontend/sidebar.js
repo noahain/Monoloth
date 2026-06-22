@@ -620,7 +620,7 @@
     function switchToMainTab(mainTabId) {
         if (_activeMainTabId === mainTabId) return;
 
-        var oldGroup = _getActiveGroup();
+        var oldGroup = _activeMainTabId ? _mainTabPanels.get(_activeMainTabId) : null;
 
         if (oldGroup) {
             oldGroup.tabs.forEach(function (tab) {
