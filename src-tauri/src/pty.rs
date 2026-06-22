@@ -254,15 +254,16 @@ impl PtyManager {
         gens.remove(session_id);
     }
 
+    fn collect_prefix_keys(&self, prefix: &str) -> Vec<String> {
+        self.sessions.lock()
+            .keys()
+            .filter(|k| k.starts_with(prefix))
+            .cloned()
+            .collect()
+    }
+
     pub fn retire_by_prefix(&self, prefix: &str) {
-        let to_retire: Vec<String> = {
-            let sessions = self.sessions.lock();
-            sessions.keys()
-                .filter(|k| k.starts_with(prefix))
-                .cloned()
-                .collect()
-        };
-        for sid in to_retire {
+        for sid in self.collect_prefix_keys(prefix) {
             self.retire_session(&sid);
         }
     }
@@ -277,14 +278,7 @@ impl PtyManager {
     }
 
     pub fn terminate_by_prefix(&self, prefix: &str) {
-        let to_terminate: Vec<String> = {
-            self.sessions.lock()
-                .keys()
-                .filter(|k| k.starts_with(prefix))
-                .cloned()
-                .collect()
-        };
-        for sid in to_terminate {
+        for sid in self.collect_prefix_keys(prefix) {
             self.terminate(&sid);
         }
     }

@@ -12,6 +12,15 @@ use config::{AppConfig, MAX_WINDOW_DIMENSION, MAX_WINDOW_POSITION, MIN_WINDOW_HE
 use history::HistoryManager;
 use pty::PtyManager;
 
+fn is_valid_window_position(x: i32, y: i32) -> bool {
+    (x as i64) > WINDOW_MINIMIZED_SENTINEL
+        && (y as i64) > WINDOW_MINIMIZED_SENTINEL
+        && (x as i64) >= MIN_WINDOW_POSITION
+        && (y as i64) >= MIN_WINDOW_POSITION
+        && (x as i64) <= MAX_WINDOW_POSITION
+        && (y as i64) <= MAX_WINDOW_POSITION
+}
+
 #[derive(Default)]
 pub struct CancelDownloadState {
     sender: Mutex<Option<oneshot::Sender<()>>>,
@@ -170,13 +179,7 @@ pub fn run() {
                                     cfg_for_events.set_window_size(size.width, size.height);
                                     if !is_wayland {
                                         if let Ok(pos) = window_clone.outer_position() {
-                                            if (pos.x as i64) > WINDOW_MINIMIZED_SENTINEL
-                                                && (pos.y as i64) > WINDOW_MINIMIZED_SENTINEL
-                                                && (pos.x as i64) >= MIN_WINDOW_POSITION
-                                                && (pos.y as i64) >= MIN_WINDOW_POSITION
-                                                && (pos.x as i64) <= MAX_WINDOW_POSITION
-                                                && (pos.y as i64) <= MAX_WINDOW_POSITION
-                                            {
+                                            if is_valid_window_position(pos.x, pos.y) {
                                                 cfg_for_events.set_window_position(pos.x, pos.y);
                                             }
                                         }
@@ -192,14 +195,7 @@ pub fn run() {
                         if is_wayland {
                             return;
                         }
-                        if pos.x <= WINDOW_MINIMIZED_SENTINEL as i32 || pos.y <= WINDOW_MINIMIZED_SENTINEL as i32 {
-                            return;
-                        }
-                        if (pos.x as i64) < MIN_WINDOW_POSITION
-                            || (pos.y as i64) < MIN_WINDOW_POSITION
-                            || (pos.x as i64) > MAX_WINDOW_POSITION
-                            || (pos.y as i64) > MAX_WINDOW_POSITION
-                        {
+                        if !is_valid_window_position(pos.x, pos.y) {
                             return;
                         }
                         if !window_clone.is_maximized().unwrap_or(false) {
@@ -219,13 +215,7 @@ pub fn run() {
                             if !is_minimized {
                                 if !is_wayland {
                                     if let Ok(pos) = window_clone.outer_position() {
-                                        if (pos.x as i64) > WINDOW_MINIMIZED_SENTINEL
-                                            && (pos.y as i64) > WINDOW_MINIMIZED_SENTINEL
-                                            && (pos.x as i64) >= MIN_WINDOW_POSITION
-                                            && (pos.y as i64) >= MIN_WINDOW_POSITION
-                                            && (pos.x as i64) <= MAX_WINDOW_POSITION
-                                            && (pos.y as i64) <= MAX_WINDOW_POSITION
-                                        {
+                                        if is_valid_window_position(pos.x, pos.y) {
                                             cfg_for_events.set_window_position(pos.x, pos.y);
                                         }
                                     }
@@ -287,8 +277,6 @@ pub fn run() {
             commands::delete_profile,
             commands::switch_profile,
             commands::rename_profile,
-            commands::get_profile_config,
-            commands::set_profile_setting,
             commands::get_profile_appearance,
             commands::set_background_config,
             commands::toggle_custom_titlebar,

@@ -202,6 +202,9 @@ function createHarness(bgState) {
     context.globalThis = context;
     vm.createContext(context);
 
+    const domUtilsSource = fs.readFileSync('frontend/lib/dom-utils.js', 'utf8');
+    vm.runInContext(domUtilsSource, context, { filename: 'frontend/lib/dom-utils.js' });
+
     const shortcutsSource = fs.readFileSync('frontend/shortcuts.js', 'utf8');
     vm.runInContext(shortcutsSource, context, { filename: 'frontend/shortcuts.js' });
 

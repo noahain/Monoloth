@@ -57,6 +57,9 @@ function createUpdaterHarness() {
     context.globalThis = context;
     vm.createContext(context);
 
+    const domUtilsSource = fs.readFileSync('frontend/lib/dom-utils.js', 'utf8');
+    vm.runInContext(domUtilsSource, context, { filename: 'frontend/lib/dom-utils.js' });
+
     const source = fs.readFileSync('frontend/lib/plugin-updater.js', 'utf8');
     vm.runInContext(source, context, { filename: 'frontend/lib/plugin-updater.js' });
 
@@ -119,6 +122,7 @@ test('plugin-updater IIFE always exposes __TAURI_PLUGIN_UPDATER__ (lazy init)', 
     const context = { console, window, Promise };
     context.globalThis = context;
     vm.createContext(context);
+    vm.runInContext(fs.readFileSync('frontend/lib/dom-utils.js', 'utf8'), context, { filename: 'frontend/lib/dom-utils.js' });
     const source = fs.readFileSync('frontend/lib/plugin-updater.js', 'utf8');
     vm.runInContext(source, context, { filename: 'frontend/lib/plugin-updater.js' });
     assert.ok(context.window.__TAURI_PLUGIN_UPDATER__, 'plugin global should always be set');
@@ -131,6 +135,7 @@ test('check() rejects when Tauri is not available (lazy guard)', async () => {
     const context = { console, window, Promise };
     context.globalThis = context;
     vm.createContext(context);
+    vm.runInContext(fs.readFileSync('frontend/lib/dom-utils.js', 'utf8'), context, { filename: 'frontend/lib/dom-utils.js' });
     const source = fs.readFileSync('frontend/lib/plugin-updater.js', 'utf8');
     vm.runInContext(source, context, { filename: 'frontend/lib/plugin-updater.js' });
     await assert.rejects(
@@ -145,6 +150,7 @@ test('check() resolves Tauri core injected after plugin load', async () => {
     const context = { console, window, Promise };
     context.globalThis = context;
     vm.createContext(context);
+    vm.runInContext(fs.readFileSync('frontend/lib/dom-utils.js', 'utf8'), context, { filename: 'frontend/lib/dom-utils.js' });
     const source = fs.readFileSync('frontend/lib/plugin-updater.js', 'utf8');
     vm.runInContext(source, context, { filename: 'frontend/lib/plugin-updater.js' });
 
@@ -163,7 +169,16 @@ test('check() resolves Tauri core injected after plugin load', async () => {
 
 test('plugin-process resolves Tauri core injected after plugin load', async () => {
     const calls = [];
-    const window = { __TAURI__: null };
+    const window = { __TAURI__: null, MonolothUI: { getCore: function () {
+        var candidates = [window.__TAURI_CORE__, window.__TAURI__ && window.__TAURI__.core, window.__TAURI_INTERNALS__];
+        for (var i = 0; i < candidates.length; i++) {
+            if (candidates[i] && typeof candidates[i].invoke === 'function') {
+                window.__TAURI_CORE__ = candidates[i];
+                return candidates[i];
+            }
+        }
+        return null;
+    } } };
     window.window = window;
     const context = { console, window, Promise };
     context.globalThis = context;

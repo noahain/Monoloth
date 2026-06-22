@@ -9,8 +9,6 @@
     var _paletteState = { subPalette: null, parentCommands: null, selectedIndex: 0 };
 
     var _paletteIcons = {
-        folder: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
-        'folder-open': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><path d="M2 10h20"/></svg>',
         'arrow-left': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>',
         copy: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
         menu: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
@@ -20,20 +18,16 @@
         palette: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>',
         clock: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
         user: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
-        'chevron-left': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>'
+        plus: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
     };
 
+    var _subPalettes = {};
+
     var commands = [
-        { id: 'open-dir', icon: 'folder-open', label: 'Open Directory', group: 'nav', action: { type: 'sub-palette', id: 'directory-search' } },
-        { id: 'last-dir', icon: 'folder', label: 'Open Last Directory', group: 'nav', action: function () {
-            window.MonolothApp.backToLanding();
-            setTimeout(function () {
-                if (window.monolithApi) {
-                    window.monolithApi.get_last_directory().then(function (res) {
-                        if (res && res.success && res.path) window.MonolothApp.showTerminal(res.path);
-                    });
-                }
-            }, 200);
+        { id: 'new-tab', icon: 'plus', label: 'New Tab', group: 'nav', shortcutKey: 'new_main_tab', action: function () {
+            if (typeof window.MonolithTerminal !== 'undefined' && typeof window.MonolithTerminal.promptNewTab === 'function') {
+                window.MonolithTerminal.promptNewTab();
+            }
         }},
         { id: 'back', icon: 'arrow-left', label: 'Back to Launcher', group: 'nav', shortcutKey: 'back_to_launcher', action: function () { window.MonolothApp.backToLanding(); } },
         { id: 'copy-path', icon: 'copy', label: 'Copy Current Path', group: 'nav', action: function () {
@@ -54,36 +48,6 @@
         { id: 'history', icon: 'clock', label: 'History', group: 'config', action: function () { window.MonolothApp.showSettings(); window.MonolothApp.switchTab('history'); } },
         { id: 'profiles', icon: 'user', label: 'Switch Profile', group: 'config', shortcutKey: 'switch_profile', action: function () { window.MonolothApp.openProfileSwitcher(); } },
     ];
-
-    var _subPalettes = {
-        'directory-search': {
-            render: function (query) {
-                var items = [];
-                if (window.monolithApi && window.monolithApi.get_last_directory) {
-                    items.push({ id: 'open-last', icon: 'folder', label: 'Open Last Directory', action: function () {
-                        window.monolithApi.get_last_directory().then(function (res) {
-                            if (res && res.success && res.path) window.MonolothApp.showTerminal(res.path);
-                        });
-                    }});
-                }
-                items.push({ id: 'browse', icon: 'folder-open', label: 'Browse...', action: function () {
-                    window.MonolothApp.backToLanding();
-                    setTimeout(function () {
-                        var chooseBtn = document.getElementById('choose-dir-btn');
-                        if (chooseBtn) chooseBtn.click();
-                    }, 200);
-                }});
-                if (query) {
-                    items = items.filter(function (item) {
-                        return item.label.toLowerCase().indexOf(query.toLowerCase()) !== -1;
-                    });
-                }
-                return items;
-            },
-            placeholder: 'Open directory...',
-            backLabel: 'Back'
-        }
-    };
     var paletteEl = document.createElement('div');
     paletteEl.id = 'command-palette';
     paletteEl.className = 'command-palette';

@@ -158,9 +158,21 @@
         }
     }
 
+    function getCore() {
+        var candidates = [window.__TAURI_CORE__, window.__TAURI__ && window.__TAURI__.core, window.__TAURI_INTERNALS__];
+        for (var i = 0; i < candidates.length; i++) {
+            if (candidates[i] && typeof candidates[i].invoke === 'function') {
+                window.__TAURI_CORE__ = candidates[i];
+                return candidates[i];
+            }
+        }
+        return null;
+    }
+
     window.MonolothUI = {
         escapeHtml: escapeHtml,
         forceReflow: forceReflow,
+        getCore: getCore,
         saveFocus: saveFocus,
         restoreFocus: restoreFocus,
         trapFocus: trapFocus,

@@ -88,7 +88,7 @@ function makeHarness({ checkResult, checkError } = {}) {
     window.__TAURI_CORE__ = window.__TAURI__.core;
     window.window = window;
     window.document = document;
-    window.MonolothUI = { escapeHtml: (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;') };
+    window.MonolothUI = { escapeHtml: (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'), getCore: () => window.__TAURI_CORE__ };   
 
     const context = {
         console,
@@ -98,7 +98,7 @@ function makeHarness({ checkResult, checkError } = {}) {
         Promise,
         setTimeout, clearTimeout,
         requestAnimationFrame: (fn) => { fn(); return 1; },
-        MonolothUI: { escapeHtml: (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;') }
+        MonolothUI: { escapeHtml: (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'), getCore: () => window.__TAURI_CORE__ }
     };
     context.globalThis = context;
     vm.createContext(context);
@@ -199,12 +199,12 @@ test('init() retries once after a transient IPC failure and mounts the toast', a
     window.__TAURI_CORE__ = window.__TAURI__.core;
     window.window = window;
     window.document = document;
-    window.MonolothUI = { escapeHtml: (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;') };
+    window.MonolothUI = { escapeHtml: (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'), getCore: () => window.__TAURI_CORE__ };   
     const context = {
         console, document, window,
         Promise, setTimeout, clearTimeout,
         requestAnimationFrame: (fn) => { fn(); return 1; },
-        MonolothUI: { escapeHtml: (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;') }
+        MonolothUI: { escapeHtml: (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'), getCore: () => window.__TAURI_CORE__ }
     };
     context.globalThis = context;
     vm.createContext(context);
@@ -238,7 +238,7 @@ test('manual update check re-enables button after timeout', async () => {
     document.documentElement = new FakeElement('html');
     const window = {
         __TAURI_PLUGIN_UPDATER__: { check: () => new Promise(() => {}) },
-        MonolothUI: { showStatus: (id, msg) => { elements[id].textContent = msg; } },
+        MonolothUI: { showStatus: (id, msg) => { elements[id].textContent = msg; }, getCore: () => null },
         addEventListener() {},
         removeEventListener() {}
     };
@@ -294,7 +294,7 @@ test('checkFromFooter routes through MonolothApp.showStatus, not MonolothUI', as
     let appCalls = 0;
     const window = {
         __TAURI_PLUGIN_UPDATER__: { check: () => new Promise(() => {}) },
-        MonolothUI: { showStatus() { uiCalls += 1; } },
+        MonolothUI: { showStatus() { uiCalls += 1; }, getCore: () => null },
         MonolothApp: { showStatus(id, msg) { appCalls += 1; status.textContent = msg; } },
         addEventListener() {},
         removeEventListener() {}

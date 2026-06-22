@@ -344,14 +344,6 @@
         return callApi('rename_profile', { old: oldName, new: newName });
     };
 
-    api.get_profile_config = function () {
-        return callApi('get_profile_config', {}, function (config) { return { config: config }; });
-    };
-
-    api.set_profile_setting = function (key, value) {
-        return callApi('set_profile_setting', { key: key, value: value });
-    };
-
     api.get_profile_appearance = function (profileName) {
         return callApiValue('get_profile_appearance', { profileName: profileName }, null);
     };

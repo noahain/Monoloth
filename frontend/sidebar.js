@@ -2,7 +2,7 @@
     'use strict';
 
     var UI = window.MonolothUI;
-    var forceReflow = UI.forceReflow;
+    var escapeHtml = UI.escapeHtml;
     var silent = UI.silent;
     var openModal = UI.openModal;
     var closeModal = UI.closeModal;
@@ -159,8 +159,8 @@
 
     function handleCopyPath() {
         var dir = getCurrentDir();
-        if (dir) {
-            navigator.clipboard.writeText(dir).catch(function () {});
+        if (dir && window.MonolothApp && window.MonolothApp.copyToClipboard) {
+            window.MonolothApp.copyToClipboard(dir);
         }
     }
 
@@ -452,10 +452,6 @@
     function applyPanelHeight(height) {
         _panelHeight = height;
         document.documentElement.style.setProperty('--cmd-panel-height', height + 'px');
-    }
-
-    function escapeHtml(str) {
-        return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
 
     function createTab(name, activate, dir, mainTabId) {

@@ -76,23 +76,33 @@ pub fn start_terminal(
     } else {
         Value::Null
     };
-    if session_id == "main" {
-        if let Value::Array(cmds) = &secondary {
-            for cmd_val in cmds {
-                if let Some(cmd_obj) = cmd_val.as_object() {
-                    if let Some(enabled) = cmd_obj.get("enabled").and_then(|v| v.as_bool()) {
-                        if enabled {
-                            if let Some(cmd_str) = cmd_obj.get("command").and_then(|v| v.as_str()) {
-                                if cmd_obj.get("mode").and_then(|v| v.as_str()) == Some("before") {
-                                    if let Err(e) = run_before_command(cmd_str, &directory, &panel_shell) {
-                                        warn!("Before command failed: {}", e);
-                                    }
-                                }
-                            }
-                        }
+    let mut before_cmds: Vec<(String, String)> = Vec::new();       // (cmd_str, shell)
+    let mut post_cmds: Vec<(usize, String, String)> = Vec::new();  // (idx, cmd_str, mode)
+    if let Value::Array(cmds) = &secondary {
+        for (idx, cmd_val) in cmds.iter().enumerate() {
+            if let Some(cmd_obj) = cmd_val.as_object() {
+                if cmd_obj.get("enabled").and_then(|v| v.as_bool()) != Some(true) {
+                    continue;
+                }
+                let cmd_str = match cmd_obj.get("command").and_then(|v| v.as_str()) {
+                    Some(s) => s.to_string(),
+                    None => continue,
+                };
+                match cmd_obj.get("mode").and_then(|v| v.as_str()) {
+                    Some("before") => before_cmds.push((cmd_str, panel_shell.clone())),
+                    Some("parallel") | Some("hidden") => {
+                        let mode = cmd_obj.get("mode").and_then(|v| v.as_str()).unwrap().to_string();
+                        post_cmds.push((idx, cmd_str, mode));
                     }
+                    _ => {}
                 }
             }
+        }
+    }
+
+    for (cmd_str, shell) in &before_cmds {
+        if let Err(e) = run_before_command(cmd_str, &directory, shell) {
+            warn!("Before command failed: {}", e);
         }
     }
 
@@ -108,34 +118,23 @@ pub fn start_terminal(
         }
     }
 
-    if session_id == "main" {
+    if !post_cmds.is_empty() {
         pty.terminate_by_prefix("hidden-");
-        if let Value::Array(cmds) = &secondary {
-            for (idx, cmd_val) in cmds.iter().enumerate() {
-                if let Some(cmd_obj) = cmd_val.as_object() {
-                    if let Some(enabled) = cmd_obj.get("enabled").and_then(|v| v.as_bool()) {
-                        if enabled {
-                            if let Some(cmd_str) = cmd_obj.get("command").and_then(|v| v.as_str()) {
-                                let mode = cmd_obj.get("mode").and_then(|v| v.as_str());
-                                if mode == Some("parallel") {
-                                    if let Err(e) = run_parallel_command(cmd_str.to_string(), directory.clone(), &panel_shell) {
-                                        warn!("Parallel command failed: {}", e);
-                                    }
-                                } else if mode == Some("hidden") {
-                                    let hidden_sid = format!("hidden-{}", idx);
-                                    match resolve_hidden_command(&panel_shell, cmd_str) {
-                                        Ok((exe, args)) => {
-                                            let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-                                            if let Err(e) = pty.spawn(&hidden_sid, &exe, &args_ref, &directory, cols, rows) {
-                                                warn!("Hidden command failed: {}", e);
-                                            }
-                                        }
-                                        Err(e) => warn!("Hidden command resolve failed: {}", e),
-                                    }
-                                }
-                            }
+        for (idx, cmd_str, mode) in &post_cmds {
+            if mode == "parallel" {
+                if let Err(e) = run_parallel_command(cmd_str.clone(), directory.clone(), &panel_shell) {
+                    warn!("Parallel command failed: {}", e);
+                }
+            } else if mode == "hidden" {
+                let hidden_sid = format!("hidden-{}", idx);
+                match resolve_hidden_command(&panel_shell, cmd_str) {
+                    Ok((exe, args)) => {
+                        let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+                        if let Err(e) = pty.spawn(&hidden_sid, &exe, &args_ref, &directory, cols, rows) {
+                            warn!("Hidden command failed: {}", e);
                         }
                     }
+                    Err(e) => warn!("Hidden command resolve failed: {}", e),
                 }
             }
         }
@@ -232,25 +231,21 @@ fn resolve_panel_shell(requested: Option<&str>) -> Result<(String, Vec<String>),
 }
 
 /// Resolve the shell + user command for a hidden (headless PTY) secondary command.
-/// Uses the same shell preference as the CMD panel (panelShell config).
+/// Uses the same shell preference as the CMD panel (panelShell config) but wraps
+/// via the shared `shell_command` helper so Windows arg construction stays consistent.
 fn resolve_hidden_command(shell_pref: &str, user_cmd: &str) -> Result<(String, Vec<String>), String> {
-    let (exe, _base_args) = resolve_panel_shell(Some(shell_pref))?;
-    let mut args: Vec<String> = Vec::new();
-    #[cfg(windows)]
-    {
-        if exe.eq_ignore_ascii_case("powershell") {
-            args.push("-NoProfile".to_string());
-            args.push("-Command".to_string());
-        } else {
-            args.push("/C".to_string());
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        args.push("-c".to_string());
-    }
-    args.push(user_cmd.to_string());
-    Ok((exe, args))
+    let (exe, _) = resolve_panel_shell(Some(shell_pref))?;
+    let shell_for_cmd = if cfg!(windows) {
+        if exe.eq_ignore_ascii_case("powershell") { "powershell" } else { "cmd" }
+    } else {
+        "sh"
+    };
+    let command = shell_command(user_cmd, shell_for_cmd);
+    let program = command.get_program().to_string_lossy().to_string();
+    let args: Vec<String> = command.get_args()
+        .map(|a| a.to_string_lossy().to_string())
+        .collect();
+    Ok((program, args))
 }
 
 #[cfg(any(not(windows), test))]

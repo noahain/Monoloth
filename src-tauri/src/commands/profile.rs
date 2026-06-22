@@ -1,5 +1,5 @@
 use crate::config::AppConfig;
-use serde_json::{Map, Value};
+use serde_json::Value;
 use tauri::State;
 
 #[tauri::command]
@@ -34,16 +34,6 @@ pub fn switch_profile(config: State<AppConfig>, name: String) -> Result<bool, St
 pub fn rename_profile(config: State<AppConfig>, old: String, new: String) -> Result<bool, String> {
     config.rename_profile(&old, &new)?;
     Ok(true)
-}
-
-#[tauri::command]
-pub fn get_profile_config(config: State<AppConfig>) -> Map<String, Value> {
-    config.get_all()
-}
-
-#[tauri::command]
-pub fn set_profile_setting(config: State<AppConfig>, key: String, value: Value) {
-    config.set(&key, value);
 }
 
 #[tauri::command]

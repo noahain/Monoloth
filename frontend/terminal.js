@@ -35,9 +35,7 @@
     }
     window.__monolithTermWinOpts = buildTerminalWindowsOptions;
 
-    function escapeHtml(str) {
-        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    }
+    var escapeHtml = window.MonolothUI.escapeHtml;
 
     function getActiveTab() {
         return _activeTabId ? _tabs.get(_activeTabId) : null;

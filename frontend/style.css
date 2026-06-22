@@ -8416,15 +8416,6 @@ body.adaptive-light.cta-outline .new-tab-card-overlay {
     padding: 0 1rem;
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-}
-@keyframes fadeOut {
-    from { opacity: 1; }
-    to   { opacity: 0; }
-}
-
 .new-tab-card-overlay.anim-enter {
     animation: fadeIn 0.2s ease forwards;
 }

@@ -45,6 +45,20 @@
         });
     }
 
+    function wireFooterButtons() {
+        if (!idFooter) return;
+        idFooter.innerHTML = '<button id="id-btn-cancel-el" class="id-btn-cancel">Cancel</button><button id="id-btn-ok-el" class="id-btn-primary">OK</button>';
+        var cancelBtn = document.getElementById('id-btn-cancel-el');
+        var okBtn = document.getElementById('id-btn-ok-el');
+        if (cancelBtn) cancelBtn.addEventListener('click', function () { closeDialog(); });
+        if (okBtn) okBtn.addEventListener('click', function () { onFooterOk(); });
+    }
+
+    var _footerOkHandler = null;
+    function onFooterOk() {
+        if (_footerOkHandler) _footerOkHandler();
+    }
+
     function showPrompt(title, label, defaultValue) {
         return new Promise(function (resolve, reject) {
             _dialogStack.push({ resolve: resolve, reject: reject });
@@ -66,11 +80,7 @@
                 if (inp) inp.addEventListener('keydown', onKey);
             }
             if (idFooter) {
-                idFooter.innerHTML = '<button id="id-btn-cancel-el" class="id-btn-cancel">Cancel</button><button id="id-btn-ok-el" class="id-btn-primary">OK</button>';
-                var cancelBtn = document.getElementById('id-btn-cancel-el');
-                var okBtn = document.getElementById('id-btn-ok-el');
-                if (cancelBtn) cancelBtn.addEventListener('click', function () { closeDialog(); });
-                if (okBtn) okBtn.addEventListener('click', function () {
+                _footerOkHandler = function () {
                     var inp = document.getElementById('id-input-field');
                     var val = inp ? inp.value.trim() : '';
                     var errEl = document.getElementById('id-input-error');
@@ -79,7 +89,8 @@
                         return;
                     }
                     closeDialog(val);
-                });
+                };
+                wireFooterButtons();
             }
             openModal(idEl);
         });
@@ -104,17 +115,14 @@
                 }
             }
             if (idFooter) {
-                idFooter.innerHTML = '<button id="id-btn-cancel-el" class="id-btn-cancel">Cancel</button><button id="id-btn-ok-el" class="id-btn-primary">OK</button>';
-                var cancelBtn = document.getElementById('id-btn-cancel-el');
-                var okBtn = document.getElementById('id-btn-ok-el');
-                if (cancelBtn) cancelBtn.addEventListener('click', function () { closeDialog(); });
-                if (okBtn) okBtn.addEventListener('click', function () {
+                _footerOkHandler = function () {
                     if (skipKey) {
                         var cb = document.getElementById('id-skip-cb-el');
                         if (cb && cb.checked) setConfirmPref(skipKey, true);
                     }
                     closeDialog(true);
-                });
+                };
+                wireFooterButtons();
             }
             openModal(idEl);
         });

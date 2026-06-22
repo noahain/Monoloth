@@ -12,8 +12,6 @@
     let _bgImagePath = '';
     let _bgTransparency = 75;
     let _currentLaunchDir = '';
-    var _keyDownHandler = null;
-    var _mouseDownHandler = null;
     var _useCustomTitlebar = true;
     var _isMaximized = false;
     var _maximizeSyncTimer = null;

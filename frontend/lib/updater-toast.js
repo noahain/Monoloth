@@ -4,16 +4,7 @@
     var STALL_TIMEOUT_MS = 2 * 60 * 1000;
     var CHECK_TIMEOUT_MS = 10000;
 
-    function getCore() {
-        var candidates = [window.__TAURI_CORE__, window.__TAURI__ && window.__TAURI__.core, window.__TAURI_INTERNALS__];
-        for (var i = 0; i < candidates.length; i++) {
-            if (candidates[i] && typeof candidates[i].invoke === 'function') {
-                window.__TAURI_CORE__ = candidates[i];
-                return candidates[i];
-            }
-        }
-        return null;
-    }
+    var getCore = window.MonolothUI.getCore;
 
     var state = {
         current: 'IDLE',
@@ -235,11 +226,9 @@
         var closeBtn = el.querySelector('.update-toast-close');
         var updateBtn = el.querySelector('.update-toast-update');
         var cancelBtn = el.querySelector('.update-toast-cancel');
-        var retryBtn = el.querySelector('.update-toast-retry');
         if (closeBtn) closeBtn.addEventListener('click', removeMounted);
         if (updateBtn) updateBtn.addEventListener('click', function () { startDownload(); });
         if (cancelBtn) cancelBtn.addEventListener('click', function () { cancelDownload(); });
-        if (retryBtn) retryBtn.addEventListener('click', function () { startDownload(); });
     }
 
     function wirePillEvents(el) {

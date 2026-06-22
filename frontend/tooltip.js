@@ -128,9 +128,6 @@
         for (var i = 0; i < els.length; i++) {
             var el = els[i];
             if (isAttached(el)) continue;
-            if (el.hasAttribute('title')) {
-                el.removeAttribute('title');
-            }
             attach(el, el.getAttribute('data-tooltip'));
         }
     }

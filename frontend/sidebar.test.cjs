@@ -170,7 +170,7 @@ function createHarness(bgState) {
         removeEventListener() {},
         matchMedia: () => ({ matches: false }),
         MonolothUI: {
-            forceReflow() {},
+            escapeHtml: (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'),
             silent(fn) { try { return fn && fn(); } catch (e) { return undefined; } },
             openModal() {},
             closeModal() {},

@@ -23,6 +23,15 @@
         new_panel_tab: 'Ctrl+Shift+T'
     };
 
+    function fillDefaults(target) {
+        for (var key in DEFAULT_SHORTCUTS) {
+            if (!target[key]) {
+                target[key] = DEFAULT_SHORTCUTS[key];
+            }
+        }
+        return target;
+    }
+
     var _shortcuts = {};
 
     function loadShortcuts(callback) {
@@ -42,21 +51,12 @@
                 } catch (e) {
                     _shortcuts = {};
                 }
-                // Fill in defaults for missing keys
-                for (var key in DEFAULT_SHORTCUTS) {
-                    if (!_shortcuts[key]) {
-                        _shortcuts[key] = DEFAULT_SHORTCUTS[key];
-                    }
-                }
+                fillDefaults(_shortcuts);
                 if (callback) callback(_shortcuts);
             })
             .catch(function (e) {
                 _shortcuts = {};
-                for (var key in DEFAULT_SHORTCUTS) {
-                    if (!_shortcuts[key]) {
-                        _shortcuts[key] = DEFAULT_SHORTCUTS[key];
-                    }
-                }
+                fillDefaults(_shortcuts);
                 if (callback) callback(_shortcuts);
             });
     }

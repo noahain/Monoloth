@@ -3,16 +3,7 @@
 (function () {
     'use strict';
 
-    function getCore() {
-        var candidates = [window.__TAURI_CORE__, window.__TAURI__ && window.__TAURI__.core, window.__TAURI_INTERNALS__];
-        for (var i = 0; i < candidates.length; i++) {
-            if (candidates[i] && typeof candidates[i].invoke === 'function') {
-                window.__TAURI_CORE__ = candidates[i];
-                return candidates[i];
-            }
-        }
-        return null;
-    }
+    var getCore = window.MonolothUI.getCore;
 
     function check() {
         var core = getCore();

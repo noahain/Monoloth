@@ -1,29 +1,15 @@
 use std::process::Command;
 
 use super::expand_env_vars;
+use super::shell_command;
 
 #[tauri::command]
 pub fn execute_background(command: String, cwd: String) -> Result<bool, String> {
     let expanded_cwd = expand_env_vars(&cwd);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        Command::new("cmd")
-            .args(["/C", &command])
-            .current_dir(&expanded_cwd)
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn()
-            .map_err(|e| format!("Failed to spawn: {}", e))?;
-    }
-    #[cfg(not(windows))]
-    {
-        use super::shell_command;
-        shell_command(&command, "cmd")
-            .current_dir(&expanded_cwd)
-            .spawn()
-            .map_err(|e| format!("Failed to spawn: {}", e))?;
-    }
+    shell_command(&command, "cmd")
+        .current_dir(&expanded_cwd)
+        .spawn()
+        .map_err(|e| format!("Failed to spawn: {}", e))?;
     Ok(true)
 }
 
