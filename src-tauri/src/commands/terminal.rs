@@ -11,37 +11,45 @@ fn is_main_tab_session(session_id: &str) -> bool {
     session_id.starts_with("main-tab-")
 }
 
-#[tauri::command]
-pub fn start_terminal(
-    pty: State<PtyManager>,
-    config: State<AppConfig>,
-    history: State<HistoryManager>,
-    session_id: String,
-    directory: String,
-    record_history: Option<bool>,
-    shell: Option<String>,
+fn is_panel_session(session_id: &str) -> bool {
+    session_id.starts_with("panel-") || session_id == "panel"
+}
+
+struct StartupCommand {
+    command: String,
+    cmd_type: String,
+}
+
+struct SecondaryPlan {
+    before: Vec<(String, String)>,
+    parallel: Vec<(usize, String)>,
+    hidden: Vec<(usize, String)>,
+}
+
+fn spawn_panel_session(
+    pty: &PtyManager,
+    config: &AppConfig,
+    history: &HistoryManager,
+    session_id: &str,
+    directory: &str,
+    shell: Option<&str>,
     cols: u16,
     rows: u16,
-    profile_name: Option<String>,
+    record: bool,
 ) -> Result<u64, String> {
-    let record = record_history.unwrap_or(true);
-    let is_panel = session_id.starts_with("panel-") || session_id == "panel";
-    let is_main_tab = is_main_tab_session(&session_id);
-    let directory = expand_env_vars(&directory);
+    let (cmd, args) = resolve_panel_shell(shell)?;
+    let args_str: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    let gen = pty.spawn(session_id, &cmd, &args_str, directory, cols, rows)?;
 
-    if is_panel {
-        let (cmd, args) = resolve_panel_shell(shell.as_deref())?;
-        let args_str: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-        let gen = pty.spawn(&session_id, &cmd, &args_str, &directory, cols, rows)?;
-
-        let active_profile = config.get_active_profile();
-        if record {
-            history.session_start_with_id(&session_id, &active_profile, &format!("[Panel] {}", cmd), &directory);
-        }
-        return Ok(gen);
+    let active_profile = config.get_active_profile();
+    if record {
+        history.session_start_with_id(session_id, &active_profile, &format!("[Panel] {}", cmd), directory);
     }
+    Ok(gen)
+}
 
-    let (startup_cmd, cmd_type) = match profile_name.as_deref() {
+fn resolve_startup_command(config: &AppConfig, profile_name: Option<&str>) -> StartupCommand {
+    let (command, cmd_type) = match profile_name {
         Some(name) if !name.is_empty() && name != "Default" => {
             let overrides = crate::config::load_json_pub(&crate::config::profile_path(name));
             let global_cmd = config.get("startup_command");
@@ -59,25 +67,33 @@ pub fn start_terminal(
             config.get("startup_command_type").as_str().unwrap_or("preset").to_string(),
         ),
     };
-    let active_profile = match profile_name.as_deref() {
+    StartupCommand { command, cmd_type }
+}
+
+fn resolve_active_profile(config: &AppConfig, profile_name: Option<&str>) -> String {
+    match profile_name {
         Some(n) if !n.is_empty() => n.to_string(),
         _ => config.get_active_profile(),
-    };
-    let panel_shell = config.get("panelShell").as_str().unwrap_or("cmd").to_string();
+    }
+}
 
-    let (cmd, args): (String, Vec<String>) = if cmd_type == "custom" {
-        resolve_custom_command(&startup_cmd)?
+fn resolve_executable(startup: &StartupCommand) -> Result<(String, Vec<String>), String> {
+    if startup.cmd_type == "custom" {
+        resolve_custom_command(&startup.command)
     } else {
-        resolve_command(&startup_cmd)?
-    };
+        resolve_command(&startup.command)
+    }
+}
 
+fn build_secondary_plan(config: &AppConfig, session_id: &str, panel_shell: &str) -> SecondaryPlan {
     let secondary = if session_id == "main" {
         config.get("secondary_commands")
     } else {
         Value::Null
     };
-    let mut before_cmds: Vec<(String, String)> = Vec::new();       // (cmd_str, shell)
-    let mut post_cmds: Vec<(usize, String, String)> = Vec::new();  // (idx, cmd_str, mode)
+    let mut before: Vec<(String, String)> = Vec::new();
+    let mut parallel: Vec<(usize, String)> = Vec::new();
+    let mut hidden: Vec<(usize, String)> = Vec::new();
     if let Value::Array(cmds) = &secondary {
         for (idx, cmd_val) in cmds.iter().enumerate() {
             if let Some(cmd_obj) = cmd_val.as_object() {
@@ -89,56 +105,118 @@ pub fn start_terminal(
                     None => continue,
                 };
                 match cmd_obj.get("mode").and_then(|v| v.as_str()) {
-                    Some("before") => before_cmds.push((cmd_str, panel_shell.clone())),
-                    Some("parallel") | Some("hidden") => {
-                        let mode = cmd_obj.get("mode").and_then(|v| v.as_str()).unwrap().to_string();
-                        post_cmds.push((idx, cmd_str, mode));
-                    }
+                    Some("before") => before.push((cmd_str, panel_shell.to_string())),
+                    Some("parallel") => parallel.push((idx, cmd_str)),
+                    Some("hidden") => hidden.push((idx, cmd_str)),
                     _ => {}
                 }
             }
         }
     }
+    SecondaryPlan { before, parallel, hidden }
+}
 
-    for (cmd_str, shell) in &before_cmds {
-        if let Err(e) = run_before_command(cmd_str, &directory, shell) {
+fn run_before_commands(before: &[(String, String)], cwd: &str) {
+    for (cmd_str, shell) in before {
+        if let Err(e) = run_before_command(cmd_str, cwd, shell) {
             warn!("Before command failed: {}", e);
         }
     }
+}
+
+fn run_post_commands(
+    plan: &SecondaryPlan,
+    pty: &PtyManager,
+    cwd: &str,
+    cols: u16,
+    rows: u16,
+    panel_shell: &str,
+) {
+    if plan.parallel.is_empty() && plan.hidden.is_empty() {
+        return;
+    }
+    pty.terminate_by_prefix("hidden-");
+    for (idx, cmd_str) in &plan.parallel {
+        if let Err(e) = run_parallel_command(cmd_str.clone(), cwd.to_string(), panel_shell) {
+            warn!("Parallel command failed: {}", e);
+        }
+    }
+    for (idx, cmd_str) in &plan.hidden {
+        let hidden_sid = format!("hidden-{}", idx);
+        match resolve_hidden_command(panel_shell, cmd_str) {
+            Ok((exe, args)) => {
+                let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+                if let Err(e) = pty.spawn(&hidden_sid, &exe, &args_ref, cwd, cols, rows) {
+                    warn!("Hidden command failed: {}", e);
+                }
+            }
+            Err(e) => warn!("Hidden command resolve failed: {}", e),
+        }
+    }
+}
+
+fn log_terminal_start(
+    history: &HistoryManager,
+    session_id: &str,
+    active_profile: &str,
+    startup_command: &str,
+    exe_or_display: &str,
+    cmd_type: &str,
+    directory: &str,
+) {
+    let display_command = if cmd_type == "custom" { startup_command } else { exe_or_display };
+    if is_main_tab_session(session_id) {
+        history.session_start_with_id(session_id, active_profile, display_command, directory);
+    } else {
+        history.session_start(active_profile, display_command, directory);
+    }
+}
+
+#[tauri::command]
+pub fn start_terminal(
+    pty: State<PtyManager>,
+    config: State<AppConfig>,
+    history: State<HistoryManager>,
+    session_id: String,
+    directory: String,
+    record_history: Option<bool>,
+    shell: Option<String>,
+    cols: u16,
+    rows: u16,
+    profile_name: Option<String>,
+) -> Result<u64, String> {
+    let record = record_history.unwrap_or(true);
+    let is_panel = is_panel_session(&session_id);
+    let directory = expand_env_vars(&directory);
+
+    if is_panel {
+        return spawn_panel_session(
+            &pty, &config, &history,
+            &session_id, &directory, shell.as_deref(),
+            cols, rows, record,
+        );
+    }
+
+    let startup = resolve_startup_command(&config, profile_name.as_deref());
+    let active_profile = resolve_active_profile(&config, profile_name.as_deref());
+    let panel_shell = config.get("panelShell").as_str().unwrap_or("cmd").to_string();
+
+    let (cmd, args): (String, Vec<String>) = resolve_executable(&startup)?;
+
+    let plan = build_secondary_plan(&config, &session_id, &panel_shell);
+    run_before_commands(&plan.before, &directory);
 
     let args_str: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
     let gen = pty.spawn(&session_id, &cmd, &args_str, &directory, cols, rows)?;
 
     if record {
-        let display_command = if cmd_type == "custom" { &startup_cmd } else { &cmd };
-        if is_main_tab {
-            history.session_start_with_id(&session_id, &active_profile, display_command, &directory);
-        } else {
-            history.session_start(&active_profile, display_command, &directory);
-        }
+        log_terminal_start(
+            &history, &session_id, &active_profile,
+            &startup.command, &cmd, &startup.cmd_type, &directory,
+        );
     }
 
-    if !post_cmds.is_empty() {
-        pty.terminate_by_prefix("hidden-");
-        for (idx, cmd_str, mode) in &post_cmds {
-            if mode == "parallel" {
-                if let Err(e) = run_parallel_command(cmd_str.clone(), directory.clone(), &panel_shell) {
-                    warn!("Parallel command failed: {}", e);
-                }
-            } else if mode == "hidden" {
-                let hidden_sid = format!("hidden-{}", idx);
-                match resolve_hidden_command(&panel_shell, cmd_str) {
-                    Ok((exe, args)) => {
-                        let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-                        if let Err(e) = pty.spawn(&hidden_sid, &exe, &args_ref, &directory, cols, rows) {
-                            warn!("Hidden command failed: {}", e);
-                        }
-                    }
-                    Err(e) => warn!("Hidden command resolve failed: {}", e),
-                }
-            }
-        }
-    }
+    run_post_commands(&plan, &pty, &directory, cols, rows, &panel_shell);
 
     Ok(gen)
 }
