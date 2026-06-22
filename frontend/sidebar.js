@@ -524,7 +524,8 @@
             dir: dir
         };
         group.tabs.set(tabId, tab);
-        _panelTabs.set(tabId, tab);
+        _panelTabs = group.tabs;
+        _activeTabId = group.activeTabId;
 
         if (activate) {
             return activateTab(tabId);
@@ -533,33 +534,26 @@
     }
 
     function activateTab(tabId) {
-        var tab = _panelTabs.get(tabId);
+        var tab = null;
+        var ownerGroup = null;
+        _mainTabPanels.forEach(function (group) {
+            if (group.tabs.has(tabId)) {
+                tab = group.tabs.get(tabId);
+                ownerGroup = group;
+            }
+        });
         if (!tab) {
             console.warn('activateTab: tab not found', tabId);
             return Promise.resolve();
         }
 
-        if (_activeTabId && _activeTabId !== tabId) {
-            var oldTab = _panelTabs.get(_activeTabId);
-            if (oldTab) {
-                oldTab.container.classList.remove('active');
-                oldTab.container.classList.add('inactive');
-                var oldItem = document.querySelector('.cmd-panel-tab[data-tab-id="' + _activeTabId + '"]');
-                if (oldItem) oldItem.classList.remove('active');
-                updateBusyDot(oldTab);
-            }
-        }
+        _activatePanelTabInGroup(ownerGroup, tabId);
+        updateBusyDot(tab);
 
-        tab.container.classList.remove('inactive');
-        tab.container.classList.add('active');
         var newItem = document.querySelector('.cmd-panel-tab[data-tab-id="' + tabId + '"]');
         if (newItem) {
-            newItem.classList.add('active');
             newItem.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
         }
-        _activeTabId = tabId;
-
-        updateBusyDot(tab);
 
         if (tab.initializing) {
             return tab.initPromise || Promise.resolve();
@@ -571,6 +565,55 @@
 
         refitActiveTab();
         return Promise.resolve();
+    }
+
+    function _activatePanelTabInGroup(group, tabId) {
+        var tab = group.tabs.get(tabId);
+        if (!tab) return;
+
+        if (group.activeTabId && group.activeTabId !== tabId) {
+            var oldTab = group.tabs.get(group.activeTabId);
+            if (oldTab) {
+                oldTab.container.classList.remove('active');
+                oldTab.container.classList.add('inactive');
+                if (oldTab.tabItem) oldTab.tabItem.classList.remove('active');
+                updateBusyDot(oldTab);
+            }
+        }
+
+        tab.container.classList.remove('inactive');
+        tab.container.classList.add('active');
+        if (tab.tabItem) tab.tabItem.classList.add('active');
+        group.activeTabId = tabId;
+        _activeTabId = tabId;
+
+        if (tab.term && tab.fitAddon) {
+            try { tab.fitAddon.fit(); } catch (e) {}
+            if (window.monolithApi) {
+                window.monolithApi.resize_terminal(tab.sessionId, tab.term.cols, tab.term.rows).catch(function () {});
+            }
+        }
+    }
+
+    function closeAllPanelTabsForMainTab(mainTabId) {
+        var group = _mainTabPanels.get(mainTabId);
+        if (!group) return;
+        var snap = Array.from(group.tabs.keys());
+        snap.forEach(function (tabId) { _doCloseTab(tabId); });
+        _mainTabPanels.delete(mainTabId);
+        if (window.monolithApi && typeof window.monolithApi.retire_panel_tabs_for_main_tab === 'function') {
+            window.monolithApi.retire_panel_tabs_for_main_tab(mainTabId).catch(function () {});
+        }
+    }
+
+    function closeAllPanelGroups() {
+        _mainTabPanels.forEach(function (group) {
+            var snap = Array.from(group.tabs.keys());
+            snap.forEach(function (tabId) { _doCloseTab(tabId); });
+        });
+        _mainTabPanels.clear();
+        _activeMainTabId = null;
+        hideCmdPanel(false);
     }
 
     function initTabXterm(tab) {
@@ -761,7 +804,14 @@
     }
 
     function _doCloseTab(tabId) {
-        var tab = _panelTabs.get(tabId);
+        var tab = null;
+        var ownerGroup = null;
+        _mainTabPanels.forEach(function (group) {
+            if (group.tabs.has(tabId)) {
+                tab = group.tabs.get(tabId);
+                ownerGroup = group;
+            }
+        });
         if (!tab) return;
         tab.closing = true;
 
@@ -806,35 +856,42 @@
         }
 
         var nextTab = null;
-        if (_activeTabId === tabId) {
-            var tabs = getAllTabs();
+        if (ownerGroup.activeTabId === tabId) {
+            var tabs = Array.from(ownerGroup.tabs.values());
             var idx = tabs.findIndex(function (t) { return t.id === tabId; });
             if (idx !== -1) {
-                nextTab = tabs[idx - 1] || tabs[idx + 1] || tabs[0] || null;
+                nextTab = tabs[idx - 1] || tabs[idx + 1] || null;
             }
         }
 
-        _panelTabs.delete(tabId);
+        ownerGroup.tabs.delete(tabId);
 
-        if (_panelTabs.size === 0) {
-            _activeTabId = null;
-            hideCmdPanel();
+        if (ownerGroup.tabs.size === 0) {
+            ownerGroup.activeTabId = null;
+            if (_activeMainTabId === tab.mainTabId) {
+                hideCmdPanel();
+            }
             return;
         }
 
-        if (nextTab) activateTab(nextTab.id);
+        if (nextTab) _activatePanelTabInGroup(ownerGroup, nextTab.id);
     }
 
     function getAllTabs() {
-        return Array.from(_panelTabs.values());
+        var group = _getActiveGroup();
+        if (!group) return [];
+        return Array.from(group.tabs.values());
     }
 
     function getTabCount() {
-        return _panelTabs.size;
+        var group = _getActiveGroup();
+        return group ? group.tabs.size : 0;
     }
 
     function getActiveTab() {
-        return _activeTabId ? _panelTabs.get(_activeTabId) : null;
+        var group = _getActiveGroup();
+        if (!group || !group.activeTabId) return null;
+        return group.tabs.get(group.activeTabId) || null;
     }
 
     function getTab(id) {
@@ -842,8 +899,7 @@
         _mainTabPanels.forEach(function (group) {
             if (group.tabs.has(id)) found = group.tabs.get(id);
         });
-        if (!found) found = _panelTabs.get(id) || null;
-        return found;
+        return found || null;
     }
 
     function updateBusyDot(tab) {

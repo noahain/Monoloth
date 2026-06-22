@@ -107,18 +107,23 @@ test('cleanup hides a visible tooltip when its target is detached', () => {
 
 // Regression for bug 10: clicking a still-initializing CMD tab used to be a
 // no-op because the early `if (tab.initializing) return ...` guard fired before
-// any visual activation. The fix moves the guard AFTER the visual switch.
+// any visual activation. The fix delegates visual activation to
+// _activatePanelTabInGroup, which must run BEFORE the initializing guard.
 test('activateTab performs visual activation before the initializing guard', () => {
     const src = fs.readFileSync('frontend/sidebar.js', 'utf8');
-    // The fix: the early return must NOT be the first thing after the tab lookup.
-    const m = src.match(/function activateTab\(tabId\)\s*\{[\s\S]*?if\s*\(\s*tab\.initializing\s*\)\s*\{/);
-    assert.ok(m, 'activateTab must contain an initializing guard');
-    const block = m[0];
-    // The guard must come AFTER classList.toggle calls (visual activation).
-    assert.ok(/classList\.(remove|add)\('inactive'\)/.test(block.split('tab.initializing')[0]),
-        'visual activation (classList toggle) must happen before the initializing guard');
-    assert.ok(/classList\.(remove|add)\('active'\)/.test(block.split('tab.initializing')[0]),
-        'tab.active must be toggled before the initializing guard');
+    const helperMatch = src.match(/function _activatePanelTabInGroup\(group, tabId\)\s*\{[\s\S]*?\n\s{4}\}/);
+    assert.ok(helperMatch, '_activatePanelTabInGroup helper must exist');
+    const helperBlock = helperMatch[0];
+    assert.ok(/classList\.(remove|add)\('inactive'\)/.test(helperBlock),
+        '_activatePanelTabInGroup must toggle the inactive class');
+    assert.ok(/classList\.(remove|add)\('active'\)/.test(helperBlock),
+        '_activatePanelTabInGroup must toggle the active class');
+
+    const activateMatch = src.match(/function activateTab\(tabId\)\s*\{[\s\S]*?if\s*\(\s*tab\.initializing\s*\)\s*\{/);
+    assert.ok(activateMatch, 'activateTab must contain an initializing guard');
+    const beforeGuard = activateMatch[0].split('tab.initializing')[0];
+    assert.ok(/_activatePanelTabInGroup\(/.test(beforeGuard),
+        'activateTab must call _activatePanelTabInGroup before the initializing guard');
 });
 
 // Regression for bug 9: closeTab used to call showConfirm().then(...) without a
