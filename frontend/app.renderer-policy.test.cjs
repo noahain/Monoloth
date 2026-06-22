@@ -562,10 +562,7 @@ test('start_terminal callback ignores a tab that was closed before it resolved',
         ctaButtonStyle: 'blur'
     });
     const T = harness.context.window.MonolithTerminal;
-    harness.context.window.monolithApi.get_config = (key) => {
-        if (key === 'persistMainTabs') return Promise.resolve(false);
-        return Promise.resolve(null);
-    };
+
     let resolveFirst;
     harness.context.window.monolithApi.start_terminal = () => new Promise((resolve) => { resolveFirst = resolve; });
     T.initTerminal('C:\\old');

@@ -102,9 +102,7 @@ fn defaults() -> Map<String, Value> {
     m.insert("window_y".into(), Value::Null);
     m.insert("cmdPanelHeight".into(), Value::Number(200.into()));
     m.insert("panelShell".into(), Value::String("cmd".into()));
-    m.insert("persistMainTabs".into(), Value::Bool(true));
-    m.insert("mainTabs".into(), Value::Array(vec![]));
-    m.insert("mainTabActive".into(), Value::String("".into()));
+
     m.insert("tabBarPosition".into(), Value::String("titlebar".into()));
     m
 }
@@ -138,7 +136,7 @@ const GLOBAL_KEYS: &[&str] = &[
     "use_custom_titlebar", "window_x", "window_y",
     "cmdPanelHeight", "panelShell", "cmdPanelOpen", "sidebar_config",
     "recent_directories", "confirm_dialog_prefs",
-    "persistMainTabs", "mainTabs", "mainTabActive", "tabBarPosition",
+    "tabBarPosition",
 ];
 
 fn is_global_key(key: &str) -> bool {
