@@ -1778,6 +1778,7 @@
             _activeMainTabId = mainTabId;
             _ensurePanelGroup(mainTabId);
         },
+        switchToMainTab: switchToMainTab,
         initTabXterm: initTabXterm,
         writeToTab: function (tabId, data, eof) {
             var tab = getTab(tabId);
