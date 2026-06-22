@@ -25,7 +25,7 @@ pub fn start_terminal(
     profile_name: Option<String>,
 ) -> Result<u64, String> {
     let record = record_history.unwrap_or(true);
-    let is_panel = session_id == "panel" || session_id.starts_with("panel-tab-");
+    let is_panel = session_id.starts_with("panel-") || session_id == "panel";
     let is_main_tab = is_main_tab_session(&session_id);
     let directory = expand_env_vars(&directory);
 
@@ -671,6 +671,15 @@ mod tests {
         assert!("panel-mtab-1-tab-1".starts_with("panel-"));
         assert!("panel-tab-1".starts_with("panel-"));
         assert!(!"panel".starts_with("panel-"));
+    }
+
+    #[test]
+    fn start_terminal_is_panel_accepts_new_format() {
+        assert!("panel-mtab-1-tab-1".starts_with("panel-"));
+        assert!("panel-tab-1".starts_with("panel-"));
+        assert!(!"panel".starts_with("panel-"));
+        assert!(!"main".starts_with("panel-"));
+        assert!(!"main-tab-1".starts_with("panel-"));
     }
 
     #[test]
