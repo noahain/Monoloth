@@ -240,29 +240,10 @@
         if (restartBtn) restartBtn.addEventListener('click', function () { relaunch(); });
     }
 
-    function setState(newState, data) {
-        state.current = newState;
-        if (!state.mounted) return;
-        if (newState === 'DOWNLOADING' || newState === 'MINI_PILL') {
-            if (data && data.done != null) state.downloaded = data.done;
-            if (data && data.total != null) state.total = data.total;
-        if (state.mounted.classList.contains('update-toast')) {
-            var progress = state.mounted.querySelector('.update-toast-progress');
-            if (progress) progress.hidden = false;
-            var actions = state.mounted.querySelector('.update-toast-actions');
-            if (actions) {
-                actions.hidden = false;
-                var updateBtn = actions.querySelector('.update-toast-update');
-                var cancelBtn = actions.querySelector('.update-toast-cancel');
-                if (updateBtn) updateBtn.hidden = true;
-                if (cancelBtn) cancelBtn.hidden = false;
-            }
-            setProgress(state.mounted, state.downloaded, state.total);
-        } else if (state.mounted.classList.contains('update-pill')) {
-                var label = state.mounted.querySelector('.update-pill-label');
-                if (label) label.textContent = 'Downloading v' + (state.update.version || '?') + '… ' + Math.round((state.downloaded / Math.max(1, state.total)) * 100) + '%';
-            }
-        } else if (newState === 'READY') {
+    var stateRenderers = {
+        DOWNLOADING: renderDownloadProgress,
+        MINI_PILL: renderDownloadProgress,
+        READY: function (data) {
             clearStallTimer();
             if (state.mounted.classList.contains('update-toast')) {
                 var progress = state.mounted.querySelector('.update-toast-progress');
@@ -280,10 +261,39 @@
                 if (pillLabel) pillLabel.textContent = 'v' + (state.update.version || '?') + ' ready';
                 if (pillRestart) pillRestart.hidden = false;
             }
-        } else if (newState === 'ERROR') {
+        },
+        ERROR: function (data) {
             clearStallTimer();
             showErrorInToast(state.mounted, (data && data.errorClass) || 'UNKNOWN');
         }
+    };
+
+    function renderDownloadProgress(data) {
+        if (data && data.done != null) state.downloaded = data.done;
+        if (data && data.total != null) state.total = data.total;
+        if (state.mounted.classList.contains('update-toast')) {
+            var progress = state.mounted.querySelector('.update-toast-progress');
+            if (progress) progress.hidden = false;
+            var actions = state.mounted.querySelector('.update-toast-actions');
+            if (actions) {
+                actions.hidden = false;
+                var updateBtn = actions.querySelector('.update-toast-update');
+                var cancelBtn = actions.querySelector('.update-toast-cancel');
+                if (updateBtn) updateBtn.hidden = true;
+                if (cancelBtn) cancelBtn.hidden = false;
+            }
+            setProgress(state.mounted, state.downloaded, state.total);
+        } else if (state.mounted.classList.contains('update-pill')) {
+            var label = state.mounted.querySelector('.update-pill-label');
+            if (label) label.textContent = 'Downloading v' + (state.update.version || '?') + '… ' + Math.round((state.downloaded / Math.max(1, state.total)) * 100) + '%';
+        }
+    }
+
+    function setState(newState, data) {
+        state.current = newState;
+        if (!state.mounted) return;
+        var renderer = stateRenderers[newState];
+        if (renderer) renderer(data);
     }
 
     function relaunch() {
