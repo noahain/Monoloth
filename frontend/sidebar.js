@@ -745,7 +745,11 @@
             // the upgrade boundary (use OSC 133 shell integration to be exact).
             if (data.indexOf('\r') !== -1) {
                 tab.busy = true;
-                updateBusyDot(tab);
+                if (tab._busyTimer) clearTimeout(tab._busyTimer);
+                tab._busyTimer = setTimeout(function () {
+                    tab._busyTimer = null;
+                    updateBusyDot(tab);
+                }, 500);
             }
         });
 
@@ -860,6 +864,7 @@
         });
         if (!tab) return;
         tab.closing = true;
+        if (tab._busyTimer) { clearTimeout(tab._busyTimer); tab._busyTimer = null; }
 
         if (window.monolithApi) {
             window.monolithApi.terminate_terminal(tab.sessionId).catch(function () {});
@@ -1792,6 +1797,7 @@
             var tab = getTab(tabId);
             if (!tab || !tab.term) return;
             if (eof) {
+                if (tab._busyTimer) { clearTimeout(tab._busyTimer); tab._busyTimer = null; }
                 tab.running = false;
                 tab.busy = false;
                 updateBusyDot(tab);
@@ -1814,6 +1820,7 @@
                 // ponytail: matches cmd.exe "C:\...>" and PowerShell "PS ...>"
                 // prompts at the tail of an output chunk. Upgrade path: OSC 133.
                 if (/[A-Za-z]:\\[^\n]*>\s*$/.test(data) || /\nPS [^\n]*>\s*$/.test(data) || /\n[^\n]*\$\s*$/.test(data)) {
+                    if (tab._busyTimer) { clearTimeout(tab._busyTimer); tab._busyTimer = null; }
                     tab.busy = false;
                     updateBusyDot(tab);
                 }

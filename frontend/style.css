@@ -8315,7 +8315,6 @@ body.adaptive-light .main-tab-bar.in-titlebar .main-tab {
 }
 .main-tab-container.active {
     display: block;
-    animation: fadeIn 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* Main tab item enter/exit motion.
@@ -8476,7 +8475,6 @@ body.adaptive-light.cta-outline .new-tab-card-overlay {
 
 .cmd-panel-tab-container.active {
     display: flex;
-    animation: fadeIn 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .cmd-panel-tab-terminal {
