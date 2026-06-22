@@ -595,6 +595,9 @@
         if (tab.sessionId.startsWith('main-tab-') && window.monolithApi && typeof window.monolithApi.retire_panel_tab === 'function') {
             window.monolithApi.retire_panel_tab(tab.sessionId).catch(function () {});
         }
+        if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.closeAllPanelTabsForMainTab === 'function') {
+            window.SidebarManager.closeAllPanelTabsForMainTab(tabId);
+        }
 
         var tabItem = tabList && tabList.querySelector('.main-tab[data-tab-id="' + tabId + '"]');
         var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1172,6 +1175,11 @@
                 delete _sessionGeneration[tab.sessionId];
                 delete _skipNextEof[tab.sessionId];
             });
+            if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.closeAllPanelTabsForMainTab === 'function') {
+                _tabs.forEach(function (tab) {
+                    window.SidebarManager.closeAllPanelTabsForMainTab(tab.id);
+                });
+            }
             // If the "main" tab was among those disposed, also kill hidden-* PTYs.
             if (hadMain && window.monolithApi && typeof window.monolithApi.terminate_hidden === 'function') {
                 try { window.monolithApi.terminate_hidden().catch(function () {}); } catch (e) {}

@@ -1410,13 +1410,8 @@
         setCurrentView('landing');
         _editingProfile = null;
         loadStartupConfig();
-        // Close all panel tabs (unchanged).
-        if (typeof window.SidebarManager !== 'undefined') {
-            if (typeof window.SidebarManager.getAllTabs === 'function') {
-                var tabsSnap = window.SidebarManager.getAllTabs().slice();
-                tabsSnap.forEach(function (t) { window.SidebarManager.closeTab(t.id, true); });
-            }
-            window.SidebarManager.hideCmdPanel(false);
+        if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.closeAllPanelGroups === 'function') {
+            window.SidebarManager.closeAllPanelGroups();
         }
         // Dispose all main tabs (terminates PTYs + disposes xterms).
         window.MonolithTerminal.dispose();
