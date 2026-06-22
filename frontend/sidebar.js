@@ -19,10 +19,6 @@
     var _sidebarEnabled = true;  // default on, async config will override if needed
     var _sidebarPosition = 'left';
 
-    // Tab Manager State
-    var _panelTabs = new Map();
-    var _activeTabId = null;
-    var _nextTabId = 1;
     var _panelShell = 'cmd';
     var _tabBarPosition = 'standard';
     var _panelHeight = 200;
@@ -145,10 +141,11 @@
 
     function openCmdPanelAt(dir) {
         showCmdPanel();
-        if (_panelTabs.size === 0) {
+        var group = _getActiveGroup();
+        if (!group || group.tabs.size === 0) {
             createTab(null, true, dir);
         } else {
-            activateTab(_activeTabId || getAllTabs()[0].id);
+            activateTab(group.activeTabId || getAllTabs()[0].id);
         }
     }
 
@@ -524,8 +521,6 @@
             dir: dir
         };
         group.tabs.set(tabId, tab);
-        _panelTabs = group.tabs;
-        _activeTabId = group.activeTabId;
 
         if (activate) {
             return activateTab(tabId);
@@ -585,7 +580,6 @@
         tab.container.classList.add('active');
         if (tab.tabItem) tab.tabItem.classList.add('active');
         group.activeTabId = tabId;
-        _activeTabId = tabId;
 
         if (tab.term && tab.fitAddon) {
             try { tab.fitAddon.fit(); } catch (e) {}
@@ -717,7 +711,7 @@
             var attempts = 0;
             var prevDims = null;
             function tryFit() {
-                if (tab.closing || !_panelTabs.has(tab.id)) { resolve(null); return; }
+                if (tab.closing || !getTab(tab.id)) { resolve(null); return; }
                 try { fitAddon.fit(); } catch (e) {}
                 var dims;
                 try { dims = fitAddon.proposeDimensions(); } catch (e) {}
@@ -733,14 +727,14 @@
             }
             tryFit();
         }).then(function (dims) {
-            if (tab.closing || !_panelTabs.has(tab.id)) return tab;
+            if (tab.closing || !getTab(tab.id)) return tab;
             var cols = dims ? dims.cols : (term.cols || 80);
             var rows = dims ? dims.rows : (term.rows || 24);
             return window.monolithApi.start_terminal(tab.sessionId, dir, false, _panelShell, cols, rows);
         })
         .then(function (result) {
             if (result === tab) return tab;
-            if (tab.closing || !_panelTabs.has(tab.id)) {
+            if (tab.closing || !getTab(tab.id)) {
                 if (result && result.success && window.monolithApi) {
                     window.monolithApi.terminate_terminal(tab.sessionId).catch(function () {});
                 }
@@ -753,7 +747,7 @@
                     window.MonolothApp.setSessionGeneration(tab.sessionId, result.generation);
                 }
                 requestAnimationFrame(function () {
-                    if (tab.closing || !_panelTabs.has(tab.id)) return;
+                    if (tab.closing || !getTab(tab.id)) return;
                     try {
                         fitAddon.fit();
                         if (window.monolithApi) {
@@ -769,14 +763,14 @@
             return tab;
         })
         .catch(function (err) {
-            if (tab.closing || !_panelTabs.has(tab.id)) return tab;
+            if (tab.closing || !getTab(tab.id)) return tab;
             console.error('Failed to start tab PTY:', err);
             tab.running = false;
             showTabExitBanner(tab);
             return tab;
         })
         .finally(function () {
-            if (_panelTabs.has(tab.id)) tab.initializing = false;
+            if (getTab(tab.id)) tab.initializing = false;
         });
 
         tab.initPromise = initPromise;
@@ -784,7 +778,7 @@
     }
 
     function closeTab(tabId, force) {
-        var tab = _panelTabs.get(tabId);
+        var tab = getTab(tabId);
         if (!tab) return;
 
         force = force || false;
@@ -970,7 +964,7 @@
     }
 
     function startRenameTab(tabId) {
-        var tab = _panelTabs.get(tabId);
+        var tab = getTab(tabId);
         if (!tab) return;
         var tabItem = document.querySelector('.cmd-panel-tab[data-tab-id="' + tabId + '"]');
         if (!tabItem) return;
@@ -1694,13 +1688,15 @@
         }
 
         window.addEventListener('beforeunload', function () {
-            _panelTabs.forEach(function (tab) {
-                if (tab.term) {
-                    try { tab.term.dispose(); } catch (e) {}
-                    try { tab.fitAddon.dispose(); } catch (e) {}
-                }
+            _mainTabPanels.forEach(function (group) {
+                group.tabs.forEach(function (tab) {
+                    if (tab.term) {
+                        try { tab.term.dispose(); } catch (e) {}
+                        try { tab.fitAddon.dispose(); } catch (e) {}
+                    }
+                });
+                group.tabs.clear();
             });
-            _panelTabs.clear();
         });
     }
 
@@ -1730,7 +1726,10 @@
         getActiveTab: getActiveTab,
         hideTabExitBanner: hideTabExitBanner,
         getTabCount: getTabCount,
-        getActiveTabId: function () { return _activeTabId; },
+        getActiveTabId: function () {
+            var group = _getActiveGroup();
+            return group ? group.activeTabId : null;
+        },
         initTabXterm: initTabXterm,
         writeToTab: function (tabId, data, eof) {
             var tab = getTab(tabId);
@@ -1778,10 +1777,11 @@
             if (!_panelRestoreNeeded) return;
             _panelRestoreNeeded = false;
             showCmdPanel();
-            if (_panelTabs.size === 0) {
+            var group = _getActiveGroup();
+            if (!group || group.tabs.size === 0) {
                 createTab(null, true, getCurrentDir() || getDefaultHomeDir());
             } else {
-                activateTab(_activeTabId || getAllTabs()[0].id);
+                activateTab(group.activeTabId || getAllTabs()[0].id);
             }
         },
         handlePanelExit: function () {
