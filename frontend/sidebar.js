@@ -631,7 +631,12 @@
         }
 
         _activeMainTabId = mainTabId;
+        var isNewGroup = !_mainTabPanels.has(mainTabId);
         var group = _ensurePanelGroup(mainTabId);
+        if (isNewGroup && _cmdPanelOpen) {
+            group.isOpen = true;
+            createTab(null, true, _getMainTabDir(mainTabId));
+        }
 
         group.tabs.forEach(function (tab) {
             if (tabList && tab.tabItem) {
@@ -920,7 +925,7 @@
         if (ownerGroup.tabs.size === 0) {
             ownerGroup.activeTabId = null;
             if (_getActiveMainTabId() === tab.mainTabId) {
-                hideCmdPanel();
+                hideCmdPanel(false);
             }
             return;
         }
@@ -1840,14 +1845,22 @@
         refitActiveTab: refitActiveTab,
         restorePanelState: function () {
             if (typeof Terminal === 'undefined' || !window.monolithApi) return;
-            if (!_panelRestoreNeeded) return;
-            _panelRestoreNeeded = false;
-            showCmdPanel();
-            var group = _getActiveGroup();
-            if (!group || group.tabs.size === 0) {
-                createTab(null, true, getCurrentDir() || getDefaultHomeDir());
+            var restore = function () {
+                showCmdPanel();
+                var group = _getActiveGroup();
+                if (!group || group.tabs.size === 0) {
+                    createTab(null, true, getCurrentDir() || getDefaultHomeDir());
+                } else {
+                    activateTab(group.activeTabId || getAllTabs()[0].id);
+                }
+            };
+            if (_panelRestoreNeeded) {
+                _panelRestoreNeeded = false;
+                restore();
             } else {
-                activateTab(group.activeTabId || getAllTabs()[0].id);
+                window.monolithApi.get_config('cmdPanelOpen').then(function (val) {
+                    if (val === true) restore();
+                }).catch(function () {});
             }
         },
         handlePanelExit: function () {
