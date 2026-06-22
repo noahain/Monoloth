@@ -40,8 +40,8 @@
     }
 
     function _getActiveGroup() {
-        if (!_activeMainTabId) return null;
-        return _mainTabPanels.get(_activeMainTabId) || null;
+        var id = _getActiveMainTabId();
+        return _mainTabPanels.get(id) || null;
     }
 
     function _getActiveMainTabId() {
@@ -606,7 +606,6 @@
             snap.forEach(function (tabId) { _doCloseTab(tabId); });
         });
         _mainTabPanels.clear();
-        _activeMainTabId = null;
         hideCmdPanel(false);
     }
 
@@ -862,7 +861,7 @@
 
         if (ownerGroup.tabs.size === 0) {
             ownerGroup.activeTabId = null;
-            if (_activeMainTabId === tab.mainTabId) {
+            if (_getActiveMainTabId() === tab.mainTabId) {
                 hideCmdPanel();
             }
             return;
