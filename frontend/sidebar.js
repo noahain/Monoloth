@@ -1071,6 +1071,7 @@
 
     function showCmdPanel() {
         _cmdPanelOpen = true;
+        var group = _getActiveGroup(); if (group) group.isOpen = true;
         if (cmdPanel) {
             cmdPanel.classList.add('open');
             cmdPanel.classList.add('anim-open');
@@ -1088,6 +1089,7 @@
 
     function hideCmdPanel(persist) {
         _cmdPanelOpen = false;
+        var group = _getActiveGroup(); if (group) group.isOpen = false;
         if (cmdPanel) {
             cmdPanel.classList.add('anim-close');
             setTimeout(function () {
