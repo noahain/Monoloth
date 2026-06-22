@@ -21,6 +21,151 @@ fn is_valid_window_position(x: i32, y: i32) -> bool {
         && (y as i64) <= MAX_WINDOW_POSITION
 }
 
+fn setup_window(app: &mut tauri::App, cfg: &AppConfig) -> Result<tauri::WebviewWindow, String> {
+    let width = cfg.get("window_width").as_i64().unwrap_or(1200) as u32;
+    let height = cfg.get("window_height").as_i64().unwrap_or(700) as u32;
+    let maximized = cfg.get("window_maximized").as_bool().unwrap_or(false);
+    let use_custom_titlebar = cfg.get("use_custom_titlebar").as_bool().unwrap_or(true);
+    let is_wayland = std::env::var("WAYLAND_DISPLAY").is_ok();
+
+    let window = app.get_webview_window("main").unwrap();
+
+    // Wayland clients cannot set/query absolute window position
+    if !is_wayland {
+        if let (Some(x), Some(y)) = (
+            cfg.get("window_x").as_i64(),
+            cfg.get("window_y").as_i64(),
+        ) {
+            window.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+                x: x as i32,
+                y: y as i32,
+            })).ok();
+        }
+    }
+
+    window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height })).ok();
+    if maximized {
+        window.maximize().ok();
+    }
+    window.show().ok();
+
+    // decorations: false is set statically in tauri.conf.json to avoid Linux bug
+    // #11856 where set_decorations(false) before show() breaks drag regions.
+    // Only flip to native decorations if user disabled custom titlebar.
+    if !use_custom_titlebar {
+        window.set_decorations(true).ok();
+    }
+
+    Ok(window)
+}
+
+struct WindowStateHandler {
+    cfg: AppConfig,
+    pty: PtyManager,
+    history: HistoryManager,
+    window: tauri::WebviewWindow,
+    is_wayland: bool,
+    last_size_save: parking_lot::Mutex<std::time::Instant>,
+    last_pos_save: parking_lot::Mutex<std::time::Instant>,
+}
+
+impl WindowStateHandler {
+    fn handle(&self, event: &tauri::WindowEvent) {
+        match event {
+            tauri::WindowEvent::Resized(size) => self.on_resized(*size),
+            tauri::WindowEvent::Moved(pos) => self.on_moved(*pos),
+            tauri::WindowEvent::CloseRequested { .. } => self.on_close_requested(),
+            _ => {}
+        }
+    }
+
+    fn on_resized(&self, size: tauri::PhysicalSize<u32>) {
+        if size.width >= MIN_WINDOW_WIDTH as u32 && size.height >= MIN_WINDOW_HEIGHT as u32
+            && (size.width as i64) <= MAX_WINDOW_DIMENSION
+            && (size.height as i64) <= MAX_WINDOW_DIMENSION
+        {
+            let is_minimized = self.window.is_minimized().unwrap_or(false);
+            if is_minimized {
+                return;
+            }
+            let is_max = self.window.is_maximized().unwrap_or(false);
+            let was_max = self.cfg.get("window_maximized").as_bool().unwrap_or(false);
+            if is_max != was_max {
+                self.cfg.set_window_maximized(is_max);
+            }
+            if !is_max {
+                let mut last = self.last_size_save.lock();
+                let now = std::time::Instant::now();
+                if now.duration_since(*last) > std::time::Duration::from_millis(500) {
+                    *last = now;
+                    drop(last);
+                    self.cfg.set_window_size(size.width, size.height);
+                    if !self.is_wayland {
+                        if let Ok(pos) = self.window.outer_position() {
+                            if is_valid_window_position(pos.x, pos.y) {
+                                self.cfg.set_window_position(pos.x, pos.y);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn on_moved(&self, pos: tauri::PhysicalPosition<i32>) {
+        if self.window.is_minimized().unwrap_or(false) {
+            return;
+        }
+        if self.is_wayland {
+            return;
+        }
+        if !is_valid_window_position(pos.x, pos.y) {
+            return;
+        }
+        if !self.window.is_maximized().unwrap_or(false) {
+            let mut last = self.last_pos_save.lock();
+            let now = std::time::Instant::now();
+            if now.duration_since(*last) > std::time::Duration::from_millis(500) {
+                *last = now;
+                drop(last);
+                self.cfg.set_window_position(pos.x, pos.y);
+            }
+        }
+    }
+
+    fn on_close_requested(&self) {
+        let is_max = self.window.is_maximized().unwrap_or(false);
+        if !is_max {
+            let is_minimized = self.window.is_minimized().unwrap_or(false);
+            if !is_minimized {
+                if !self.is_wayland {
+                    if let Ok(pos) = self.window.outer_position() {
+                        if is_valid_window_position(pos.x, pos.y) {
+                            self.cfg.set_window_position(pos.x, pos.y);
+                        }
+                    }
+                }
+                if let Ok(size) = self.window.inner_size() {
+                    if size.width >= MIN_WINDOW_WIDTH as u32
+                        && size.height >= MIN_WINDOW_HEIGHT as u32
+                        && (size.width as i64) <= MAX_WINDOW_DIMENSION
+                        && (size.height as i64) <= MAX_WINDOW_DIMENSION
+                    {
+                        self.cfg.set_window_size(size.width, size.height);
+                    }
+                }
+            }
+        }
+        self.cfg.set_window_maximized(is_max);
+
+        self.history.session_end();
+        self.history.session_end_all_main_tabs();
+        self.history.session_end_by_id("panel");
+        self.history.session_end_all_panel_tabs();
+        self.pty.terminate_all();
+    }
+}
+
 #[derive(Default)]
 pub struct CancelDownloadState {
     sender: Mutex<Option<oneshot::Sender<()>>>,
@@ -91,8 +236,6 @@ pub fn run() {
     let app_config = AppConfig::new();
     let history_manager = HistoryManager::new();
     let pty_manager = PtyManager::new();
-    let pty_for_close = pty_manager.clone();
-    let history_for_close = history_manager.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -110,138 +253,21 @@ pub fn run() {
             let pty = app.state::<PtyManager>();
             pty.set_app_handle(app.handle().clone());
 
-            // Restore window size and position from config
-            let cfg: AppConfig = app.state::<AppConfig>().inner().clone();
-            let width = cfg.get("window_width").as_i64().unwrap_or(1200) as u32;
-            let height = cfg.get("window_height").as_i64().unwrap_or(700) as u32;
-            let maximized = cfg.get("window_maximized").as_bool().unwrap_or(false);
-            let use_custom_titlebar = cfg.get("use_custom_titlebar").as_bool().unwrap_or(true);
-
-            let window = app.get_webview_window("main").unwrap();
-
-            // Wayland clients cannot set/query absolute window position
+            let cfg = app.state::<AppConfig>().inner().clone();
             let is_wayland = std::env::var("WAYLAND_DISPLAY").is_ok();
+            let window = setup_window(app, &cfg)?;
 
-            // Restore position if saved (skip on Wayland — compositor owns placement)
-            if !is_wayland {
-                if let (Some(x), Some(y)) = (
-                    cfg.get("window_x").as_i64(),
-                    cfg.get("window_y").as_i64(),
-                ) {
-                    window.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
-                        x: x as i32,
-                        y: y as i32,
-                    })).ok();
-                }
-            }
+            let handler = WindowStateHandler {
+                cfg,
+                pty: app.state::<PtyManager>().inner().clone(),
+                history: app.state::<HistoryManager>().inner().clone(),
+                window: window.clone(),
+                is_wayland,
+                last_size_save: parking_lot::Mutex::new(std::time::Instant::now()),
+                last_pos_save: parking_lot::Mutex::new(std::time::Instant::now()),
+            };
 
-            window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height })).ok();
-            if maximized {
-                window.maximize().ok();
-            }
-            window.show().ok();
-
-            // decorations: false is set statically in tauri.conf.json to avoid Linux bug
-            // #11856 where set_decorations(false) before show() breaks drag regions.
-            // Only flip to native decorations if user disabled custom titlebar.
-            if !use_custom_titlebar {
-                window.set_decorations(true).ok();
-            }
-
-            // Save window state on resize / move / close
-            let cfg_for_events = cfg.clone();
-            let pty_clone = pty_for_close;
-            let last_size_save = std::sync::Arc::new(parking_lot::Mutex::new(std::time::Instant::now()));
-            let last_pos_save = std::sync::Arc::new(parking_lot::Mutex::new(std::time::Instant::now()));
-            let window_clone = window.clone();
-            window.on_window_event(move |event| {
-                match event {
-                    tauri::WindowEvent::Resized(size) => {
-                        if size.width >= MIN_WINDOW_WIDTH as u32 && size.height >= MIN_WINDOW_HEIGHT as u32
-                            && (size.width as i64) <= MAX_WINDOW_DIMENSION
-                            && (size.height as i64) <= MAX_WINDOW_DIMENSION
-                        {
-                            let is_minimized = window_clone.is_minimized().unwrap_or(false);
-                            if is_minimized {
-                                return;
-                            }
-                            let is_max = window_clone.is_maximized().unwrap_or(false);
-                            let was_max = cfg_for_events.get("window_maximized").as_bool().unwrap_or(false);
-                            if is_max != was_max {
-                                cfg_for_events.set_window_maximized(is_max);
-                            }
-                            if !is_max {
-                                let mut last = last_size_save.lock();
-                                let now = std::time::Instant::now();
-                                if now.duration_since(*last) > std::time::Duration::from_millis(500) {
-                                    *last = now;
-                                    drop(last);
-                                    cfg_for_events.set_window_size(size.width, size.height);
-                                    if !is_wayland {
-                                        if let Ok(pos) = window_clone.outer_position() {
-                                            if is_valid_window_position(pos.x, pos.y) {
-                                                cfg_for_events.set_window_position(pos.x, pos.y);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    tauri::WindowEvent::Moved(pos) => {
-                        if window_clone.is_minimized().unwrap_or(false) {
-                            return;
-                        }
-                        if is_wayland {
-                            return;
-                        }
-                        if !is_valid_window_position(pos.x, pos.y) {
-                            return;
-                        }
-                        if !window_clone.is_maximized().unwrap_or(false) {
-                            let mut last = last_pos_save.lock();
-                            let now = std::time::Instant::now();
-                            if now.duration_since(*last) > std::time::Duration::from_millis(500) {
-                                *last = now;
-                                drop(last);
-                                cfg_for_events.set_window_position(pos.x, pos.y);
-                            }
-                        }
-                    }
-                    tauri::WindowEvent::CloseRequested { .. } => {
-                        let is_max = window_clone.is_maximized().unwrap_or(false);
-                        if !is_max {
-                            let is_minimized = window_clone.is_minimized().unwrap_or(false);
-                            if !is_minimized {
-                                if !is_wayland {
-                                    if let Ok(pos) = window_clone.outer_position() {
-                                        if is_valid_window_position(pos.x, pos.y) {
-                                            cfg_for_events.set_window_position(pos.x, pos.y);
-                                        }
-                                    }
-                                }
-                                if let Ok(size) = window_clone.inner_size() {
-                                    if size.width >= MIN_WINDOW_WIDTH as u32
-                                        && size.height >= MIN_WINDOW_HEIGHT as u32
-                                        && (size.width as i64) <= MAX_WINDOW_DIMENSION
-                                        && (size.height as i64) <= MAX_WINDOW_DIMENSION
-                                    {
-                                        cfg_for_events.set_window_size(size.width, size.height);
-                                    }
-                                }
-                            }
-                        }
-                        cfg_for_events.set_window_maximized(is_max);
-
-                        history_for_close.session_end();
-                        history_for_close.session_end_all_main_tabs();
-                        history_for_close.session_end_by_id("panel");
-                        history_for_close.session_end_all_panel_tabs();
-                        pty_clone.terminate_all();
-                    }
-                    _ => {}
-                }
-            });
+            window.on_window_event(move |event| handler.handle(event));
 
             Ok(())
         })
