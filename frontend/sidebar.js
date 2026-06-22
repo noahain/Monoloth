@@ -52,6 +52,14 @@
         return 'mtab-1';
     }
 
+    function _getMainTabDir(mainTabId) {
+        if (typeof window.MonolithTerminal !== 'undefined' && typeof window.MonolithTerminal.getTab === 'function') {
+            var mainTab = window.MonolithTerminal.getTab(mainTabId);
+            if (mainTab && mainTab.dir) return mainTab.dir;
+        }
+        return getCurrentDir() || getDefaultHomeDir();
+    }
+
     var _isDragging = false;
     var _resizeStartY = 0;
     var _resizeStartHeight = 0;
@@ -454,7 +462,7 @@
         name = name || _panelShell || 'cmd';
         activate = activate !== false;
         mainTabId = mainTabId || _getActiveMainTabId();
-        dir = dir || (getCurrentDir() || getDefaultHomeDir());
+        dir = dir || _getMainTabDir(mainTabId);
 
         var group = _ensurePanelGroup(mainTabId);
         var tabId = 'ptab-' + mainTabId + '-' + group.nextTabId;
