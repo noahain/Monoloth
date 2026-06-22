@@ -1820,6 +1820,8 @@
         toggleCmdPanel: toggleCmdPanel,
         showCmdPanel: showCmdPanel,
         hideCmdPanel: hideCmdPanel,
+        closeAllPanelTabsForMainTab: closeAllPanelTabsForMainTab,
+        closeAllPanelGroups: closeAllPanelGroups,
         refitActiveTab: refitActiveTab,
         restorePanelState: function () {
             if (typeof Terminal === 'undefined' || !window.monolithApi) return;
