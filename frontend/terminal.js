@@ -356,6 +356,7 @@
             onTermCreated: function (refs) {
                 tab.term = refs.term;
                 tab.fitAddon = refs.fitAddon;
+                tab._lastPixelSize = tab.termDiv.clientWidth + 'x' + tab.termDiv.clientHeight;
             },
             abortCheck: function () { return tab.closing || !_tabs.has(tab.id); },
             startPty: function (cols, rows) {
@@ -570,7 +571,21 @@
         var dims;
         try { dims = tab.fitAddon.proposeDimensions(); } catch (e) { return; }
         if (!dims || isNaN(dims.cols) || isNaN(dims.rows)) return;
-        if (dims.cols === tab.term.cols && dims.rows === tab.term.rows) return;
+
+        var pixelSize = el.clientWidth + 'x' + el.clientHeight;
+
+        if (dims.cols === tab.term.cols && dims.rows === tab.term.rows) {
+            if (tab._lastPixelSize && tab._lastPixelSize !== pixelSize) {
+                requestAnimationFrame(function () {
+                    if (tab.closing || !tab.term || !tab.fitAddon) return;
+                    try { tab.fitAddon.fit(); } catch (e) {}
+                });
+            }
+            tab._lastPixelSize = pixelSize;
+            return;
+        }
+
+        tab._lastPixelSize = pixelSize;
         if (window.monolithApi) {
             try { window.monolithApi.resize_terminal(tab.sessionId, dims.cols, dims.rows); } catch (e) {}
         }
@@ -1013,104 +1028,134 @@
     // Stays compatible with app.js callers. "initTerminal" now means:
     // create the first main tab (if none exists) and activate it.
     window.MonolithTerminal = {
-        initTerminal: function (dir) {
-            // If we already have tabs (e.g., restoring persisted state), just
-            // activate the active one. Otherwise create the first tab.
-            if (_tabs.size > 0) {
-                var active = getActiveTab();
-                if (active) return activateTab(active.id);
-                var first = Array.from(_tabs.values())[0];
-                return activateTab(first.id);
-            }
-            return createTab(dir, true);
+        tabs: {
+            createTab: createTab,
+            activateTab: activateTab,
+            closeTab: closeTab,
+            promptNewTab: promptNewTab,
+            getActiveTab: getActiveTab,
+            getActiveTabId: function () { return _activeTabId; },
+            getTabBySessionId: function (sessionId) {
+                var found = null;
+                _tabs.forEach(function (t) { if (t.sessionId === sessionId) found = t; });
+                return found;
+            },
+            getAllTabs: function () { return Array.from(_tabs.values()); },
+            getTab: function (id) { return _tabs.get(id) || null; },
+            hideTabExitBanner: hideTabExitBanner,
+            updateTabBarVisibility: updateTabBarVisibility,
         },
-        getTerm: function () {
-            var tab = getActiveTab();
-            return tab ? tab.term : null;
+        pty: {
+            writeToTerm: window.writeToTerm,
+            setSkipNextEof: function (sessionId, val) { _skipNextEof[sessionId] = val; },
+            setSessionGeneration: function (sessionId, gen) { _sessionGeneration[sessionId] = gen; },
+            incrementSessionGeneration: function (sessionId) {
+                _sessionGeneration[sessionId] = (_sessionGeneration[sessionId] || 0) + 1;
+            },
+            deleteSessionGeneration: function (sessionId) { delete _sessionGeneration[sessionId]; },
+            hasSkipNextEof: function (sessionId) { return _skipNextEof[sessionId] !== undefined; },
+            deleteSkipNextEof: function (sessionId) { delete _skipNextEof[sessionId]; },
+            isRunning: function () {
+                var tab = getActiveTab();
+                return tab ? tab.running : false;
+            },
+            anyRunning: function () {
+                var any = false;
+                _tabs.forEach(function (t) { if (t.running) any = true; });
+                return any;
+            },
+            anyBusy: function () {
+                var any = false;
+                _tabs.forEach(function (t) { if (t.running && t.busy) any = true; });
+                return any;
+            },
+            setRunning: function (v) {
+                var tab = getActiveTab();
+                if (tab) tab.running = v;
+            },
+            setWindowsPtyInfo: function (info) { _windowsPtyInfo = info || null; },
         },
-        refit: refit,
-        refitActiveTab: refitActiveTab,
-        dispose: function () {
-            // Tear down ALL tabs: terminate PTYs, dispose xterms, remove DOM.
-            // Called from backToLanding. Must terminate PTYs BEFORE clearing
-            // or backend sessions leak.
-            var hadMain = false;
-            _tabs.forEach(function (tab) {
-                clearTabExitCountdown(tab);
-                if (window.monolithApi) {
-                    try { window.monolithApi.terminate_terminal(tab.sessionId).catch(function () {}); } catch (e) {}
+        view: {
+            getTerm: function () {
+                var tab = getActiveTab();
+                return tab ? tab.term : null;
+            },
+            refit: refit,
+            refitActiveTab: refitActiveTab,
+            initTabXterm: initTabXterm,
+        },
+        lifecycle: {
+            initTerminal: function (dir) {
+                if (_tabs.size > 0) {
+                    var active = getActiveTab();
+                    if (active) return activateTab(active.id);
+                    var first = Array.from(_tabs.values())[0];
+                    return activateTab(first.id);
                 }
-                if (tab.sessionId === 'main') hadMain = true;
-                if (tab.sessionId.startsWith('main-tab-') && window.monolithApi && typeof window.monolithApi.retire_panel_tab === 'function') {
-                    try { window.monolithApi.retire_panel_tab(tab.sessionId).catch(function () {}); } catch (e) {}
-                }
-                window.MonolithTerminalView.disposeTerminals(tab);
-                // Remove DOM elements (containers + tab bar items).
-                if (tab.container && tab.container.parentNode) tab.container.remove();
-                var tabItem = tabList && tabList.querySelector('.main-tab[data-tab-id="' + tab.id + '"]');
-                if (tabItem) tabItem.remove();
-                delete _sessionGeneration[tab.sessionId];
-                delete _skipNextEof[tab.sessionId];
-            });
-            if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.closeAllPanelTabsForMainTab === 'function') {
+                return createTab(dir, true);
+            },
+            dispose: function () {
+                var hadMain = false;
                 _tabs.forEach(function (tab) {
-                    window.SidebarManager.closeAllPanelTabsForMainTab(tab.id);
+                    clearTabExitCountdown(tab);
+                    if (window.monolithApi) {
+                        try { window.monolithApi.terminate_terminal(tab.sessionId).catch(function () {}); } catch (e) {}
+                    }
+                    if (tab.sessionId === 'main') hadMain = true;
+                    if (tab.sessionId.startsWith('main-tab-') && window.monolithApi && typeof window.monolithApi.retire_panel_tab === 'function') {
+                        try { window.monolithApi.retire_panel_tab(tab.sessionId).catch(function () {}); } catch (e) {}
+                    }
+                    window.MonolithTerminalView.disposeTerminals(tab);
+                    if (tab.container && tab.container.parentNode) tab.container.remove();
+                    var tabItem = tabList && tabList.querySelector('.main-tab[data-tab-id="' + tab.id + '"]');
+                    if (tabItem) tabItem.remove();
+                    delete _sessionGeneration[tab.sessionId];
+                    delete _skipNextEof[tab.sessionId];
                 });
-            }
-            // If the "main" tab was among those disposed, also kill hidden-* PTYs.
-            if (hadMain && window.monolithApi && typeof window.monolithApi.terminate_hidden === 'function') {
-                try { window.monolithApi.terminate_hidden().catch(function () {}); } catch (e) {}
-            }
-            _tabs.clear();
-            _activeTabId = null;
-            _appProfile = null;
-            _nextTabId = 1;
-            hideNewTabCard();
-            updateTabBarVisibility();
+                if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.closeAllPanelTabsForMainTab === 'function') {
+                    _tabs.forEach(function (tab) {
+                        window.SidebarManager.closeAllPanelTabsForMainTab(tab.id);
+                    });
+                }
+                if (hadMain && window.monolithApi && typeof window.monolithApi.terminate_hidden === 'function') {
+                    try { window.monolithApi.terminate_hidden().catch(function () {}); } catch (e) {}
+                }
+                _tabs.clear();
+                _activeTabId = null;
+                _appProfile = null;
+                _nextTabId = 1;
+                hideNewTabCard();
+                updateTabBarVisibility();
+            },
         },
-        setSkipNextEof: function (sessionId, val) { _skipNextEof[sessionId] = val; },
-        setSessionGeneration: function (sessionId, gen) { _sessionGeneration[sessionId] = gen; },
-        incrementSessionGeneration: function (sessionId) {
-            _sessionGeneration[sessionId] = (_sessionGeneration[sessionId] || 0) + 1;
-        },
-        deleteSessionGeneration: function (sessionId) { delete _sessionGeneration[sessionId]; },
-        hasSkipNextEof: function (sessionId) { return _skipNextEof[sessionId] !== undefined; },
-        deleteSkipNextEof: function (sessionId) { delete _skipNextEof[sessionId]; },
-        isRunning: function () {
-            var tab = getActiveTab();
-            return tab ? tab.running : false;
-        },
-        anyRunning: function () {
-            var any = false;
-            _tabs.forEach(function (t) { if (t.running) any = true; });
-            return any;
-        },
-        anyBusy: function () {
-            var any = false;
-            _tabs.forEach(function (t) { if (t.running && t.busy) any = true; });
-            return any;
-        },
-        setRunning: function (v) {
-            var tab = getActiveTab();
-            if (tab) tab.running = v;
-        },
-        setWindowsPtyInfo: function (info) { _windowsPtyInfo = info || null; },
-        // New tab-manager API
-        createTab: createTab,
-        promptNewTab: promptNewTab,
-        activateTab: activateTab,
-        closeTab: closeTab,
-        getAllTabs: function () { return Array.from(_tabs.values()); },
-        getTab: function (id) { return _tabs.get(id) || null; },
-        getActiveTab: getActiveTab,
-        getActiveTabId: function () { return _activeTabId; },
-        getTabBySessionId: function (sessionId) {
-            var found = null;
-            _tabs.forEach(function (t) { if (t.sessionId === sessionId) found = t; });
-            return found;
-        },
-        hideTabExitBanner: hideTabExitBanner,
-        initTabXterm: initTabXterm,
-        updateTabBarVisibility: updateTabBarVisibility,
     };
+    // Flat backwards-compatible aliases (preserve every existing call site)
+    window.MonolithTerminal.initTerminal = window.MonolithTerminal.lifecycle.initTerminal;
+    window.MonolithTerminal.getTerm = window.MonolithTerminal.view.getTerm;
+    window.MonolithTerminal.refit = window.MonolithTerminal.view.refit;
+    window.MonolithTerminal.refitActiveTab = window.MonolithTerminal.view.refitActiveTab;
+    window.MonolithTerminal.dispose = window.MonolithTerminal.lifecycle.dispose;
+    window.MonolithTerminal.setSkipNextEof = window.MonolithTerminal.pty.setSkipNextEof;
+    window.MonolithTerminal.setSessionGeneration = window.MonolithTerminal.pty.setSessionGeneration;
+    window.MonolithTerminal.incrementSessionGeneration = window.MonolithTerminal.pty.incrementSessionGeneration;
+    window.MonolithTerminal.deleteSessionGeneration = window.MonolithTerminal.pty.deleteSessionGeneration;
+    window.MonolithTerminal.hasSkipNextEof = window.MonolithTerminal.pty.hasSkipNextEof;
+    window.MonolithTerminal.deleteSkipNextEof = window.MonolithTerminal.pty.deleteSkipNextEof;
+    window.MonolithTerminal.isRunning = window.MonolithTerminal.pty.isRunning;
+    window.MonolithTerminal.anyRunning = window.MonolithTerminal.pty.anyRunning;
+    window.MonolithTerminal.anyBusy = window.MonolithTerminal.pty.anyBusy;
+    window.MonolithTerminal.setRunning = window.MonolithTerminal.pty.setRunning;
+    window.MonolithTerminal.setWindowsPtyInfo = window.MonolithTerminal.pty.setWindowsPtyInfo;
+    window.MonolithTerminal.createTab = window.MonolithTerminal.tabs.createTab;
+    window.MonolithTerminal.promptNewTab = window.MonolithTerminal.tabs.promptNewTab;
+    window.MonolithTerminal.activateTab = window.MonolithTerminal.tabs.activateTab;
+    window.MonolithTerminal.closeTab = window.MonolithTerminal.tabs.closeTab;
+    window.MonolithTerminal.getAllTabs = window.MonolithTerminal.tabs.getAllTabs;
+    window.MonolithTerminal.getTab = window.MonolithTerminal.tabs.getTab;
+    window.MonolithTerminal.getActiveTab = window.MonolithTerminal.tabs.getActiveTab;
+    window.MonolithTerminal.getActiveTabId = window.MonolithTerminal.tabs.getActiveTabId;
+    window.MonolithTerminal.getTabBySessionId = window.MonolithTerminal.tabs.getTabBySessionId;
+    window.MonolithTerminal.hideTabExitBanner = window.MonolithTerminal.tabs.hideTabExitBanner;
+    window.MonolithTerminal.initTabXterm = window.MonolithTerminal.view.initTabXterm;
+    window.MonolithTerminal.updateTabBarVisibility = window.MonolithTerminal.tabs.updateTabBarVisibility;
 })();

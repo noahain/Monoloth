@@ -1498,7 +1498,6 @@
             // Only create main tabs when the terminal view is active.
             var isTermView = document.getElementById('terminal-view');
             if (!isTermView || !isTermView.classList.contains('active')) return;
-            if (isTypingInMainTerminalOrInput()) return;
             e.preventDefault();
             // Open the file picker + profile picker flow (shared with the + button).
             if (typeof window.MonolithTerminal !== 'undefined' && typeof window.MonolithTerminal.promptNewTab === 'function') {
