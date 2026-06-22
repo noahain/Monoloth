@@ -254,6 +254,19 @@ impl PtyManager {
         gens.remove(session_id);
     }
 
+    pub fn retire_by_prefix(&self, prefix: &str) {
+        let to_retire: Vec<String> = {
+            let sessions = self.sessions.lock();
+            sessions.keys()
+                .filter(|k| k.starts_with(prefix))
+                .cloned()
+                .collect()
+        };
+        for sid in to_retire {
+            self.retire_session(&sid);
+        }
+    }
+
     pub fn terminate_all(&self) {
         let all_sessions: Vec<String> = {
             self.sessions.lock().keys().cloned().collect()

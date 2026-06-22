@@ -453,17 +453,19 @@
         return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
 
-    function createTab(name, activate, dir) {
+    function createTab(name, activate, dir, mainTabId) {
         name = name || _panelShell || 'cmd';
         activate = activate !== false;
+        mainTabId = mainTabId || _getActiveMainTabId();
         dir = dir || (getCurrentDir() || getDefaultHomeDir());
 
-        var tabId = 'tab-' + _nextTabId;
-        var sessionId = 'panel-tab-' + _nextTabId;
-        _nextTabId++;
+        var group = _ensurePanelGroup(mainTabId);
+        var tabId = 'ptab-' + mainTabId + '-' + group.nextTabId;
+        var sessionId = 'panel-' + mainTabId + '-tab-' + group.nextTabId;
+        group.nextTabId++;
 
         var container = document.createElement('div');
-        container.id = 'tab-container-' + tabId;
+        container.id = 'ptab-container-' + tabId;
         container.className = 'cmd-panel-tab-container';
         if (activate) container.classList.add('active');
 
@@ -508,6 +510,8 @@
             id: tabId,
             name: name,
             sessionId: sessionId,
+            mainTabId: mainTabId,
+            tabItem: tabItem,
             running: false,
             container: container,
             term: null,
@@ -519,6 +523,7 @@
             firstOutput: true,
             dir: dir
         };
+        group.tabs.set(tabId, tab);
         _panelTabs.set(tabId, tab);
 
         if (activate) {
@@ -833,7 +838,12 @@
     }
 
     function getTab(id) {
-        return _panelTabs.get(id) || null;
+        var found = null;
+        _mainTabPanels.forEach(function (group) {
+            if (group.tabs.has(id)) found = group.tabs.get(id);
+        });
+        if (!found) found = _panelTabs.get(id) || null;
+        return found;
     }
 
     function updateBusyDot(tab) {
@@ -1665,7 +1675,7 @@
         getActiveTabId: function () { return _activeTabId; },
         initTabXterm: initTabXterm,
         writeToTab: function (tabId, data, eof) {
-            var tab = _panelTabs.get(tabId);
+            var tab = getTab(tabId);
             if (!tab || !tab.term) return;
             if (eof) {
                 tab.running = false;
@@ -1677,7 +1687,7 @@
                 if (tab.firstOutput) {
                     tab.firstOutput = false;
                     setTimeout(function () {
-                        if (tab.closing || !_panelTabs.has(tab.id) || !tab.fitAddon || !tab.term) return;
+                        if (tab.closing || !getTab(tab.id) || !tab.fitAddon || !tab.term) return;
                         try {
                             tab.fitAddon.fit();
                             if (window.monolithApi) {

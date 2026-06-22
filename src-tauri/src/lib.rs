@@ -276,6 +276,7 @@ pub fn run() {
             commands::resize_terminal,
             commands::terminate_terminal,
             commands::retire_panel_tab,
+            commands::retire_panel_tabs_for_main_tab,
             commands::terminate_hidden,
             commands::get_current_version,
             commands::get_windows_pty_info,

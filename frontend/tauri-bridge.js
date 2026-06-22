@@ -77,6 +77,10 @@
         return callApi('retire_panel_tab', { sessionId: sessionId });
     };
 
+    api.retire_panel_tabs_for_main_tab = function (mainTabId) {
+        return window.__TAURI__.core.invoke('retire_panel_tabs_for_main_tab', { mainTabId: mainTabId });
+    };
+
     api.terminate_hidden = function () {
         return callApi('terminate_hidden', null, function () { return { success: true }; });
     };

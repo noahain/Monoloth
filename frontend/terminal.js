@@ -1082,15 +1082,22 @@
             if (t.sessionId === sessionId) tab = t;
         });
         if (!tab || !tab.term) {
-            // Delegate panel-tab routing to SidebarManager (unchanged).
-            if (sessionId.startsWith('panel-tab-')) {
-                var panelTabId = sessionId.replace('panel-', '');
-                if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.writeToTab) {
-                    window.SidebarManager.writeToTab(panelTabId, data, eof);
-                }
-            } else if (sessionId === 'panel') {
-                if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.writeToPanel) {
-                    window.SidebarManager.writeToPanel(data, eof);
+            if (sessionId.startsWith('panel-')) {
+                var match = sessionId.match(/^panel-(mtab-\d+)-tab-(\d+)$/);
+                if (match) {
+                    var panelTabId = 'ptab-' + match[1] + '-' + match[2];
+                    if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.writeToTab) {
+                        window.SidebarManager.writeToTab(panelTabId, data, eof);
+                    }
+                } else if (sessionId.startsWith('panel-tab-')) {
+                    var legacyTabId = sessionId.replace('panel-', '');
+                    if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.writeToTab) {
+                        window.SidebarManager.writeToTab(legacyTabId, data, eof);
+                    }
+                } else if (sessionId === 'panel') {
+                    if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.writeToPanel) {
+                        window.SidebarManager.writeToPanel(data, eof);
+                    }
                 }
             }
             return;
