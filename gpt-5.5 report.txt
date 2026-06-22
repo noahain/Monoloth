@@ -1,0 +1,14 @@
+**Findings**
+- **P1: Late terminal-start callbacks can resurrect or corrupt the main terminal state.** [frontend/terminal.js](<F:\Coding Projects\Monolith\frontend\terminal.js:173>) starts `start_terminal()` inside `requestAnimationFrame`, and the `.then/.catch` handlers later mutate global `term`, `_terminalRunning`, and `_sessionGeneration` without checking that the terminal instance is still current. If the user returns to the launcher or starts another session while backend startup is still pending, the old callback can mark the disposed session running or write failure text into the new terminal. [frontend/app.js](<F:\Coding Projects\Monolith\frontend\app.js:1315>) has a launch token before `initTerminal()`, but that token does not guard the async backend completion inside `terminal.js`.
+
+- **P2: File picker “Date modified” renders `Invalid Date`.** Rust sends `DirEntry.modified` as a relative string like `just now`, `3d ago`, or `1y ago` from [src-tauri/src/commands/fs.rs](<F:\Coding Projects\Monolith\src-tauri\src\commands\fs.rs:133>) and [src-tauri/src/commands/fs.rs](<F:\Coding Projects\Monolith\src-tauri\src\commands\fs.rs:284>). The frontend treats it as Unix seconds in [frontend/file-picker.js](<F:\Coding Projects\Monolith\frontend\file-picker.js:348>) and `new Date(ts * 1000)` in [frontend/file-picker.js](<F:\Coding Projects\Monolith\frontend\file-picker.js:566>). I verified `new Date('3d ago' * 1000)` renders `Invalid Date`.
+
+- **P3: SVG/ICO previews are advertised but cannot work through the current preview contract.** The frontend classifies `.svg` and `.ico` as image-previewable in [frontend/file-picker.js](<F:\Coding Projects\Monolith\frontend\file-picker.js:370>) and opens the preview pane for them in [frontend/file-picker.js](<F:\Coding Projects\Monolith\frontend\file-picker.js:464>), but the backend returns SVG as `Text` and does not include ICO in `image_exts` at [src-tauri/src/commands/fs.rs](<F:\Coding Projects\Monolith\src-tauri\src\commands\fs.rs:199>). The bridge exposes `Text` as `{ text }`, while `showPreview()` only accepts `{ dataUrl }`, so those files end up as “Preview not available.”
+
+- **P3: Missing paths are reported as access/network errors.** `get_path_info()` sets `success` equal to `path_buf.exists()` in [src-tauri/src/commands/fs.rs](<F:\Coding Projects\Monolith\src-tauri\src\commands\fs.rs:58>). The frontend then treats `!success` as “Access denied or network error” before it can reach its “Path not found” branch in [frontend/file-picker.js](<F:\Coding Projects\Monolith\frontend\file-picker.js:251>).
+
+**Verification**
+- `node --test frontend/*.test.cjs`: 35 passed.
+- `cargo test --target-dir C:\tmp\monolith-cargo-target`: 33 passed.
+- Plain sandboxed `cargo test` against the repo target is currently blocked by `target\debug\.cargo-lock` with `Access is denied`; the unsandboxed temp-target run completed cleanly.
+- I did not edit tracked files.

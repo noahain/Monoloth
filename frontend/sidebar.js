@@ -20,7 +20,7 @@
     var _sidebarPosition = 'left';
 
     var _panelShell = 'cmd';
-    var _tabBarPosition = 'standard';
+    var _tabBarPosition = 'titlebar';
     var _panelHeight = 200;
     var _cmdPanelOpen = false;
 
@@ -402,7 +402,7 @@
             }
         }).catch(function () {});
         window.monolithApi.get_config('tabBarPosition').then(function (val) {
-            _tabBarPosition = (val === 'titlebar' || val === 'hidden') ? val : 'standard';
+            _tabBarPosition = (val === 'titlebar' || val === 'hidden') ? val : 'titlebar';
             applyTabBarPosition();
         }).catch(function () {});
     }

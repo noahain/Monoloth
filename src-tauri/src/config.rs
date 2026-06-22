@@ -105,7 +105,7 @@ fn defaults() -> Map<String, Value> {
     m.insert("persistMainTabs".into(), Value::Bool(true));
     m.insert("mainTabs".into(), Value::Array(vec![]));
     m.insert("mainTabActive".into(), Value::String("".into()));
-    m.insert("tabBarPosition".into(), Value::String("standard".into()));
+    m.insert("tabBarPosition".into(), Value::String("titlebar".into()));
     m
 }
 
