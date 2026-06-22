@@ -609,6 +609,51 @@
         hideCmdPanel(false);
     }
 
+    function switchToMainTab(mainTabId) {
+        if (_activeMainTabId === mainTabId) return;
+
+        var oldGroup = _getActiveGroup();
+
+        if (oldGroup) {
+            oldGroup.tabs.forEach(function (tab) {
+                if (tab.container) tab.container.style.display = 'none';
+            });
+        }
+
+        var tabList = document.getElementById('cmd-panel-tabs');
+        if (tabList) {
+            var items = tabList.querySelectorAll('.cmd-panel-tab');
+            items.forEach(function (item) { item.remove(); });
+        }
+
+        _activeMainTabId = mainTabId;
+        var group = _ensurePanelGroup(mainTabId);
+
+        group.tabs.forEach(function (tab) {
+            if (tabList && tab.tabItem) {
+                tabList.insertBefore(tab.tabItem, tabList.querySelector('.cmd-panel-new-tab'));
+            }
+            if (tab.container) tab.container.style.display = '';
+        });
+
+        if (group.activeTabId) {
+            _activatePanelTabInGroup(group, group.activeTabId);
+        }
+
+        if (group.isOpen && !_cmdPanelOpen) {
+            _cmdPanelOpen = true;
+            if (cmdPanel) {
+                cmdPanel.classList.add('open');
+            }
+            setTimeout(function () { refitActiveTab(); }, 50);
+        } else if (!group.isOpen && _cmdPanelOpen) {
+            _cmdPanelOpen = false;
+            if (cmdPanel) {
+                cmdPanel.classList.remove('open');
+            }
+        }
+    }
+
     function initTabXterm(tab) {
         var terminalDiv = tab.container.querySelector('.cmd-panel-tab-terminal');
 
@@ -1728,6 +1773,10 @@
         getActiveTabId: function () {
             var group = _getActiveGroup();
             return group ? group.activeTabId : null;
+        },
+        initForMainTab: function (mainTabId) {
+            _activeMainTabId = mainTabId;
+            _ensurePanelGroup(mainTabId);
         },
         initTabXterm: initTabXterm,
         writeToTab: function (tabId, data, eof) {
