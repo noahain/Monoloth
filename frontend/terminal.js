@@ -246,7 +246,7 @@
                 }
                 applyTabXtermTheme(tab, appearance);
                 refitActiveTab();
-                if (tab.term) tab.term.focus();
+                if (tab.term && !tab._renaming) tab.term.focus();
                 if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.refitActiveTab) {
                     window.SidebarManager.refitActiveTab();
                 }
@@ -254,7 +254,7 @@
             }).catch(function () {
                 if (!tab.term) return initTabXterm(tab);
                 refitActiveTab();
-                if (tab.term) tab.term.focus();
+                if (tab.term && !tab._renaming) tab.term.focus();
                 return Promise.resolve();
             });
         }
@@ -263,7 +263,7 @@
             return initTabXterm(tab);
         }
         refitActiveTab();
-        if (tab.term) tab.term.focus();
+        if (tab.term && !tab._renaming) tab.term.focus();
         return Promise.resolve();
     }
 
@@ -661,11 +661,13 @@
         input.style.cssText = 'width:100%;font-size:0.75rem;border:none;background:transparent;color:inherit;outline:none;';
         input.maxLength = 20;
         nameSpan.replaceWith(input);
+        tab._renaming = true;
         input.focus();
         input.select();
         function finish() {
             var newName = input.value.trim() || tab.name;
             tab.name = newName;
+            tab._renaming = false;
             var newSpan = document.createElement('span');
             newSpan.className = 'main-tab-name';
             newSpan.textContent = newName;
