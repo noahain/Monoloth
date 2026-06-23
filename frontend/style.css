@@ -8180,6 +8180,7 @@ body.tabbar-titlebar[data-current-view="settings"] .titlebar-center {
 }
 .main-tab-bar.in-titlebar .main-tab-tabs {
     align-items: stretch;
+    flex: 0 1 auto;
 }
 .main-tab-bar.in-titlebar .main-tab-spacer {
     flex: 1;

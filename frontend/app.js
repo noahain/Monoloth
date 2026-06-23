@@ -2118,7 +2118,10 @@
 
         // --- UI / Navigation ---
         ui: {
-            getCurrentDir: function () { return _currentLaunchDir; },
+            getCurrentDir: function () {
+                var t = window.MonolithTerminal && window.MonolithTerminal.getActiveTab && window.MonolithTerminal.getActiveTab();
+                return (t && t.dir) || _currentLaunchDir;
+            },
             showConfirm: function (t, m, k) { return window.MonolithDialog.showConfirm(t, m, k); },
             backToLanding: function () { backToLanding(); },
             showTerminal: function (dir) { showTerminal(dir); },
