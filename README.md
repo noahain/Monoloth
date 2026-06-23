@@ -25,7 +25,7 @@
 
 ---
 
-Monoloth wraps CLI coding agents (like OpenCode and Claude Code) in a native desktop shell on Windows, macOS, and Linux. Choose a project directory to start a session with integrated terminal emulation and session history tracking.
+Monoloth wraps CLI coding agents (like OpenCode and Claude Code) in a native desktop shell on Windows, macOS, and Linux. Choose a project directory to start a session with integrated terminal emulation, multi-tab workspaces, and session history tracking.
 
 We built the backend with Tauri 2 and Rust, and the frontend with vanilla JavaScript. The project does not use a bundler, a `package.json` file, or a Node.js build process.
 
@@ -35,7 +35,7 @@ Grab a prebuilt binary from the [latest release](https://github.com/noahain/Mono
 
 **Which file?**
 
-- **Windows**: `x64-setup.exe` to install, or `x64_portable.exe` to run without installing.
+- **Windows**: `x64-setup.exe` (NSIS installer) or `x64_en-US.msi` to install; `x64_portable.exe` to run without installing.
 - **macOS**: `aarch64.dmg` for Apple Silicon (M1 and newer), `x64.dmg` for Intel.
 - **Linux**: `.AppImage` runs on any distro; grab the `.deb` or `.rpm` if you prefer your package manager.
 
@@ -74,23 +74,73 @@ The system serves frontend assets directly from the `frontend/` directory, requi
 
 ### Features
 
-- **Terminal emulator**
-  - Uses xterm.js with WebGL rendering
-  - Manages multiple session PTYs via `portable-pty`
-  - Includes a secondary CMD panel with drag-to-resize handles
-- **Command palette** (`Ctrl+P`)
-  - Provides grouped commands and directory navigation
-  - Allows users to trigger custom secondary actions
-- **Custom sidebar**
-  - Supports background commands and external terminal execution
-  - Offers reorderable buttons and multiple icon options
-- **Visual theme configuration**
-  - Updates color themes based on wallpaper brightness
-  - Applies blur or solid styling to UI elements
-- **Profile system**
-  - Keeps user settings separate while sharing global window states
-- **Session tracking**
-  - Saves session times and per-tool usage breakdowns
+#### Terminal
+
+- **xterm.js** with WebGL-accelerated rendering, full addon support, and per-tab xterm instances
+- **Multi-tab workspace** — spawn multiple terminal tabs (`Ctrl+T`), each with its own PTY session, directory, and profile. Tabs persist across restarts (opt-in). Reorder, rename, and close with animations.
+- **CMD Panel** — secondary resizable terminal panel at the bottom (`Ctrl+J`), with its own multi-tab system grouped per main tab. Drag-to-resize handle with animated open/close.
+- **New Tab Card** — overlay with directory picker, recent projects list, and profile selector when opening a new tab
+- **Session generation tokens** — prevents stale output from terminated PTY sessions
+- **Busy detection** — visual indicator when the agent is actively generating output
+- **Session exit countdown** — 5-second auto-return to the launcher when the agent exits
+- **Command palette** (`Ctrl+P`) — grouped actions (navigation, window controls, settings) with fuzzy filtering, sub-palettes, and keyboard navigation
+
+#### Launcher
+
+- **Startup presets** — predefined profiles for OpenCode, Claude Code, Qwen, Kimi, Codex, Pi, and Gemini. Pick one or enter a custom command.
+- **Secondary commands** — run "before" commands synchronously before the main PTY spawns, "parallel" commands in separate windows, and "hidden" headless PTY sessions for background tools
+- **Recent directories** — persistent list of recently used projects on the landing page
+- **File picker** — choose between native OS dialogs or a built-in custom file browser with breadcrumb navigation, quick-access sidebar, image previews, drive listing, and keyboard navigation
+
+#### Sidebar
+
+- **Configurable buttons** — reorderable buttons with custom commands, icons, and execution modes (run in background, open in external terminal, or open in the CMD panel)
+- **22 SVG icons** to choose from, with default actions for open folder, open in CMD panel, and copy project path
+- **Tab bar position** — move the terminal tab bar to the titlebar, standard position, or hide it entirely
+
+#### Themes & Appearance
+
+- **3 theme modes** — dark, light, and auto (detects wallpaper brightness to pick automatically)
+- **4 CTA styles** — blur, glass, solid, and outline
+- **4 background types** — none, solid color, gradient (8 presets with custom color picking), and image (including animated GIFs)
+- **Background layering** — place the background behind the terminal or as an overlay on top
+- **Opacity control** — slider for terminal background transparency
+- **Wallpaper brightness analysis** — analyzes background images to recommend a theme mode
+- **Custom titlebar** — minimize, maximize, and close buttons with OS-accurate maximize/restore sync
+
+#### Profiles
+
+- **Per-user settings isolation** — separate config profiles while sharing global window state
+- **Per-tab profile switching** — assign different profiles to different main terminal tabs; right-click a tab to switch profiles
+- **Full CRUD** — create, rename, and delete profiles from settings, with a switcher modal
+
+#### Shortcuts
+
+Fully rebindable keyboard shortcuts with an interactive editor in settings:
+
+| Action | Default |
+|--------|---------|
+| Command palette | `Ctrl+P` |
+| Settings | `Ctrl+,` |
+| Toggle sidebar | `Ctrl+B` |
+| Toggle CMD panel | `Ctrl+J` |
+| Clear terminal | `Ctrl+K` |
+| New tab | `Ctrl+T` |
+| New panel tab | `Ctrl+Shift+T` |
+| Switch profile | `Ctrl+Shift+P` |
+| Back to launcher | `Ctrl+Shift+W` |
+
+#### Updater
+
+- **In-app update notifications** — download progress bar with stall detection, error recovery (signature, network, rate limit), retry, and abort support
+- **Mini-pill mode** — compact indicator during downloads so it doesn't block your workflow
+- **Signed artifacts** — minisign signature verification before installing
+
+#### History & Sessions
+
+- **Session tracking** — records start time, end time, duration, profile, command, and directory for every session
+- **Configurable retention** — keep sessions for 7, 30, or 90 days, or clear on demand
+- **Tab-scoped** — main tabs and panel tabs each get their own tracked sessions
 
 ### Visual Gallery
 
@@ -128,50 +178,60 @@ The system serves frontend assets directly from the `frontend/` directory, requi
 
 ```
 Monoloth/
-├── src-tauri/                  # Rust backend configuration
+├── src-tauri/                  # Rust backend
 │   ├── src/
-│   │   ├── main.rs             # Execution entry point
-│   │   ├── lib.rs              # Tauri setup and window events
-│   │   ├── commands/           # Tauri IPC commands
-│   │   │   ├── config.rs       # Profile and background configurations
-│   │   │   ├── fs.rs           # File operations and previews
+│   │   ├── main.rs             # Entry point
+│   │   ├── lib.rs              # Tauri setup, window events, update commands
+│   │   ├── commands/           # IPC command handlers
+│   │   │   ├── config.rs       # Profile and background configuration
+│   │   │   ├── fs.rs           # File system operations and previews
 │   │   │   ├── history.rs      # Session history queries
-│   │   │   ├── image.rs        # Image reading and analysis
-│   │   │   ├── profile.rs      # Profile operations
-│   │   │   ├── shell.rs        # External execution handling
-│   │   │   ├── terminal.rs     # Terminal session management
+│   │   │   ├── image.rs        # Image reading and brightness analysis
+│   │   │   ├── mod.rs          # Shared path/shell utilities
+│   │   │   ├── profile.rs      # Profile CRUD operations
+│   │   │   ├── shell.rs        # Background and external terminal execution
+│   │   │   ├── terminal.rs     # PTY session management and command resolution
+│   │   │   ├── version.rs      # Version and Windows PTY info
 │   │   │   └── window.rs       # Window controls
-│   │   ├── config.rs           # Profile serialization and sanitization
-│   │   ├── history.rs          # History tracking
-│   │   └── pty.rs              # Terminal manager interface
+│   │   ├── config.rs           # AppConfig — profile-aware config store
+│   │   ├── history.rs          # HistoryManager — session tracking
+│   │   └── pty.rs              # PtyManager — PTY lifecycle
 │   ├── Cargo.toml
 │   └── tauri.conf.json
 ├── frontend/
 │   ├── index.html              # HTML structure
-│   ├── app.js                  # Main application controller
-│   ├── sidebar.js              # Sidebar logic
-│   ├── tauri-bridge.js         # IPC layer
-│   ├── dom-utils.js            # User interface utilities
+│   ├── app.js                  # Central orchestration facade (MonolothApp)
+│   ├── terminal.js             # Main terminal tab manager (MonolithTerminal)
+│   ├── sidebar.js              # Sidebar and CMD panel logic
+│   ├── command-palette.js      # Command palette overlay (MonolithPalette)
+│   ├── profiles.js             # Profile management and switcher
+│   ├── file-picker.js          # Custom file browser
+│   ├── dialog.js               # Prompt and confirm dialogs
+│   ├── shortcuts.js            # Keyboard shortcut management
+│   ├── theme.js                # Theme, CTA style, and wallpaper analysis
+│   ├── tauri-bridge.js         # IPC bridge (monolithApi)
+│   ├── dom-utils.js            # DOM utilities and modal helpers
 │   ├── tooltip.js              # Custom tooltips
-│   ├── style.css               # Application stylesheet
+│   ├── style.css               # Application stylesheet (~7000 lines)
 │   └── lib/
-│       ├── xterm.js            # Terminal rendering library
-│       ├── xterm-addon-fit.js  # Terminal fit plugin
-│       ├── xterm-addon-webgl.js# Terminal WebGL acceleration
-│       ├── plugin-updater.js   # Updater wrapper
-│       ├── plugin-process.js   # Process wrapper
-│       └── updater-toast.js    # Update notifications
+│       ├── xterm.js            # Terminal emulator library
+│       ├── xterm-addon-fit.js  # Terminal fit addon
+│       ├── xterm-addon-webgl.js# WebGL renderer addon
+│       ├── terminal-view.js    # xterm factory and lifecycle
+│       ├── plugin-updater.js   # Updater plugin wrapper
+│       ├── plugin-process.js   # Process plugin wrapper
+│       └── updater-toast.js    # Update notification UI
 ├── assets/
 │   ├── icon.png
 │   ├── icon.ico
 │   └── screenshots/
 ├── .github/
 │   ├── ISSUE_TEMPLATE/         # Bug report + feature request forms
-│   └── workflows/release.yml   # Cross-platform build & release
-├── ARCHITECTURE.md             # How the system fits together
+│   └── workflows/release.yml   # Cross-platform build & release matrix
+├── ARCHITECTURE.md             # System architecture overview
 ├── CONTRIBUTING.md             # Build, style, and PR guide
 ├── CHANGELOG.md                # Release history
-└── SECURITY.md                 # Reporting + what the app accesses
+└── SECURITY.md                 # Security reporting and app scope
 ```
 </details>
 
@@ -185,27 +245,34 @@ The application stores settings in `config.json` and saves user profiles in a `p
 | macOS | `~/Library/Application Support/Monoloth/` |
 | Linux | `~/.config/Monoloth/` |
 
-| Parameter | Default Value | Description |
-| --------- | ------------- | ----------- |
-| `startup_command` | `opencode` | Default CLI command |
-| `theme_mode` | `dark` | Default theme configuration |
-| `bg_type` | `none` | Background image type |
-| `cta_button_style` | `blur` | Visual theme styling |
-| `active_profile` | `Default` | Loaded settings profile |
-| `use_custom_titlebar` | `true` | Frame display configuration |
+Global keys (shared across all profiles) include window state, recent directories, sidebar layout, tab bar position, and panel configuration. All other keys — theme, background, startup command, shortcuts — are per-profile overridable.
+
+#### Key Configuration Options
+
+| Parameter | Default | Description |
+| --------- | ------- | ----------- |
+| `startup_command` | `opencode` | CLI agent command launched in each main terminal tab |
+| `theme_mode` | `dark` | dark, light, or auto |
+| `bg_type` | `none` | none, image, color, or gradient |
+| `cta_button_style` | `blur` | blur, glass, solid, or outline |
+| `active_profile` | `Default` | Currently active settings profile |
+| `use_custom_titlebar` | `true` | Use custom titlebar instead of native decorations |
+| `persistMainTabs` | `false` | Restore terminal tabs on next launch |
+| `tabBarPosition` | `standard` | standard, titlebar, or hidden |
+| `panelShell` | (platform default) | Shell used for the CMD panel |
+| `cmdPanelOpen` | `false` | Whether the CMD panel is open on launch |
 
 #### Settings Tabs
 
-- **Startup**: Configures startup commands and default directories.
-- **Appearance**: Controls visual themes and background styles.
-- **Keybinds**: Rebinds command palette shortcuts.
-- **Profiles**: Manages active user profiles.
-- **History**: Controls session retention rules.
-- **Sidebar**: Reorders sidebar buttons and action layouts.
+- **Startup** — agent command preset (opencode, claude, qwen, kimi, codex, pi, gemini, or custom), default directory, and secondary commands (before/parallel/hidden)
+- **Appearance** — theme mode, background type (image/color/gradient/overlay), CTA button style, opacity, custom titlebar toggle, tab bar position
+- **Keybinds** — interactive rebindable shortcut editor for all actions
+- **Profiles** — create, rename, switch, and delete configuration profiles
+- **History** — session tracking toggle, retention period (7/30/90 days), and clear history
 
 ### Tech Stack
 
-Rust 1.77.2 • Tauri 2.11.1 • portable-pty • xterm.js • WebGL • Vanilla JS • HTML5 • CSS3
+Rust 1.77.2 • Tauri 2.11.1 • portable-pty • xterm.js • WebGL • Vanilla JavaScript • HTML5 • CSS3 • rfd • image • serde_json
 
 ### Contributing
 
