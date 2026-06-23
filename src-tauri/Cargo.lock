@@ -2679,7 +2679,7 @@ dependencies = [
 
 [[package]]
 name = "monoloth"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "base64 0.22.1",
  "dirs 5.0.1",

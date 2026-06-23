@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-06-23
+
+### Fixed
+- xterm.js WebGL renderer no longer corrupts the terminal when the
+  background is transparent (wallpaper, solid color, or gradient). WebGL
+  is now only enabled for opaque backgrounds (`layer: overlay` or no
+  background) and falls back to the canvas renderer otherwise.
+- Windows PTY info is now ignored when `buildNumber` is `0` or missing
+  (the previous `typeof buildNumber === 'number'` check incorrectly
+  accepted `0` as a valid build number, leading to misconfigured
+  `windowsPty` options).
+
+### Changed
+- PTY resize is now driven by a single `term.onResize` handler in
+  `terminal-view.js` instead of being called from each resize path
+  (`fit`, `applyResize`, refit on tab switch, refit on panel open,
+  pixel-size fallback). This eliminates the resize-then-resize race
+  that caused scattered, sometimes duplicated PTY syncs.
+- The main-terminal resize debounce increased from 120ms to 250ms so
+  maximize/restore animations settle before the final measurement.
+- xterm.js and its addons (fit, webgl) are now rebuilt against the
+  `globalThis` UMD target, matching the rest of the vendored libs.
+
+### Removed
+- `fastScrollModifier: 'alt'` (xterm.js option). Alt-fast-scroll is no
+  longer bound.
+- Scattered `window.resize` listener and `onWindowResize` wrapper in the
+  sidebar; the panel terminal's `ResizeObserver` and the main terminal's
+  own `ResizeObserver` are the single sources of truth for refit.
+
 ## [2.2.0] - 2026-06-23
 
 ### Added
@@ -365,7 +395,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release.
 
-[Unreleased]: https://github.com/noahain/Monoloth/compare/v2.2.0...beta
+[Unreleased]: https://github.com/noahain/Monoloth/compare/v2.2.1...beta
+[2.2.1]: https://github.com/noahain/Monoloth/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/noahain/Monoloth/compare/v2.1.11...v2.2.0
 [2.1.11]: https://github.com/noahain/Monoloth/compare/v2.1.10...v2.1.11
 [2.1.10]: https://github.com/noahain/Monoloth/compare/v2.1.9...v2.1.10
