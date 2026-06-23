@@ -7,8 +7,8 @@ before reporting a vulnerability.
 
 | Version | Supported |
 | --- | --- |
-| 2.1.x | Yes |
-| < 2.1 | No |
+| 2.2.x | Yes |
+| < 2.2 | No |
 
 ## Reporting a vulnerability
 
@@ -28,12 +28,15 @@ in ways worth stating plainly:
 
 - **Terminals and processes.** It spawns PTY sessions and runs the command you
   configure (`opencode` by default) plus any secondary or background commands
-  you set up. Those processes run with your user permissions.
+  you set up. It manages multiple terminal tabs (main and panel), hidden
+  headless sessions, and parallel processes — all running with your user
+  permissions.
 - **The project directory.** It reads the directory you pick: listing files,
   generating previews, and analyzing image brightness for theming.
-- **Local config.** Settings and profiles are stored under
-  `%APPDATA%/Monoloth/` (or the platform config directory). Nothing is sent
-  anywhere.
+- **Local config and history.** Settings, profiles, session history (start/end
+  times, command, directory), recent directories, shortcut bindings, and tab
+  state are stored under `%APPDATA%/Monoloth/` (or the platform config
+  directory). Nothing is sent anywhere.
 
 ## Auto-update
 

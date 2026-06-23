@@ -20,9 +20,16 @@ development packages (see the dependency list in
 
 ```bash
 cd src-tauri
-cargo check        # fast type check
-cargo tauri dev    # run with hot reload
-cargo tauri build  # release build
+cargo check                    # fast typecheck
+cargo tauri dev                # run with hot reload
+cargo tauri build              # release build
+```
+
+Run the tests from `src-tauri/`:
+
+```bash
+cargo test                     # all Rust tests
+node --test ../frontend/*.test.cjs   # all frontend tests
 ```
 
 There is no Node build step. The frontend assets in `frontend/` are served
@@ -36,11 +43,10 @@ The Rust backend lives in `src-tauri/` and the vanilla-JS frontend in
 
 ## Code style
 
-- Run `cargo fmt` and `cargo clippy` before opening a PR.
-- The frontend is vanilla JavaScript with no bundler. Match the surrounding
-  style; do not introduce a build tool or framework.
-- Run the tests: `cargo test` (backend) and the Node test files
-  (`node --test frontend/*.test.cjs`).
+- Match the surrounding style. The frontend is vanilla JavaScript with no
+  bundler — do not introduce a build tool or framework.
+- Run the tests before opening a PR: `cargo test` and
+  `node --test frontend/*.test.cjs`.
 
 ## Reporting bugs and requesting features
 
@@ -52,11 +58,12 @@ CLI agent you run.
 
 ## Pull requests
 
-- Branch from `main` with a descriptive name (`fix/pty-leak`,
-  `feat/split-pane`).
+- Branch from `beta` with a descriptive name (`fix/pty-leak`,
+  `feat/split-pane`). The `beta` branch is the active development branch;
+  `main` tracks released versions.
 - Keep each PR focused on one change.
 - Write a clear description of what changed and how you tested it.
-- Make sure `cargo fmt`, `cargo clippy`, and the test suites pass.
+- Make sure the test suites pass.
 
 Reviews check correctness, that the change stays scoped, cross-platform
 behavior where relevant, and that tests cover new logic.
