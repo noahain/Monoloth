@@ -35,18 +35,18 @@ Grab a prebuilt binary from the [latest release](https://github.com/noahain/Mono
 
 **Which file?**
 
-- **Windows**: `x64-setup.exe` (NSIS installer) or `x64_en-US.msi` to install; `x64_portable.exe` to run without installing.
-- **macOS**: `aarch64.dmg` for Apple Silicon (M1 and newer), `x64.dmg` for Intel.
-- **Linux**: `.AppImage` runs on any distro; grab the `.deb` or `.rpm` if you prefer your package manager.
+- **Windows**: `Monoloth_*_x64-setup.exe` (NSIS) or `Monoloth_*_x64_en-US.msi` to install; `Monoloth_*_x64_portable.exe` to run without installing.
+- **macOS**: `Monoloth_*_aarch64.dmg` for Apple Silicon, `Monoloth_*_x64.dmg` for Intel. Portable `.app.zip` variants also available for both architectures.
+- **Linux**: `Monoloth_*_amd64.AppImage` runs on any distro; grab the `.deb` or `.rpm` if you prefer your package manager.
 
-Ignore the `.sig` and `.app.tar.gz` files. The auto-updater uses those, and you don't need them for a manual download.
+Ignore `.sig`, `.app.tar.gz`, and `.app.tar.gz.sig` files. The auto-updater uses those, and you don't need them for a manual download.
 
-| Platform | Download | Notes |
-| -------- | -------- | ----- |
-| Windows | `.msi` or `-setup.exe` installer | WebView2 installs on first run |
-| Windows (portable) | `_x64_portable.exe` | Single file, no install |
-| macOS | `.dmg` (Apple Silicon or Intel) | Pick the build that matches your chip |
-| Linux | `.AppImage` | Mark it executable and run; `.deb` and `.rpm` also ship |
+| Platform | Downloads | Notes |
+| -------- | --------- | ----- |
+| Windows | `_x64-setup.exe`, `_x64_en-US.msi`, `_x64_portable.exe` | MSI or NSIS for install; portable is a single file |
+| macOS (Apple Silicon) | `_aarch64.dmg`, `_aarch64_portable.app.zip` | DMG is the standard installer |
+| macOS (Intel) | `_x64.dmg`, `_x64_portable.app.zip` | DMG is the standard installer |
+| Linux | `_amd64.AppImage`, `_amd64.deb`, `.x86_64.rpm` | AppImage is portable; deb/rpm for package managers |
 
 The app updates itself after that: it checks the release feed, verifies the minisign signature, and installs the new version on your confirmation.
 
