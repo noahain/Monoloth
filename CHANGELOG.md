@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Titlebar tabs now shrink to fit with overflow scroll; the spacer element fills remaining space as a drag handle.
+
 ## [2.2.2] - 2026-06-24
 
 ### Added
