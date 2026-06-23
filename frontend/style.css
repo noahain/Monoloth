@@ -5916,6 +5916,44 @@ body.adaptive-light .titlebar-close-btn:hover {
     color: var(--accent-red);
 }
 
+/* macOS Traffic-Light Buttons — only the 3 window controls on the right.
+   The menu button (tb-menu) is unaffected. */
+body.platform-macos #tb-minimize,
+body.platform-macos #tb-maximize,
+body.platform-macos #tb-close {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    background: transparent;
+    color: transparent;
+}
+body.platform-macos #tb-minimize svg,
+body.platform-macos #tb-maximize svg,
+body.platform-macos #tb-close svg {
+    display: none;
+}
+body.platform-macos #tb-minimize::before,
+body.platform-macos #tb-maximize::before,
+body.platform-macos #tb-close::before {
+    content: '';
+    display: block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 0.5px solid rgba(0, 0, 0, 0.12);
+}
+body.platform-macos #tb-minimize::before { background: #ffbd2e; }
+body.platform-macos #tb-maximize::before { background: #28c840; }
+body.platform-macos #tb-close::before    { background: #ff5f57; }
+body.platform-macos #tb-minimize:hover::before { background: #ffd633; }
+body.platform-macos #tb-maximize:hover::before { background: #4ade80; }
+body.platform-macos #tb-close:hover::before    { background: #ff6b6b; }
+body.platform-macos #tb-minimize:hover,
+body.platform-macos #tb-maximize:hover,
+body.platform-macos #tb-close:hover {
+    background: transparent;
+}
+
 /* View-Driven Button Visibility */
 body[data-current-view="landing"] #tb-back,
 body[data-current-view="landing"] #tb-refresh,
@@ -5949,46 +5987,6 @@ body.custom-titlebar-active .settings-bar {
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
-}
-.titlebar-toggle-btn {
-    background: transparent;
-    border: 1px solid var(--modal-border-strong);
-    color: var(--modal-text-muted);
-    padding: 0.35rem 0.85rem;
-    font-size: 0.65rem;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-family: var(--font-mono);
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-}
-.titlebar-toggle-btn:hover {
-    border-color: var(--modal-border-strong);
-    color: var(--modal-text);
-    background: var(--modal-hover-bg);
-}
-.titlebar-toggle-btn.active {
-    border-color: var(--modal-border-active);
-    color: var(--modal-text);
-    background: var(--modal-active-bg);
-}
-body.light-mode .titlebar-toggle-btn,
-body.adaptive-light .titlebar-toggle-btn {
-    border-color: var(--modal-border);
-    color: var(--modal-text-dim);
-}
-body.light-mode .titlebar-toggle-btn:hover,
-body.adaptive-light .titlebar-toggle-btn:hover {
-    border-color: rgba(0, 0, 0, 0.2);
-    color: rgba(0, 0, 0, 0.85);
-    background: rgba(0, 0, 0, 0.04);
-}
-body.light-mode .titlebar-toggle-btn.active,
-body.adaptive-light .titlebar-toggle-btn.active {
-    border-color: var(--modal-border-active);
-    color: var(--modal-text);
-    background: rgba(0, 0, 0, 0.06);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -6707,7 +6705,8 @@ body.adaptive-light .cmd-panel-exit-banner {
 
 .sidebar-toggle-btn,
 .sidebar-pos-btn,
-.sidebar-tabbar-btn {
+.sidebar-tabbar-btn,
+.titlebar-toggle-btn {
     background: transparent;
     border: 1px solid var(--modal-border);
     color: rgba(255, 255, 255, 0.35);
@@ -6723,7 +6722,8 @@ body.adaptive-light .cmd-panel-exit-banner {
 
 .sidebar-toggle-btn:hover,
 .sidebar-pos-btn:hover,
-.sidebar-tabbar-btn:hover {
+.sidebar-tabbar-btn:hover,
+.titlebar-toggle-btn:hover {
     border-color: rgba(255, 255, 255, 0.15);
     color: rgba(255, 255, 255, 0.85);
     background: rgba(255, 255, 255, 0.05);
@@ -6731,10 +6731,21 @@ body.adaptive-light .cmd-panel-exit-banner {
 
 .sidebar-toggle-btn.active,
 .sidebar-pos-btn.active,
-.sidebar-tabbar-btn.active {
+.sidebar-tabbar-btn.active,
+.titlebar-toggle-btn.active {
     border-color: var(--modal-border-active);
     color: rgba(255, 255, 255, 0.95);
     background: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-tabbar-btn.disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+.sidebar-tabbar-btn.disabled:hover {
+    border-color: var(--modal-border);
+    color: rgba(255, 255, 255, 0.35);
+    background: transparent;
 }
 
 body.light-mode .sidebar-toggle-btn,
@@ -6742,7 +6753,9 @@ body.adaptive-light .sidebar-toggle-btn,
 body.light-mode .sidebar-pos-btn,
 body.adaptive-light .sidebar-pos-btn,
 body.light-mode .sidebar-tabbar-btn,
-body.adaptive-light .sidebar-tabbar-btn {
+body.adaptive-light .sidebar-tabbar-btn,
+body.light-mode .titlebar-toggle-btn,
+body.adaptive-light .titlebar-toggle-btn {
     border-color: var(--modal-border);
     color: var(--modal-text-dim);
 }
@@ -6752,7 +6765,9 @@ body.adaptive-light .sidebar-toggle-btn:hover,
 body.light-mode .sidebar-pos-btn:hover,
 body.adaptive-light .sidebar-pos-btn:hover,
 body.light-mode .sidebar-tabbar-btn:hover,
-body.adaptive-light .sidebar-tabbar-btn:hover {
+body.adaptive-light .sidebar-tabbar-btn:hover,
+body.light-mode .titlebar-toggle-btn:hover,
+body.adaptive-light .titlebar-toggle-btn:hover {
     border-color: rgba(0, 0, 0, 0.2);
     color: rgba(0, 0, 0, 0.85);
     background: rgba(0, 0, 0, 0.04);
@@ -6763,7 +6778,9 @@ body.adaptive-light .sidebar-toggle-btn.active,
 body.light-mode .sidebar-pos-btn.active,
 body.adaptive-light .sidebar-pos-btn.active,
 body.light-mode .sidebar-tabbar-btn.active,
-body.adaptive-light .sidebar-tabbar-btn.active {
+body.adaptive-light .sidebar-tabbar-btn.active,
+body.light-mode .titlebar-toggle-btn.active,
+body.adaptive-light .titlebar-toggle-btn.active {
     border-color: var(--modal-border-active);
     color: var(--modal-text);
     background: rgba(0, 0, 0, 0.06);
@@ -8022,7 +8039,6 @@ body.light-mode.cta-glass .update-pill {
     width: 100%;
     min-width: 0;
     box-sizing: border-box;
-    overflow: hidden;
 }
 .main-tab-bar.visible {
     display: flex;
@@ -8074,7 +8090,7 @@ body.adaptive-light.cta-outline .main-tab-bar:not(.in-titlebar) {
 
 .main-tab-tabs {
     display: flex;
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
     gap: 4px;
     overflow-x: auto;
@@ -8164,9 +8180,16 @@ body.adaptive-light.cta-outline .main-tab-bar:not(.in-titlebar) {
     outline-offset: 0;
 }
 
-/* --- Tab Bar Position: Titlebar --- */
+/* --- Tab Bar Position: Titlebar ---
+   Layout invariant: in titlebar, tabs grow to fill .titlebar-left (flex 1 1 auto)
+   while .titlebar-right stays at natural size (window controls are fixed width).
+   The .main-tab-spacer is zero-size — the flex parent distributes space, not the spacer.
+   Outside titlebar, .main-tab-tabs stays at flex 0 1 auto so it doesn't steal space
+   from neighbors in the row. Don't flip these values without re-checking the
+   neighboring .titlebar-left/-right rules. */
 body.tabbar-titlebar .titlebar-center { display: none; }
-body.tabbar-titlebar .titlebar-left { flex: 1; }
+body.tabbar-titlebar .titlebar-left { flex: 1; min-width: 0; overflow: hidden; }
+body.tabbar-titlebar .titlebar-right { flex: 0 0 auto; }
 body.tabbar-titlebar[data-current-view="landing"] .titlebar-center,
 body.tabbar-titlebar[data-current-view="settings"] .titlebar-center {
     display: flex;
@@ -8184,10 +8207,10 @@ body.tabbar-titlebar[data-current-view="settings"] .titlebar-center {
 }
 .main-tab-bar.in-titlebar .main-tab-tabs {
     align-items: stretch;
-    flex: 0 1 auto;
+    flex: 1 1 auto;
 }
 .main-tab-bar.in-titlebar .main-tab-spacer {
-    flex: 1;
+    flex: 0 0 0;
     height: 100%;
     cursor: default;
 }

@@ -140,6 +140,10 @@
         return getPlatform() === 'windows';
     }
 
+    function isMac() {
+        return getPlatform() === 'macos';
+    }
+
     function togglePanelExitBanner(banner, show, onClick) {
         if (!banner) return;
         if (show) {
@@ -186,6 +190,7 @@
         togglePanelExitBanner: togglePanelExitBanner,
         getPlatform: getPlatform,
         isWindows: isWindows,
+        isMac: isMac,
         ANIM_EXIT_MS: ANIM_EXIT_MS,
         ANIM_COLLAPSE_MS: ANIM_COLLAPSE_MS
     };

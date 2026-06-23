@@ -1764,6 +1764,11 @@
     SM.renderSettingsTab = renderSettingsTab;
     SM.getPanelShell = function () { return _panelShell; };
     SM.applyTabBarPosition = applyTabBarPosition;
+    SM.setTabBarPosition = function (pos) {
+        if (pos === 'titlebar' || pos === 'standard' || pos === 'hidden') {
+            _tabBarPosition = pos;
+        }
+    };
     SM.getTabBarPosition = function () { return _tabBarPosition; };
 
     // ---- Nested Groups ----

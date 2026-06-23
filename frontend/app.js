@@ -9,6 +9,10 @@
     const settingsClose = document.getElementById('settings-close');
     const terminalContainer = document.getElementById('terminal');
 
+    if (window.MonolothUI && window.MonolothUI.isMac && window.MonolothUI.isMac()) {
+        document.body.classList.add('platform-macos');
+    }
+
     let _bgImagePath = '';
     let _bgTransparency = 75;
     let _currentLaunchDir = '';
@@ -1762,6 +1766,7 @@
         if (window.SidebarManager && window.SidebarManager.applyTabBarPosition) {
             window.SidebarManager.applyTabBarPosition();
         }
+        syncTabBarToggleState();
     }
 
     function syncTitlebarToggleState() {
@@ -1780,11 +1785,14 @@
         var pos = (window.SidebarManager && window.SidebarManager.getTabBarPosition)
             ? window.SidebarManager.getTabBarPosition()
             : 'titlebar';
-        if (pos === 'titlebar' && !document.body.classList.contains('custom-titlebar-active')) {
+        var customTitlebarActive = document.body.classList.contains('custom-titlebar-active');
+        if (pos === 'titlebar' && !customTitlebarActive) {
             pos = 'standard';
         }
         toggleContainer.querySelectorAll('.sidebar-tabbar-btn').forEach(function(b) {
+            var isTitlebar = b.dataset.tabbar === 'titlebar';
             b.classList.toggle('active', b.dataset.tabbar === pos);
+            b.classList.toggle('disabled', isTitlebar && !customTitlebarActive);
         });
     }
 
@@ -1905,7 +1913,7 @@
         if (tabbarToggle) {
             tabbarToggle.addEventListener('click', function(e) {
                 var btn = e.target.closest('.sidebar-tabbar-btn');
-                if (!btn) return;
+                if (!btn || btn.classList.contains('disabled')) return;
                 var pos = btn.dataset.tabbar;
                 tabbarToggle.querySelectorAll('.sidebar-tabbar-btn').forEach(function(b) {
                     b.classList.toggle('active', b === btn);
@@ -1914,6 +1922,7 @@
                     window.monolithApi.set_config('tabBarPosition', pos).catch(function () {});
                 }
                 if (window.SidebarManager && window.SidebarManager.applyTabBarPosition) {
+                    window.SidebarManager.setTabBarPosition(pos);
                     window.SidebarManager.applyTabBarPosition();
                     setTimeout(function() { syncTabBarToggleState(); }, 0);
                 }
