@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.2] - 2026-06-24
+
+### Added
+- macOS native titlebar with traffic-light button dots when the custom titlebar is active.
+- Settings: the tab-bar position 'Titlebar' option is disabled when the custom titlebar toggle is off.
+
+### Fixed
+- History sessions are now persisted when overwritten; `get_data` includes the active session; disabling history flushes the active session immediately.
+- xterm.js scrollbar hidden to prevent visual overlap with the terminal viewport.
+
+### Changed
+- Settings UI polish: improved visual consistency, consolidated shared button rules, and reordered history retention buttons.
+
 ## [2.2.1] - 2026-06-23
 
 ### Fixed
@@ -395,7 +408,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release.
 
-[Unreleased]: https://github.com/noahain/Monoloth/compare/v2.2.1...beta
+[Unreleased]: https://github.com/noahain/Monoloth/compare/v2.2.2...beta
+[2.2.2]: https://github.com/noahain/Monoloth/compare/v2.2.1...v2.2.2
 [2.2.1]: https://github.com/noahain/Monoloth/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/noahain/Monoloth/compare/v2.1.11...v2.2.0
 [2.1.11]: https://github.com/noahain/Monoloth/compare/v2.1.10...v2.1.11
