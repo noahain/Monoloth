@@ -8101,6 +8101,10 @@ body.light-mode.cta-glass .update-pill {
     gap: 6px;
     padding: 6px 8px;
     flex-shrink: 0;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 .main-tab-bar.visible {
     display: flex;
@@ -8152,7 +8156,7 @@ body.adaptive-light.cta-outline .main-tab-bar:not(.in-titlebar) {
 
 .main-tab-tabs {
     display: flex;
-    flex: 0 1 auto;
+    flex: 1 1 auto;
     min-width: 0;
     gap: 4px;
     overflow-x: auto;
@@ -8160,6 +8164,10 @@ body.adaptive-light.cta-outline .main-tab-bar:not(.in-titlebar) {
     scrollbar-width: none;
 }
 .main-tab-tabs::-webkit-scrollbar { display: none; }
+.main-tab-tabs .main-tab-new {
+    order: 999;
+    flex-shrink: 0;
+}
 
 .main-tab {
     display: flex;

@@ -1718,23 +1718,125 @@
     }
 
     // ---- Public API ----
-    window.SidebarManager = {
-        init: init,
-        show: function () {
-            if (_sidebarEnabled) {
-                applySidebar();
-            }
-        },
-        hide: function () {
-            sidebar.style.display = 'none';
-            sidebar.classList.remove('anim-slide-left', 'anim-slide-right');
-            if (terminalView) {
-                terminalView.classList.remove('sidebar-visible', 'has-sidebar-left', 'has-sidebar-right');
-            }
-            document.body.classList.remove('sidebar-visible-left', 'sidebar-visible-right');
-        },
-        isPanelOpen: function () { return _cmdPanelOpen; },
+    var SM = window.SidebarManager = {};
 
+    // Flat backwards-compatible methods
+    SM.init = init;
+    SM.show = function () {
+        if (_sidebarEnabled) { applySidebar(); }
+    };
+    SM.hide = function () {
+        sidebar.style.display = 'none';
+        sidebar.classList.remove('anim-slide-left', 'anim-slide-right');
+        if (terminalView) {
+            terminalView.classList.remove('sidebar-visible', 'has-sidebar-left', 'has-sidebar-right');
+        }
+        document.body.classList.remove('sidebar-visible-left', 'sidebar-visible-right');
+    };
+    SM.isPanelOpen = function () { return _cmdPanelOpen; };
+    SM.createTab = createTab;
+    SM.activateTab = activateTab;
+    SM.closeTab = closeTab;
+    SM.getAllTabs = getAllTabs;
+    SM.getTab = getTab;
+    SM.getActiveTab = getActiveTab;
+    SM.hideTabExitBanner = hideTabExitBanner;
+    SM.getTabCount = getTabCount;
+    SM.getActiveTabId = function () { var g = _getActiveGroup(); return g ? g.activeTabId : null; };
+    SM.initForMainTab = function (mainTabId) { _activeMainTabId = mainTabId; _ensurePanelGroup(mainTabId); };
+    SM.switchToMainTab = switchToMainTab;
+    SM.initTabXterm = initTabXterm;
+    SM.writeToTab = function (tabId, data, eof) {
+        var tab = getTab(tabId);
+        if (!tab || !tab.term) return;
+        if (eof) {
+            if (tab._busyTimer) { clearTimeout(tab._busyTimer); tab._busyTimer = null; }
+            tab.running = false;
+            tab.busy = false;
+            updateBusyDot(tab);
+            showTabExitBanner(tab);
+        } else {
+            tab.term.write(data);
+            if (tab.firstOutput) {
+                tab.firstOutput = false;
+                setTimeout(function () {
+                    if (tab.closing || !getTab(tab.id) || !tab.fitAddon || !tab.term) return;
+                    try {
+                        tab.fitAddon.fit();
+                        if (window.monolithApi) {
+                            window.monolithApi.resize_terminal(tab.sessionId, tab.term.cols, tab.term.rows).catch(function () {});
+                        }
+                    } catch (e) {}
+                }, 300);
+            }
+            if (looksLikePrompt(data)) {
+                if (tab._busyTimer) { clearTimeout(tab._busyTimer); tab._busyTimer = null; }
+                tab.busy = false;
+                updateBusyDot(tab);
+            }
+        }
+    };
+    SM.writeToPanel = function (data, eof) {
+        var tab = getActiveTab();
+        if (!tab || !tab.term) return;
+        SM.writeToTab(tab.id, data, eof);
+    };
+    SM.toggleCmdPanel = toggleCmdPanel;
+    SM.showCmdPanel = showCmdPanel;
+    SM.hideCmdPanel = hideCmdPanel;
+    SM.closeAllPanelTabsForMainTab = closeAllPanelTabsForMainTab;
+    SM.closeAllPanelGroups = closeAllPanelGroups;
+    SM.refitActiveTab = refitActiveTab;
+    SM.restorePanelState = function () {
+        if (typeof Terminal === 'undefined' || !window.monolithApi) return;
+        var restore = function () {
+            showCmdPanel();
+            var group = _getActiveGroup();
+            if (!group || group.tabs.size === 0) {
+                createTab(null, true, getCurrentDir() || getDefaultHomeDir());
+            } else {
+                activateTab(group.activeTabId || getAllTabs()[0].id);
+            }
+        };
+        if (_panelRestoreNeeded) {
+            _panelRestoreNeeded = false;
+            restore();
+        } else {
+            window.monolithApi.get_config('cmdPanelOpen').then(function (val) {
+                if (val === true) restore();
+            }).catch(function () {});
+        }
+    };
+    SM.handlePanelExit = function () {
+        var tab = getActiveTab();
+        if (tab) showTabExitBanner(tab);
+    };
+    SM.applySidebar = applySidebar;
+    SM.toggleSidebar = toggleSidebar;
+    SM.renderSettingsTab = renderSettingsTab;
+    SM.getPanelShell = function () { return _panelShell; };
+    SM.applyTabBarPosition = applyTabBarPosition;
+
+    // ---- Nested Groups ----
+    SM.lifecycle = {
+        init: init,
+        show: SM.show,
+        hide: SM.hide,
+        toggleSidebar: toggleSidebar,
+        applySidebar: applySidebar
+    };
+    SM.panel = {
+        isPanelOpen: function () { return _cmdPanelOpen; },
+        toggleCmdPanel: toggleCmdPanel,
+        showCmdPanel: showCmdPanel,
+        hideCmdPanel: hideCmdPanel,
+        closeAllPanelTabsForMainTab: closeAllPanelTabsForMainTab,
+        closeAllPanelGroups: closeAllPanelGroups,
+        handlePanelExit: SM.handlePanelExit,
+        getPanelShell: function () { return _panelShell; },
+        restorePanelState: SM.restorePanelState
+    };
+    SM.tabs = {
         createTab: createTab,
         activateTab: activateTab,
         closeTab: closeTab,
@@ -1743,87 +1845,18 @@
         getActiveTab: getActiveTab,
         hideTabExitBanner: hideTabExitBanner,
         getTabCount: getTabCount,
-        getActiveTabId: function () {
-            var group = _getActiveGroup();
-            return group ? group.activeTabId : null;
-        },
-        initForMainTab: function (mainTabId) {
-            _activeMainTabId = mainTabId;
-            _ensurePanelGroup(mainTabId);
-        },
-        switchToMainTab: switchToMainTab,
+        getActiveTabId: SM.getActiveTabId,
+        initForMainTab: SM.initForMainTab,
+        switchToMainTab: switchToMainTab
+    };
+    SM.terminal = {
         initTabXterm: initTabXterm,
-        writeToTab: function (tabId, data, eof) {
-            var tab = getTab(tabId);
-            if (!tab || !tab.term) return;
-            if (eof) {
-                if (tab._busyTimer) { clearTimeout(tab._busyTimer); tab._busyTimer = null; }
-                tab.running = false;
-                tab.busy = false;
-                updateBusyDot(tab);
-                showTabExitBanner(tab);
-            } else {
-                tab.term.write(data);
-                if (tab.firstOutput) {
-                    tab.firstOutput = false;
-                    setTimeout(function () {
-                        if (tab.closing || !getTab(tab.id) || !tab.fitAddon || !tab.term) return;
-                        try {
-                            tab.fitAddon.fit();
-                            if (window.monolithApi) {
-                                window.monolithApi.resize_terminal(tab.sessionId, tab.term.cols, tab.term.rows).catch(function () {});
-                            }
-                        } catch (e) {}
-                    }, 300);
-                }
-                if (looksLikePrompt(data)) {
-                    if (tab._busyTimer) { clearTimeout(tab._busyTimer); tab._busyTimer = null; }
-                    tab.busy = false;
-                    updateBusyDot(tab);
-                }
-            }
-        },
-        writeToPanel: function (data, eof) {
-            var tab = getActiveTab();
-            if (!tab || !tab.term) return;
-            this.writeToTab(tab.id, data, eof);
-        },
-
-        toggleCmdPanel: toggleCmdPanel,
-        showCmdPanel: showCmdPanel,
-        hideCmdPanel: hideCmdPanel,
-        closeAllPanelTabsForMainTab: closeAllPanelTabsForMainTab,
-        closeAllPanelGroups: closeAllPanelGroups,
-        refitActiveTab: refitActiveTab,
-        restorePanelState: function () {
-            if (typeof Terminal === 'undefined' || !window.monolithApi) return;
-            var restore = function () {
-                showCmdPanel();
-                var group = _getActiveGroup();
-                if (!group || group.tabs.size === 0) {
-                    createTab(null, true, getCurrentDir() || getDefaultHomeDir());
-                } else {
-                    activateTab(group.activeTabId || getAllTabs()[0].id);
-                }
-            };
-            if (_panelRestoreNeeded) {
-                _panelRestoreNeeded = false;
-                restore();
-            } else {
-                window.monolithApi.get_config('cmdPanelOpen').then(function (val) {
-                    if (val === true) restore();
-                }).catch(function () {});
-            }
-        },
-        handlePanelExit: function () {
-            var tab = getActiveTab();
-            if (tab) showTabExitBanner(tab);
-        },
-
-        applySidebar: applySidebar,
-        toggleSidebar: toggleSidebar,
+        writeToTab: SM.writeToTab,
+        writeToPanel: SM.writeToPanel,
+        refitActiveTab: refitActiveTab
+    };
+    SM.settingsUI = {
         renderSettingsTab: renderSettingsTab,
-        getPanelShell: function () { return _panelShell; },
         applyTabBarPosition: applyTabBarPosition
     };
 
