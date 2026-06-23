@@ -8185,12 +8185,10 @@ body.adaptive-light.cta-outline .main-tab-bar:not(.in-titlebar) {
 }
 
 /* --- Tab Bar Position: Titlebar ---
-   Layout invariant: in titlebar, tabs grow to fill .titlebar-left (flex 1 1 auto)
-   while .titlebar-right stays at natural size (window controls are fixed width).
-   The .main-tab-spacer is zero-size — the flex parent distributes space, not the spacer.
-   Outside titlebar, .main-tab-tabs stays at flex 0 1 auto so it doesn't steal space
-   from neighbors in the row. Don't flip these values without re-checking the
-   neighboring .titlebar-left/-right rules. */
+   Tabs shrink to fit (flex 0 1 auto) and overflow-x scroll internally.
+   The .main-tab-spacer (flex 1) fills remaining space and acts as a drag handle
+   (data-tauri-drag-region set in sidebar.js). .titlebar-right is fixed to
+   window-control natural width so .titlebar-left gets all remaining space. */
 body.tabbar-titlebar .titlebar-center { display: none; }
 body.tabbar-titlebar .titlebar-left { flex: 1; min-width: 0; overflow: hidden; }
 body.tabbar-titlebar .titlebar-right { flex: 0 0 auto; }
@@ -8211,10 +8209,10 @@ body.tabbar-titlebar[data-current-view="settings"] .titlebar-center {
 }
 .main-tab-bar.in-titlebar .main-tab-tabs {
     align-items: stretch;
-    flex: 1 1 auto;
+    flex: 0 1 auto;
 }
 .main-tab-bar.in-titlebar .main-tab-spacer {
-    flex: 0 0 0;
+    flex: 1;
     height: 100%;
     cursor: default;
 }
