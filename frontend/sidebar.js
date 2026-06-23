@@ -1222,7 +1222,7 @@
         // --- Buttons Card (vertical layout) ---
         html += '<div class="settings-card settings-card--vertical">';
         html += '<div class="card-icon-row">';
-        html += '<div class="card-icon">' + ICONS.panel + '</div>';
+        html += '<div class="card-icon">' + ICONS.tab + '</div>';
         html += '<div class="card-header-text">';
         html += '<h3>Buttons</h3>';
         html += '<p class="card-desc">Configure default and custom sidebar buttons.</p>';
@@ -1295,7 +1295,7 @@
 
         // --- Tab Bar Card ---
         html += '<div class="settings-card">';
-        html += '<div class="card-icon">' + ICONS.tab + '</div>';
+        html += '<div class="card-icon" style="transform:rotate(90deg)">' + ICONS.tab + '</div>';
         html += '<div class="card-body">';
         html += '<h3>Tab Bar</h3>';
         html += '<p class="card-desc">Choose where the main terminal tab bar appears.</p>';
