@@ -1443,20 +1443,6 @@
         loadBackgroundConfig();
     }
 
-    var terminalBackBtn = document.getElementById('terminal-back-btn');
-    if (terminalBackBtn) {
-        terminalBackBtn.addEventListener('click', function () {
-            if (window.MonolithTerminal.anyRunning()) {
-                window.MonolithDialog.confirmBackToLauncher()
-                    .then(function () { backToLanding(); })
-                    .catch(function () {});
-            } else {
-                backToLanding();
-            }
-        });
-    }
-
-
     // buildTerminalWindowsOptions + initTerminal moved to terminal.js (window.MonolithTerminal)
 
 

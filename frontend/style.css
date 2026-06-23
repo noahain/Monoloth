@@ -2493,47 +2493,7 @@ body.adaptive-light .gradient-btn.active {
     display: block;
 }
 
-.terminal-toolbar {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    padding: 0 1rem;
-    z-index: 100;
-    pointer-events: none;
-}
 
-.terminal-back-btn {
-    pointer-events: auto;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: rgba(255, 255, 255, 0.5);
-    padding: 0.2rem 0.6rem;
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-body.cta-blur .terminal-back-btn {
-    background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-body.cta-blur .terminal-back-btn:hover {
-    background: var(--modal-active-bg);
-    color: rgba(255, 255, 255, 0.9);
-    border-color: var(--modal-border-active);
-}
 
 .main-tab-terminal {
     height: 100%;
@@ -5615,41 +5575,7 @@ body.outline-on-light.cta-outline .command-palette-input {
     border-color: rgba(0, 0, 0, 0.18);
 }
 
-/* --- .terminal-back-btn variants --- */
-body.cta-glass .terminal-back-btn {
-    background: rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid var(--modal-border-active);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
-}
-body.cta-glass .terminal-back-btn:hover {
-    background: rgba(255, 255, 255, 0.14);
-    color: rgba(255, 255, 255, 0.9);
-    border-color: rgba(255, 255, 255, 0.25);
-}
-body.cta-solid .terminal-back-btn {
-    background: var(--bg-tertiary);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    border: 1px solid var(--border-dark);
-}
-body.cta-solid .terminal-back-btn:hover {
-    background: var(--bg-secondary);
-    color: rgba(255, 255, 255, 0.9);
-    border-color: var(--border-light);
-}
-body.cta-outline .terminal-back-btn {
-    background: transparent;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    border: 1px solid var(--border-muted);
-}
-body.cta-outline .terminal-back-btn:hover {
-    background: rgba(255, 255, 255, 0.04);
-    color: rgba(255, 255, 255, 0.9);
-    border-color: rgba(255, 255, 255, 0.15);
-}
+
 
 /* --- Overlays --- */
 body.cta-glass .settings-page {
@@ -5830,7 +5756,7 @@ body.adaptive-light.cta-outline .id-close:hover {
 @media (prefers-reduced-motion: no-preference) {
     .landing-card, .landing-status-bar,
     .settings-glass, .fp-modal, .ps-modal,
-    .command-palette-modal, .id-modal, .terminal-back-btn {
+    .command-palette-modal, .id-modal {
         transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.25s ease;
     }
 }
@@ -6012,10 +5938,7 @@ body.custom-titlebar-active .settings-bar {
     top: calc(30px + 1.25rem);
 }
 
-/* Terminal Toolbar Hide */
-body.custom-titlebar-active .terminal-toolbar {
-    display: none !important;
-}
+
 
 /* Settings Toggle Styles */
 .titlebar-toggle {
@@ -6338,13 +6261,7 @@ body:not(.custom-titlebar-active) { --titlebar-height: 0px; }
     transition: margin-left 0.2s ease, margin-right 0.2s ease;
 }
 
-/* Terminal toolbar */
-.terminal-toolbar {
-    position: relative !important;
-    height: 32px;
-    flex-shrink: 0;
-    transition: margin-left 0.2s ease, margin-right 0.2s ease;
-}
+
 
 /* Sidebar */
 #sidebar {
@@ -6636,15 +6553,13 @@ body.adaptive-light.cta-outline .monoloth-tooltip {
 /* Sidebar positioning (left/right) */
 #terminal-view.sidebar-visible.has-sidebar-left #sidebar { left: 0; right: auto; }
 #terminal-view.sidebar-visible.has-sidebar-left #terminal-container,
-#terminal-view.sidebar-visible.has-sidebar-left #cmd-panel,
-#terminal-view.sidebar-visible.has-sidebar-left .terminal-toolbar {
+#terminal-view.sidebar-visible.has-sidebar-left #cmd-panel {
     margin-left: 48px;
 }
 
 #terminal-view.sidebar-visible.has-sidebar-right #sidebar { left: auto; right: 0; }
 #terminal-view.sidebar-visible.has-sidebar-right #terminal-container,
-#terminal-view.sidebar-visible.has-sidebar-right #cmd-panel,
-#terminal-view.sidebar-visible.has-sidebar-right .terminal-toolbar {
+#terminal-view.sidebar-visible.has-sidebar-right #cmd-panel {
     margin-right: 48px;
 }
 
@@ -7084,7 +6999,6 @@ body.adaptive-light .sidebar-setting-name {
     body.cta-glass .command-palette-modal,
     body.cta-glass .id-modal,
     body.cta-glass .monoloth-tooltip,
-    body.cta-glass .terminal-back-btn,
     body.cta-glass .sidebar,
     body.cta-glass #cmd-panel,
     body.cta-glass #custom-titlebar,
