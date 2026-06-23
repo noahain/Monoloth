@@ -370,6 +370,7 @@
         if (tabName === 'appearance') {
             loadBackgroundConfig();
             syncTitlebarToggleState();
+            syncTabBarToggleState();
         } else if (tabName === 'keybinds') {
             window.MonolithShortcuts.loadShortcuts(function () {
                 window.MonolithShortcuts.renderShortcutUI();
@@ -1787,6 +1788,20 @@
         }
     }
 
+    function syncTabBarToggleState() {
+        var toggleContainer = document.getElementById('tabbar-position-toggle');
+        if (!toggleContainer) return;
+        var pos = (window.SidebarManager && window.SidebarManager.getTabBarPosition)
+            ? window.SidebarManager.getTabBarPosition()
+            : 'titlebar';
+        if (pos === 'titlebar' && !document.body.classList.contains('custom-titlebar-active')) {
+            pos = 'standard';
+        }
+        toggleContainer.querySelectorAll('.sidebar-tabbar-btn').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.tabbar === pos);
+        });
+    }
+
     function setCurrentView(view) {
         document.body.dataset.currentView = view;
         if (view !== 'settings') _currentViewState = view;
@@ -1897,6 +1912,25 @@
                 if (!btn) return;
                 var enable = btn.dataset.titlebar === 'custom';
                 applyCustomTitlebarUI(enable, true);
+            });
+        }
+
+        var tabbarToggle = document.getElementById('tabbar-position-toggle');
+        if (tabbarToggle) {
+            tabbarToggle.addEventListener('click', function(e) {
+                var btn = e.target.closest('.sidebar-tabbar-btn');
+                if (!btn) return;
+                var pos = btn.dataset.tabbar;
+                tabbarToggle.querySelectorAll('.sidebar-tabbar-btn').forEach(function(b) {
+                    b.classList.toggle('active', b === btn);
+                });
+                if (window.monolithApi) {
+                    window.monolithApi.set_config('tabBarPosition', pos).catch(function () {});
+                }
+                if (window.SidebarManager && window.SidebarManager.applyTabBarPosition) {
+                    window.SidebarManager.applyTabBarPosition();
+                    setTimeout(function() { syncTabBarToggleState(); }, 0);
+                }
             });
         }
     }
@@ -2104,6 +2138,7 @@
             showTerminal: function (dir) { showTerminal(dir); },
             showSettings: function () { showSettings(); },
             switchTab: switchTab,
+            syncTabBarToggleState: syncTabBarToggleState,
             openProfileSwitcher: function () { window.MonolithProfiles.openProfileSwitcher(); },
             copyToClipboard: function (t) { copyToClipboard(t); },
             showStatus: function (id, msg, isError) { showStatus(id, msg, isError); },

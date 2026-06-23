@@ -1293,22 +1293,6 @@
 
         html += '</div></div>';
 
-        // --- Tab Bar Card ---
-        html += '<div class="settings-card">';
-        html += '<div class="card-icon" style="transform:rotate(90deg)">' + ICONS.tab + '</div>';
-        html += '<div class="card-body">';
-        html += '<h3>Tab Bar</h3>';
-        html += '<p class="card-desc">Choose where the main terminal tab bar appears.</p>';
-
-        html += '<div class="form-group"><label>Position</label>';
-        html += '<div class="sidebar-toggle-btns">';
-        html += '<button class="sidebar-tabbar-btn' + (_tabBarPosition === 'titlebar' ? ' active' : '') + '" data-tabbar="titlebar">Titlebar</button>';
-        html += '<button class="sidebar-tabbar-btn' + (_tabBarPosition === 'standard' ? ' active' : '') + '" data-tabbar="standard">Standard</button>';
-        html += '<button class="sidebar-tabbar-btn' + (_tabBarPosition === 'hidden' ? ' active' : '') + '" data-tabbar="hidden">Hidden</button>';
-        html += '</div></div>';
-
-        html += '</div></div>';
-
         html += '<div id="sidebar-status" class="appearance-status"></div>';
 
         if (window.MonolothTooltip) {
@@ -1415,20 +1399,6 @@
                 }
             });
         }
-
-        // Tab bar position
-        var tabbarBtns = document.querySelectorAll('#tab-sidebar .sidebar-tabbar-btn');
-        tabbarBtns.forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                _tabBarPosition = this.dataset.tabbar;
-                tabbarBtns.forEach(function (b) { b.classList.remove('active'); });
-                this.classList.add('active');
-                if (window.monolithApi) {
-                    window.monolithApi.set_config('tabBarPosition', _tabBarPosition).catch(function () {});
-                }
-                applyTabBarPosition();
-            });
-        });
 
         // Drag reorder
         setupDragReorder();
@@ -1643,7 +1613,7 @@
         var sidebarTab = document.createElement('button');
         sidebarTab.className = 'settings-tab';
         sidebarTab.dataset.tab = 'sidebar';
-        sidebarTab.textContent = 'Sidebar';
+        sidebarTab.textContent = 'Workspace';
         sidebarTab.addEventListener('click', function () {
             if (window.MonolothApp && window.MonolothApp.switchTab) {
                 window.MonolothApp.switchTab('sidebar');
@@ -1816,6 +1786,7 @@
     SM.renderSettingsTab = renderSettingsTab;
     SM.getPanelShell = function () { return _panelShell; };
     SM.applyTabBarPosition = applyTabBarPosition;
+    SM.getTabBarPosition = function () { return _tabBarPosition; };
 
     // ---- Nested Groups ----
     SM.lifecycle = {
