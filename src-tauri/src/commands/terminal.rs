@@ -136,7 +136,7 @@ fn run_post_commands(
         return;
     }
     pty.terminate_by_prefix("hidden-");
-    for (idx, cmd_str) in &plan.parallel {
+    for (_idx, cmd_str) in &plan.parallel {
         if let Err(e) = run_parallel_command(cmd_str.clone(), cwd.to_string(), panel_shell) {
             warn!("Parallel command failed: {}", e);
         }
