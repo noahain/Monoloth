@@ -310,15 +310,18 @@ impl AppConfig {
     /// Write a single key to a specific profile's file without switching the active
     /// profile. Global keys always go to the global config. "Default" writes to global.
     pub fn set_for_profile(&self, key: &str, value: Value, profile_name: &str) {
+        let mut inner = self.inner.lock();
         if is_global_key(key) || profile_name == "Default" {
-            let mut inner = self.inner.lock();
             inner.global.insert(key.to_string(), value);
             save_json(&config_path(), &inner.global);
         } else {
             let path = profile_path(profile_name);
             let mut overrides = load_json(&path);
-            overrides.insert(key.to_string(), value);
+            overrides.insert(key.to_string(), value.clone());
             save_json(&path, &overrides);
+            if profile_name == inner.active_profile {
+                inner.profile_overrides.insert(key.to_string(), value);
+            }
         }
     }
 

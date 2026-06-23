@@ -42,10 +42,11 @@ pub fn get_profile_appearance(config: State<AppConfig>, profile_name: String) ->
         "theme_mode", "cta_button_style",
         "bg_type", "bg_image", "bg_color", "bg_gradient", "bg_transparency", "bg_layer",
     ];
+    let global = config.get_all_for_profile("Default");
     if profile_name == "Default" || !crate::config::profile_path(&profile_name).exists() {
         let mut result = serde_json::Map::new();
         for key in &appearance_keys {
-            result.insert(key.to_string(), config.get(key));
+            result.insert(key.to_string(), global.get(*key).cloned().unwrap_or(Value::Null));
         }
         return Ok(serde_json::Value::Object(result));
     }
@@ -53,7 +54,7 @@ pub fn get_profile_appearance(config: State<AppConfig>, profile_name: String) ->
     let mut result = serde_json::Map::new();
     for key in &appearance_keys {
         let val = overrides.get(*key).cloned()
-            .unwrap_or_else(|| config.get(key));
+            .unwrap_or_else(|| global.get(*key).cloned().unwrap_or(Value::Null));
         result.insert(key.to_string(), val);
     }
     Ok(serde_json::Value::Object(result))

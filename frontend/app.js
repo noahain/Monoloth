@@ -786,11 +786,13 @@
             return Promise.resolve();
         }
         _loadBackgroundConfigRetries = 0;
-        var configPromise = _editingProfile
-            ? window.monolithApi.get_background_config_for_profile(_editingProfile)
+        var snapshotProfile = _editingProfile;
+        var configPromise = snapshotProfile
+            ? window.monolithApi.get_background_config_for_profile(snapshotProfile)
             : window.monolithApi.get_background_config();
         return configPromise
             .then(function (config) {
+                if (snapshotProfile !== _editingProfile) return;
                 if (!config) return;
                 applyBackground(config);
                 renderBgPreview(config);
@@ -1495,11 +1497,9 @@
             if (typeof window.SidebarManager !== 'undefined') window.SidebarManager.toggleCmdPanel();
         }
         if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('new_main_tab'))) {
-            // Only create main tabs when the terminal view is active.
+            e.preventDefault();
             var isTermView = document.getElementById('terminal-view');
             if (!isTermView || !isTermView.classList.contains('active')) return;
-            e.preventDefault();
-            // Open the file picker + profile picker flow (shared with the + button).
             if (typeof window.MonolithTerminal !== 'undefined' && typeof window.MonolithTerminal.promptNewTab === 'function') {
                 window.MonolithTerminal.promptNewTab();
             }
@@ -1548,7 +1548,7 @@
         }
         if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('back_to_launcher'))) {
             e.preventDefault();
-            if (window.MonolithTerminal.isRunning()) {
+            if (window.MonolithTerminal.anyRunning()) {
                 window.MonolithDialog.confirmBackToLauncher()
                     .then(function() { backToLanding(); })
                     .catch(function() {});
@@ -1814,7 +1814,7 @@
         var tbBack = document.getElementById('tb-back');
         if (tbBack) {
             tbBack.addEventListener('click', function() {
-                if (window.MonolithTerminal.isRunning()) {
+                if (window.MonolithTerminal.anyRunning()) {
                     window.MonolithDialog.confirmBackToLauncher()
                         .then(function() { backToLanding(); })
                         .catch(function() {});
@@ -1827,8 +1827,9 @@
         var tbRefresh = document.getElementById('tb-refresh');
         if (tbRefresh) {
             tbRefresh.addEventListener('click', function() {
-                if (_currentLaunchDir) {
-                    var tab = window.MonolithTerminal.getActiveTab();
+                var tab = window.MonolithTerminal.getActiveTab();
+                var refreshDir = tab ? tab.dir : _currentLaunchDir;
+                if (refreshDir) {
                     if (!tab) return;
                     window.MonolithTerminal.incrementSessionGeneration(tab.sessionId);
                     window.MonolithTerminal.setSkipNextEof(tab.sessionId, true);
@@ -1838,7 +1839,6 @@
                     terminatePromise.finally(function () {
                         window.MonolithTerminal.setSkipNextEof(tab.sessionId, false);
                         tab.running = false;
-                        // Re-init the xterm for this tab (dispose + recreate).
                         if (tab.term) { try { tab.term.dispose(); } catch (e) {} tab.term = null; }
                         if (tab.fitAddon) { try { tab.fitAddon.dispose(); } catch (e) {} tab.fitAddon = null; }
                         tab.termDiv.innerHTML = '';
@@ -2076,11 +2076,12 @@
                         window.MonolithTerminal.setSkipNextEof('panel', true);
                         window.monolithApi.terminate_terminal('panel')
                             .catch(function () {})
-                            .finally(function () { window.MonolithTerminal.setSkipNextEof('panel', false); _panelRunning = false; if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.createTab === 'function') { window.SidebarManager.showCmdPanel(); window.SidebarManager.createTab(null, true, _currentLaunchDir, window.MonolithTerminal.getActiveTabId()); } });
+                            .finally(function () { window.MonolithTerminal.setSkipNextEof('panel', false); _panelRunning = false; if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.createTab === 'function') { window.SidebarManager.showCmdPanel(); var _activeTab = window.MonolithTerminal.getActiveTab(); window.SidebarManager.createTab(null, true, _activeTab ? _activeTab.dir : _currentLaunchDir, window.MonolithTerminal.getActiveTabId()); } });
                     } else {
                         if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.createTab === 'function') {
                             window.SidebarManager.showCmdPanel();
-                            window.SidebarManager.createTab(null, true, _currentLaunchDir, window.MonolithTerminal.getActiveTabId());
+                            var _activeTab2 = window.MonolithTerminal.getActiveTab();
+                            window.SidebarManager.createTab(null, true, _activeTab2 ? _activeTab2.dir : _currentLaunchDir, window.MonolithTerminal.getActiveTabId());
                         }
                     }
                 }

@@ -70,7 +70,7 @@
         document.body.classList.remove('light-mode', 'adaptive-light');
         if (themeMode === 'light') {
             document.body.classList.add('light-mode');
-        } else if (themeMode === 'auto') {
+        } else if (themeMode === 'auto' && _wallpaperBrightness !== null && _wallpaperBrightness > 0.5) {
             document.body.classList.add('adaptive-light');
         }
 

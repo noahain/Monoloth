@@ -13,6 +13,20 @@
                /(?:^|[\n\r])[^\n]*[$#]\s*$/.test(text);
     }
 
+    var _promptDetectBuffer = '';
+    var PROMPT_BUFFER_MAX = 256;
+    function detectPromptInChunks(data, tab) {
+        if (typeof data !== 'string') return false;
+        _promptDetectBuffer = (_promptDetectBuffer + data).slice(-PROMPT_BUFFER_MAX);
+        if (looksLikePrompt(_promptDetectBuffer)) {
+            tab.busy = false;
+            updateBusyDot(tab);
+            _promptDetectBuffer = '';
+            return true;
+        }
+        return false;
+    }
+
     // --- Main Terminal Tab Manager ---
     // Depends on: window.MonolithTheme, window.MonolithShortcuts, window.MonolothApp
     // Mirrors the sidebar.js panel-tab pattern but for the MAIN terminal view.
@@ -411,12 +425,21 @@
     function startSessionExitCountdown(tab) {
         tab.running = false;
         clearTabExitCountdown(tab);
+        var isActive = (tab.id === _activeTabId);
+        var hasOtherTabs = _tabs.size > 1;
         var banner = document.createElement('div');
         banner.className = 'session-exit-banner';
         banner.style.cssText = 'position:absolute;bottom:40px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,0.9);color:#c0c0c0;padding:8px 16px;border-radius:6px;font-family:monospace;font-size:13px;z-index:101;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(4px);pointer-events:auto;cursor:pointer;';
-        banner.textContent = 'Session ended \u2014 returning to launcher in 5s (click to stay)';
+        if (isActive && !hasOtherTabs) {
+            banner.textContent = 'Session ended \u2014 returning to launcher in 5s (click to stay)';
+        } else if (isActive && hasOtherTabs) {
+            banner.textContent = 'Session ended (switch tabs or close this one)';
+        } else {
+            banner.textContent = 'Session ended (tab inactive)';
+        }
         tab.container.appendChild(banner);
         tab.exitBanner = banner;
+        if (!isActive || hasOtherTabs) return;
         var countdown = 5;
         banner.addEventListener('click', function () { clearTabExitCountdown(tab); });
         tab.exitCountdown = setInterval(function () {
@@ -474,13 +497,8 @@
         delete _sessionGeneration[tab.sessionId];
         delete _skipNextEof[tab.sessionId];
 
-        // For main-tab-N sessions, call retire (cleans backend generation tracking).
-        // The "main" session is fully terminated by terminate_terminal above.
         if (tab.sessionId.startsWith('main-tab-') && window.monolithApi && typeof window.monolithApi.retire_panel_tab === 'function') {
             window.monolithApi.retire_panel_tab(tab.sessionId).catch(function () {});
-        }
-        if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.closeAllPanelTabsForMainTab === 'function') {
-            window.SidebarManager.closeAllPanelTabsForMainTab(tabId);
         }
 
         var tabItem = tabList && tabList.querySelector('.main-tab[data-tab-id="' + tabId + '"]');
@@ -504,28 +522,23 @@
         }
         _tabs.delete(tabId);
 
-        // If no tabs left, go back to landing.
         if (_tabs.size === 0) {
             _activeTabId = null;
+            if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.closeAllPanelTabsForMainTab === 'function') {
+                window.SidebarManager.closeAllPanelTabsForMainTab(tabId);
+            }
             updateTabBarVisibility();
             window.MonolothApp.backToLanding();
             return;
         }
 
-        // Activate the nearest surviving tab.
         if (_activeTabId === tabId) {
             var arr = Array.from(_tabs.values());
-            // Find the index of the closed tab in insertion order, pick prev or next.
-            var closedIdx = -1;
-            for (var i = 0; i < arr.length; i++) {
-                // arr reflects current _tabs after deletion; the closed tab's
-                // neighbors shifted. Use _nextTabId ordering as a proxy: the
-                // tab with the highest id below the closed tab's id, else lowest.
-            }
-            // Simpler: activate the last tab in the array (most recently added
-            // survivor), which is the most likely "previous" in usage.
             var newActive = arr[arr.length - 1] || arr[0];
             activateTab(newActive.id);
+        }
+        if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.closeAllPanelTabsForMainTab === 'function') {
+            window.SidebarManager.closeAllPanelTabsForMainTab(tabId);
         }
         updateTabBarVisibility();
     }
@@ -1018,10 +1031,7 @@
         if (typeof data === 'string' && data.indexOf('[session ended]') !== -1) {
             startSessionExitCountdown(tab);
         }
-        if (looksLikePrompt(data)) {
-            tab.busy = false;
-            updateBusyDot(tab);
-        }
+        detectPromptInChunks(data, tab);
     };
 
     // --- Public API (window.MonolithTerminal) ---

@@ -52,14 +52,13 @@ fn resolve_startup_command(config: &AppConfig, profile_name: Option<&str>) -> St
     let (command, cmd_type) = match profile_name {
         Some(name) if !name.is_empty() && name != "Default" => {
             let overrides = crate::config::load_json_pub(&crate::config::profile_path(name));
-            let global_cmd = config.get("startup_command");
-            let global_cmd_type = config.get("startup_command_type");
+            let global = config.get_all_for_profile("Default");
+            let global_cmd = global.get("startup_command").and_then(|v| v.as_str()).unwrap_or("opencode");
+            let global_cmd_type = global.get("startup_command_type").and_then(|v| v.as_str()).unwrap_or("preset");
             let cmd = overrides.get("startup_command").and_then(|v| v.as_str())
-                .or_else(|| global_cmd.as_str())
-                .unwrap_or("opencode").to_string();
+                .unwrap_or(global_cmd).to_string();
             let ctype = overrides.get("startup_command_type").and_then(|v| v.as_str())
-                .or_else(|| global_cmd_type.as_str())
-                .unwrap_or("preset").to_string();
+                .unwrap_or(global_cmd_type).to_string();
             (cmd, ctype)
         }
         _ => (
@@ -313,17 +312,20 @@ fn resolve_panel_shell(requested: Option<&str>) -> Result<(String, Vec<String>),
 /// via the shared `shell_command` helper so Windows arg construction stays consistent.
 fn resolve_hidden_command(shell_pref: &str, user_cmd: &str) -> Result<(String, Vec<String>), String> {
     let (exe, _) = resolve_panel_shell(Some(shell_pref))?;
-    let shell_for_cmd = if cfg!(windows) {
-        if exe.eq_ignore_ascii_case("powershell") { "powershell" } else { "cmd" }
-    } else {
-        "sh"
-    };
-    let command = shell_command(user_cmd, shell_for_cmd);
-    let program = command.get_program().to_string_lossy().to_string();
-    let args: Vec<String> = command.get_args()
-        .map(|a| a.to_string_lossy().to_string())
-        .collect();
-    Ok((program, args))
+    #[cfg(windows)]
+    {
+        let shell_for_cmd = if exe.eq_ignore_ascii_case("powershell") { "powershell" } else { "cmd" };
+        let command = shell_command(user_cmd, shell_for_cmd);
+        let program = command.get_program().to_string_lossy().to_string();
+        let args: Vec<String> = command.get_args()
+            .map(|a| a.to_string_lossy().to_string())
+            .collect();
+        Ok((program, args))
+    }
+    #[cfg(not(windows))]
+    {
+        Ok((exe, vec!["-c".to_string(), user_cmd.to_string()]))
+    }
 }
 
 #[cfg(any(not(windows), test))]

@@ -78,7 +78,7 @@
     };
 
     api.retire_panel_tabs_for_main_tab = function (mainTabId) {
-        return window.__TAURI__.core.invoke('retire_panel_tabs_for_main_tab', { mainTabId: mainTabId });
+        return callApi('retire_panel_tabs_for_main_tab', { mainTabId: mainTabId });
     };
 
     api.terminate_hidden = function () {
@@ -152,8 +152,8 @@
     api.get_shortcuts = function (profileName) {
         if (profileName) {
             return invoke('get_all_config_for_profile', { profileName: profileName }).then(function (all) {
-                return { shortcuts: all.shortcuts || {} };
-            }).catch(function () { return { shortcuts: {} }; });
+                return { success: true, shortcuts: all.shortcuts || {} };
+            }).catch(function () { return { success: false, shortcuts: {} }; });
         }
         return callApi('get_config', { key: 'shortcuts' }, function (val) { return { shortcuts: val || {} }; });
     };
@@ -218,8 +218,8 @@
     api.get_secondary_commands = function (profileName) {
         if (profileName) {
             return invoke('get_all_config_for_profile', { profileName: profileName }).then(function (all) {
-                return { commands: all.secondary_commands || [] };
-            }).catch(function () { return { commands: [] }; });
+                return { success: true, commands: all.secondary_commands || [] };
+            }).catch(function () { return { success: false, commands: [] }; });
         }
         return callApi('get_config', { key: 'secondary_commands' }, function (val) { return { commands: val || [] }; });
     };

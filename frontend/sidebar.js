@@ -414,7 +414,7 @@
             }
         }).catch(function () {});
         window.monolithApi.get_config('tabBarPosition').then(function (val) {
-            _tabBarPosition = (val === 'titlebar' || val === 'hidden') ? val : 'titlebar';
+            _tabBarPosition = (val === 'titlebar' || val === 'standard' || val === 'hidden') ? val : 'titlebar';
             applyTabBarPosition();
         }).catch(function () {});
     }
