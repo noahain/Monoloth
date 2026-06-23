@@ -1958,166 +1958,206 @@
 
     // --- MonolothApp Facade (exposed to sidebar.js) ---
     window.MonolothApp = {
-        getCurrentDir: function () { return _currentLaunchDir; },
-        getStartupLabel: function () { return getStartupLabel(); },
-        getBgState: function () { return { type: _bgType, layer: _bgLayer, transparency: _bgTransparency }; },
-        computeTerminalBg: function (cfg) { return computeTerminalBg(cfg); },
-        applyTerminalBg: function (cfg) { applyTerminalBg(cfg); },
-        applyProfileBackground: function (appearance) { applyProfileBackground(appearance); },
-        setEditingProfile: function (name) { _editingProfile = name || null; },
-        getEditingProfile: function () { return _editingProfile; },
-        showConfirm: function (t, m, k) { return window.MonolithDialog.showConfirm(t, m, k); },
-        restartSession: function (sessionId) {
-            sessionId = sessionId || 'main';
-            if (sessionId === 'main' || sessionId.startsWith('main-tab-')) {
-                var tab = window.MonolithTerminal.getTabBySessionId(sessionId);
-                if (!tab) {
-                    // Fallback: if no exact match for 'main', use active tab.
-                    if (sessionId === 'main') tab = window.MonolithTerminal.getActiveTab();
-                    if (!tab) return;
-                }
-                window.MonolithTerminal.incrementSessionGeneration(tab.sessionId);
-                if (tab.running) {
-                    window.MonolithTerminal.setSkipNextEof(tab.sessionId, true);
-                    window.monolithApi.terminate_terminal(tab.sessionId)
-                        .catch(function () {})
-                        .finally(function () {
-                            window.MonolithTerminal.setSkipNextEof(tab.sessionId, false);
-                            tab.running = false;
-                            if (tab.term) { try { tab.term.dispose(); } catch (e) {} tab.term = null; }
-                            if (tab.fitAddon) { try { tab.fitAddon.dispose(); } catch (e) {} tab.fitAddon = null; }
-                            tab.termDiv.innerHTML = '';
-                            tab.firstOutput = true;
-                            tab.busy = false;
-                            window.MonolithTerminal.hideTabExitBanner(tab);
-                            window.MonolithTerminal.initTabXterm(tab);
-                        });
-                } else {
-                    if (tab.term) { try { tab.term.dispose(); } catch (e) {} tab.term = null; }
-                    if (tab.fitAddon) { try { tab.fitAddon.dispose(); } catch (e) {} tab.fitAddon = null; }
-                    tab.termDiv.innerHTML = '';
-                    tab.firstOutput = true;
-                    window.MonolithTerminal.hideTabExitBanner(tab);
-                    window.MonolithTerminal.initTabXterm(tab);
-                }
-            } else if (sessionId.startsWith('panel-tab-')) {
-                if (typeof window.SidebarManager === 'undefined' || typeof window.SidebarManager.getTab !== 'function') return;
-                var tabId = sessionId.replace('panel-', '');
-                var tab = window.SidebarManager.getTab(tabId);
-                if (!tab) return;
-                window.MonolithTerminal.incrementSessionGeneration(sessionId);
-                window.MonolithTerminal.setSkipNextEof(sessionId, true);
-                var restartPromise = window.monolithApi
-                    ? window.monolithApi.terminate_terminal(sessionId).catch(function () {})
-                    : Promise.resolve();
-                restartPromise.finally(function () {
-                    window.MonolithTerminal.setSkipNextEof(sessionId, false);
-                    tab = window.SidebarManager.getTab(tabId);
-                    if (!tab) return;
-                    if (tab.term) {
-                        try { tab.term.dispose(); } catch (e) {}
-                        try { tab.fitAddon.dispose(); } catch (e) {}
-                        tab.term = null;
-                        tab.fitAddon = null;
-                    }
-                    tab.running = false;
-                    tab.busy = false;
-                    tab.generation = null;
-                    tab.closing = false;
-                    if (window.MonolithTerminal.hasSkipNextEof(sessionId)) {
-                        window.MonolithTerminal.deleteSkipNextEof(sessionId);
-                    }
-                    var terminalDiv = tab.container.querySelector('.cmd-panel-tab-terminal');
-                    if (terminalDiv) terminalDiv.innerHTML = '';
-                    window.SidebarManager.hideTabExitBanner(tab);
-                    if (window.SidebarManager.getActiveTabId() === tabId) {
-                        window.SidebarManager.initTabXterm(tab);
-                    }
-                });
-            } else if (sessionId.startsWith('panel-') && sessionId !== 'panel') {
-                if (typeof window.SidebarManager === 'undefined' || typeof window.SidebarManager.getTab !== 'function') return;
-                var match = sessionId.match(/^panel-(mtab-\d+)-tab-(\d+)$/);
-                if (!match) return;
-                var tabId = 'ptab-' + match[1] + '-' + match[2];
-                var tab = window.SidebarManager.getTab(tabId);
-                if (!tab) return;
-                window.MonolithTerminal.incrementSessionGeneration(sessionId);
-                window.MonolithTerminal.setSkipNextEof(sessionId, true);
-                var restartPromise = window.monolithApi
-                    ? window.monolithApi.terminate_terminal(sessionId).catch(function () {})
-                    : Promise.resolve();
-                restartPromise.finally(function () {
-                    window.MonolithTerminal.setSkipNextEof(sessionId, false);
-                    tab = window.SidebarManager.getTab(tabId);
-                    if (!tab) return;
-                    if (tab.term) {
-                        try { tab.term.dispose(); } catch (e) {}
-                        try { tab.fitAddon.dispose(); } catch (e) {}
-                        tab.term = null;
-                        tab.fitAddon = null;
-                    }
-                    tab.running = false;
-                    tab.busy = false;
-                    tab.generation = null;
-                    tab.closing = false;
-                    if (window.MonolithTerminal.hasSkipNextEof(sessionId)) {
-                        window.MonolithTerminal.deleteSkipNextEof(sessionId);
-                    }
-                    var terminalDiv = tab.container.querySelector('.cmd-panel-tab-terminal');
-                    if (terminalDiv) terminalDiv.innerHTML = '';
-                    window.SidebarManager.hideTabExitBanner(tab);
-                    if (window.SidebarManager.getActiveTabId() === tabId) {
-                        window.SidebarManager.initTabXterm(tab);
-                    }
-                });
-            } else if (sessionId === 'panel') {
-                if (_panelRunning) {
-                    window.MonolithTerminal.incrementSessionGeneration('panel');
-                    window.MonolithTerminal.setSkipNextEof('panel', true);
-                    window.monolithApi.terminate_terminal('panel')
-                        .catch(function () {})
-                        .finally(function () { window.MonolithTerminal.setSkipNextEof('panel', false); _panelRunning = false; if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.createTab === 'function') { window.SidebarManager.showCmdPanel(); window.SidebarManager.createTab(null, true, _currentLaunchDir, window.MonolithTerminal.getActiveTabId()); } });
-                } else {
-                    if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.createTab === 'function') {
-                        window.SidebarManager.showCmdPanel();
-                        window.SidebarManager.createTab(null, true, _currentLaunchDir, window.MonolithTerminal.getActiveTabId());
-                    }
-                }
-            }
+        // --- Background / Appearance ---
+        background: {
+            getBgState: function () { return { type: _bgType, layer: _bgLayer, transparency: _bgTransparency }; },
+            computeTerminalBg: function (cfg) { return computeTerminalBg(cfg); },
+            applyTerminalBg: function (cfg) { applyTerminalBg(cfg); },
+            applyProfileBackground: function (appearance) { applyProfileBackground(appearance); },
+        },
 
+        // --- Session control ---
+        session: {
+            restartSession: function (sessionId) {
+                sessionId = sessionId || 'main';
+                if (sessionId === 'main' || sessionId.startsWith('main-tab-')) {
+                    var tab = window.MonolithTerminal.getTabBySessionId(sessionId);
+                    if (!tab) {
+                        if (sessionId === 'main') tab = window.MonolithTerminal.getActiveTab();
+                        if (!tab) return;
+                    }
+                    window.MonolithTerminal.incrementSessionGeneration(tab.sessionId);
+                    if (tab.running) {
+                        window.MonolithTerminal.setSkipNextEof(tab.sessionId, true);
+                        window.monolithApi.terminate_terminal(tab.sessionId)
+                            .catch(function () {})
+                            .finally(function () {
+                                window.MonolithTerminal.setSkipNextEof(tab.sessionId, false);
+                                tab.running = false;
+                                if (tab.term) { try { tab.term.dispose(); } catch (e) {} tab.term = null; }
+                                if (tab.fitAddon) { try { tab.fitAddon.dispose(); } catch (e) {} tab.fitAddon = null; }
+                                tab.termDiv.innerHTML = '';
+                                tab.firstOutput = true;
+                                tab.busy = false;
+                                window.MonolithTerminal.hideTabExitBanner(tab);
+                                window.MonolithTerminal.initTabXterm(tab);
+                            });
+                    } else {
+                        if (tab.term) { try { tab.term.dispose(); } catch (e) {} tab.term = null; }
+                        if (tab.fitAddon) { try { tab.fitAddon.dispose(); } catch (e) {} tab.fitAddon = null; }
+                        tab.termDiv.innerHTML = '';
+                        tab.firstOutput = true;
+                        window.MonolithTerminal.hideTabExitBanner(tab);
+                        window.MonolithTerminal.initTabXterm(tab);
+                    }
+                } else if (sessionId.startsWith('panel-tab-')) {
+                    if (typeof window.SidebarManager === 'undefined' || typeof window.SidebarManager.getTab !== 'function') return;
+                    var tabId = sessionId.replace('panel-', '');
+                    var tab = window.SidebarManager.getTab(tabId);
+                    if (!tab) return;
+                    window.MonolithTerminal.incrementSessionGeneration(sessionId);
+                    window.MonolithTerminal.setSkipNextEof(sessionId, true);
+                    var restartPromise = window.monolithApi
+                        ? window.monolithApi.terminate_terminal(sessionId).catch(function () {})
+                        : Promise.resolve();
+                    restartPromise.finally(function () {
+                        window.MonolithTerminal.setSkipNextEof(sessionId, false);
+                        tab = window.SidebarManager.getTab(tabId);
+                        if (!tab) return;
+                        if (tab.term) {
+                            try { tab.term.dispose(); } catch (e) {}
+                            try { tab.fitAddon.dispose(); } catch (e) {}
+                            tab.term = null;
+                            tab.fitAddon = null;
+                        }
+                        tab.running = false;
+                        tab.busy = false;
+                        tab.generation = null;
+                        tab.closing = false;
+                        if (window.MonolithTerminal.hasSkipNextEof(sessionId)) {
+                            window.MonolithTerminal.deleteSkipNextEof(sessionId);
+                        }
+                        var terminalDiv = tab.container.querySelector('.cmd-panel-tab-terminal');
+                        if (terminalDiv) terminalDiv.innerHTML = '';
+                        window.SidebarManager.hideTabExitBanner(tab);
+                        if (window.SidebarManager.getActiveTabId() === tabId) {
+                            window.SidebarManager.initTabXterm(tab);
+                        }
+                    });
+                } else if (sessionId.startsWith('panel-') && sessionId !== 'panel') {
+                    if (typeof window.SidebarManager === 'undefined' || typeof window.SidebarManager.getTab !== 'function') return;
+                    var match = sessionId.match(/^panel-(mtab-\d+)-tab-(\d+)$/);
+                    if (!match) return;
+                    var tabId = 'ptab-' + match[1] + '-' + match[2];
+                    var tab = window.SidebarManager.getTab(tabId);
+                    if (!tab) return;
+                    window.MonolithTerminal.incrementSessionGeneration(sessionId);
+                    window.MonolithTerminal.setSkipNextEof(sessionId, true);
+                    var restartPromise = window.monolithApi
+                        ? window.monolithApi.terminate_terminal(sessionId).catch(function () {})
+                        : Promise.resolve();
+                    restartPromise.finally(function () {
+                        window.MonolithTerminal.setSkipNextEof(sessionId, false);
+                        tab = window.SidebarManager.getTab(tabId);
+                        if (!tab) return;
+                        if (tab.term) {
+                            try { tab.term.dispose(); } catch (e) {}
+                            try { tab.fitAddon.dispose(); } catch (e) {}
+                            tab.term = null;
+                            tab.fitAddon = null;
+                        }
+                        tab.running = false;
+                        tab.busy = false;
+                        tab.generation = null;
+                        tab.closing = false;
+                        if (window.MonolithTerminal.hasSkipNextEof(sessionId)) {
+                            window.MonolithTerminal.deleteSkipNextEof(sessionId);
+                        }
+                        var terminalDiv = tab.container.querySelector('.cmd-panel-tab-terminal');
+                        if (terminalDiv) terminalDiv.innerHTML = '';
+                        window.SidebarManager.hideTabExitBanner(tab);
+                        if (window.SidebarManager.getActiveTabId() === tabId) {
+                            window.SidebarManager.initTabXterm(tab);
+                        }
+                    });
+                } else if (sessionId === 'panel') {
+                    if (_panelRunning) {
+                        window.MonolithTerminal.incrementSessionGeneration('panel');
+                        window.MonolithTerminal.setSkipNextEof('panel', true);
+                        window.monolithApi.terminate_terminal('panel')
+                            .catch(function () {})
+                            .finally(function () { window.MonolithTerminal.setSkipNextEof('panel', false); _panelRunning = false; if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.createTab === 'function') { window.SidebarManager.showCmdPanel(); window.SidebarManager.createTab(null, true, _currentLaunchDir, window.MonolithTerminal.getActiveTabId()); } });
+                    } else {
+                        if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.createTab === 'function') {
+                            window.SidebarManager.showCmdPanel();
+                            window.SidebarManager.createTab(null, true, _currentLaunchDir, window.MonolithTerminal.getActiveTabId());
+                        }
+                    }
+                }
+            },
+            setSkipNextEof: function (sessionId, val) {
+                window.MonolithTerminal.setSkipNextEof(sessionId, val);
+            },
+            setSessionGeneration: function (sessionId, gen) {
+                window.MonolithTerminal.setSessionGeneration(sessionId, gen);
+            },
+            isMainActive: function () { return window.MonolithTerminal.anyRunning(); },
+            clearTerminal: function () { var t = window.MonolithTerminal.getTerm(); if (t) t.clear(); },
         },
-        setSkipNextEof: function (sessionId, val) {
-            window.MonolithTerminal.setSkipNextEof(sessionId, val);
+
+        // --- UI / Navigation ---
+        ui: {
+            getCurrentDir: function () { return _currentLaunchDir; },
+            showConfirm: function (t, m, k) { return window.MonolithDialog.showConfirm(t, m, k); },
+            backToLanding: function () { backToLanding(); },
+            showTerminal: function (dir) { showTerminal(dir); },
+            showSettings: function () { showSettings(); },
+            switchTab: switchTab,
+            openProfileSwitcher: function () { window.MonolithProfiles.openProfileSwitcher(); },
+            copyToClipboard: function (t) { copyToClipboard(t); },
+            showStatus: function (id, msg, isError) { showStatus(id, msg, isError); },
+            refitTerminals: function () {
+                window.MonolithTerminal.refit();
+                if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.refitActiveTab === 'function') {
+                    window.SidebarManager.refitActiveTab();
+                }
+            },
         },
-        setSessionGeneration: function (sessionId, gen) {
-            window.MonolithTerminal.setSessionGeneration(sessionId, gen);
+
+        // --- Settings / Config management ---
+        settings: {
+            getStartupLabel: function () { return getStartupLabel(); },
+            setEditingProfile: function (name) { _editingProfile = name || null; },
+            getEditingProfile: function () { return _editingProfile; },
+            addToRecentDirectories: function (path) { addToRecentDirectories(path); },
+            reloadProfileSettings: function () {
+                loadBackgroundConfig();
+                loadStartupConfig();
+                loadSecondaryCommands();
+                window.MonolithShortcuts.loadShortcuts(function () { window.MonolithShortcuts.renderShortcutUI(); window.MonolithShortcuts.updateKbdHint(); });
+            },
+            reloadStartupConfig: function () {
+                loadStartupConfig();
+            },
         },
-        refitTerminals: function () {
-            window.MonolithTerminal.refit();
-            if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.refitActiveTab === 'function') {
-                window.SidebarManager.refitActiveTab();
-            }
-        },
-        isMainActive: function () { return window.MonolithTerminal.anyRunning(); },
-        switchTab: switchTab,
-        backToLanding: function () { backToLanding(); },
-        showTerminal: function (dir) { showTerminal(dir); },
-        showSettings: function () { showSettings(); },
-        clearTerminal: function () { var t = window.MonolithTerminal.getTerm(); if (t) t.clear(); },
-        copyToClipboard: function (t) { copyToClipboard(t); },
-        openProfileSwitcher: function () { window.MonolithProfiles.openProfileSwitcher(); },
-        showStatus: function (id, msg, isError) { showStatus(id, msg, isError); },
-        addToRecentDirectories: function (path) { addToRecentDirectories(path); },
-        reloadProfileSettings: function () {
-            loadBackgroundConfig();
-            loadStartupConfig();
-            loadSecondaryCommands();
-            window.MonolithShortcuts.loadShortcuts(function () { window.MonolithShortcuts.renderShortcutUI(); window.MonolithShortcuts.updateKbdHint(); });
-        },
-        reloadStartupConfig: function () {
-            loadStartupConfig();
-        }
     };
+
+    // Flat backwards-compatible aliases
+    window.MonolothApp.getCurrentDir = window.MonolothApp.ui.getCurrentDir;
+    window.MonolothApp.getStartupLabel = window.MonolothApp.settings.getStartupLabel;
+    window.MonolothApp.getBgState = window.MonolothApp.background.getBgState;
+    window.MonolothApp.computeTerminalBg = window.MonolothApp.background.computeTerminalBg;
+    window.MonolothApp.applyTerminalBg = window.MonolothApp.background.applyTerminalBg;
+    window.MonolothApp.applyProfileBackground = window.MonolothApp.background.applyProfileBackground;
+    window.MonolothApp.setEditingProfile = window.MonolothApp.settings.setEditingProfile;
+    window.MonolothApp.getEditingProfile = window.MonolothApp.settings.getEditingProfile;
+    window.MonolothApp.showConfirm = window.MonolothApp.ui.showConfirm;
+    window.MonolothApp.restartSession = window.MonolothApp.session.restartSession;
+    window.MonolothApp.setSkipNextEof = window.MonolothApp.session.setSkipNextEof;
+    window.MonolothApp.setSessionGeneration = window.MonolothApp.session.setSessionGeneration;
+    window.MonolothApp.isMainActive = window.MonolothApp.session.isMainActive;
+    window.MonolothApp.clearTerminal = window.MonolothApp.session.clearTerminal;
+    window.MonolothApp.refitTerminals = window.MonolothApp.ui.refitTerminals;
+    window.MonolothApp.switchTab = window.MonolothApp.ui.switchTab;
+    window.MonolothApp.backToLanding = window.MonolothApp.ui.backToLanding;
+    window.MonolothApp.showTerminal = window.MonolothApp.ui.showTerminal;
+    window.MonolothApp.showSettings = window.MonolothApp.ui.showSettings;
+    window.MonolothApp.copyToClipboard = window.MonolothApp.ui.copyToClipboard;
+    window.MonolothApp.openProfileSwitcher = window.MonolothApp.ui.openProfileSwitcher;
+    window.MonolothApp.showStatus = window.MonolothApp.ui.showStatus;
+    window.MonolothApp.addToRecentDirectories = window.MonolothApp.settings.addToRecentDirectories;
+    window.MonolothApp.reloadProfileSettings = window.MonolothApp.settings.reloadProfileSettings;
+    window.MonolothApp.reloadStartupConfig = window.MonolothApp.settings.reloadStartupConfig;
 
     // Auto-check for updates (silent on failure, see MonolothUpdater.init)
     if (window.MonolothUpdater && typeof window.MonolothUpdater.init === 'function') {
