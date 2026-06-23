@@ -13,7 +13,7 @@
   <p>Run OpenCode, Claude Code, and other CLI agents in a real desktop window instead of a bare terminal.</p>
 
   <p>
-    <img src="https://img.shields.io/badge/version-2.2.2-blue" alt="version" />
+    <img src="https://img.shields.io/badge/version-2.2.3-blue" alt="version" />
     <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
     <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey" alt="platform" />
     <img src="https://img.shields.io/badge/rust-1.77.2-orange" alt="rust" />
