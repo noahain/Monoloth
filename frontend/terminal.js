@@ -54,12 +54,21 @@
 
     function buildTerminalWindowsOptions() {
         var info = window.__monolithWindowsPty || _windowsPtyInfo;
-        if (info && info.backend && typeof info.buildNumber === 'number') {
+        if (info && info.backend && info.buildNumber > 0) {
             return { windowsPty: { backend: info.backend, buildNumber: info.buildNumber } };
         }
         return {};
     }
     window.__monolithTermWinOpts = buildTerminalWindowsOptions;
+
+    function bumpMainSessionGen(tab) {
+        // Bump the generation before terminating so any lingering output from the
+        // dying PTY is filtered out instead of leaking into the next session that
+        // reuses this session ID (especially "main", which is the only one reused).
+        if (tab.sessionId === 'main') {
+            _sessionGeneration[tab.sessionId] = (_sessionGeneration[tab.sessionId] || 0) + 1;
+        }
+    }
 
     var escapeHtml = window.MonolothUI.escapeHtml;
 
@@ -285,6 +294,8 @@
         var initBgConfig = { type: _bg.type, bgLayer: _bg.layer };
         var terminalBg = _bg.layer === 'overlay' ? '#000000' : window.MonolothApp.computeTerminalBg(initBgConfig);
         var terminalBlack = _bg.layer === 'overlay' ? '#000000' : (_bg.type !== 'none' ? 'rgba(10, 10, 10, 0)' : '#0a0a0a');
+        // xterm.js WebGL renderer corrupts with transparent backgrounds; only opaque backgrounds (no wallpaper/color/gradient) are safe.
+        tab.useWebgl = _bg && (_bg.layer === 'overlay' || _bg.type === 'none');
         var isLight = document.body.classList.contains('light-mode') || document.body.classList.contains('adaptive-light');
         var initTheme = isLight ? window.MonolithTheme.getTerminalLightTheme() : window.MonolithTheme.getTerminalDarkTheme();
         initTheme.background = terminalBg;
@@ -390,7 +401,7 @@
                     requestAnimationFrame(function () {
                         if (tab.fitAddon) tab.fitAddon.fit();
                         refitActiveTab();
-                        if (typeof WebglAddon !== 'undefined' && !tab.webglAddon) {
+                        if (tab.useWebgl && typeof WebglAddon !== 'undefined' && !tab.webglAddon) {
                             try {
                                 var gl = new WebglAddon.WebglAddon();
                                 gl.onContextLoss(function () { gl.dispose(); });
@@ -486,6 +497,8 @@
         if (!tab) return;
         tab.closing = true;
 
+        bumpMainSessionGen(tab);
+
         if (window.monolithApi) {
             window.monolithApi.terminate_terminal(tab.sessionId).catch(function () {});
             if (tab.sessionId === 'main' && typeof window.monolithApi.terminate_hidden === 'function') {
@@ -494,7 +507,9 @@
         }
         clearTabExitCountdown(tab);
         window.MonolithTerminalView.disposeTerminals(tab);
-        delete _sessionGeneration[tab.sessionId];
+        if (tab.sessionId !== 'main') {
+            delete _sessionGeneration[tab.sessionId];
+        }
         delete _skipNextEof[tab.sessionId];
 
         if (tab.sessionId.startsWith('main-tab-') && window.monolithApi && typeof window.monolithApi.retire_panel_tab === 'function') {
@@ -599,15 +614,14 @@
         }
 
         tab._lastPixelSize = pixelSize;
-        if (window.monolithApi) {
-            try { window.monolithApi.resize_terminal(tab.sessionId, dims.cols, dims.rows); } catch (e) {}
-        }
         try { tab.term.resize(dims.cols, dims.rows); } catch (e) {}
     }
 
     function scheduleResize() {
         clearTimeout(_resizeTimer);
-        _resizeTimer = setTimeout(applyResize, 120);
+        // ponytail: maximize/restore animations need time to settle; 250ms
+        // coalesces rapid ResizeObserver/window events into one final measurement.
+        _resizeTimer = setTimeout(applyResize, 250);
     }
 
     function refit() {
@@ -618,7 +632,9 @@
         applyResize();
     }
 
-    // Global resize listener (once, for all tabs — applies to active tab)
+    // Global resize listener (once, for all tabs — applies to active tab).
+    // window.resize and the ResizeObserver share the same debounce, so they
+    // coalesce into a single applyResize call when the container settles.
     window.addEventListener('resize', function () { scheduleResize(); });
     if (tabHost) {
         var ro = new ResizeObserver(function () { scheduleResize(); });
@@ -1108,10 +1124,13 @@
                 var hadMain = false;
                 _tabs.forEach(function (tab) {
                     clearTabExitCountdown(tab);
+                    if (tab.sessionId === 'main') {
+                        hadMain = true;
+                    }
+                    bumpMainSessionGen(tab);
                     if (window.monolithApi) {
                         try { window.monolithApi.terminate_terminal(tab.sessionId).catch(function () {}); } catch (e) {}
                     }
-                    if (tab.sessionId === 'main') hadMain = true;
                     if (tab.sessionId.startsWith('main-tab-') && window.monolithApi && typeof window.monolithApi.retire_panel_tab === 'function') {
                         try { window.monolithApi.retire_panel_tab(tab.sessionId).catch(function () {}); } catch (e) {}
                     }
@@ -1119,7 +1138,9 @@
                     if (tab.container && tab.container.parentNode) tab.container.remove();
                     var tabItem = tabList && tabList.querySelector('.main-tab[data-tab-id="' + tab.id + '"]');
                     if (tabItem) tabItem.remove();
-                    delete _sessionGeneration[tab.sessionId];
+                    if (tab.sessionId !== 'main') {
+                        delete _sessionGeneration[tab.sessionId];
+                    }
                     delete _skipNextEof[tab.sessionId];
                 });
                 if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.closeAllPanelTabsForMainTab === 'function') {

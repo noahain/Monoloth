@@ -160,10 +160,12 @@ function createHarness(backgroundConfig) {
         onData() {}
         dispose() {}
         onScroll() {}
+        onResize(cb) { this._onResize = cb; }
         refresh() {}
         resize(cols, rows) {
             this.cols = cols;
             this.rows = rows;
+            if (this._onResize) this._onResize({ cols, rows });
         }
 
         getOption(name) {

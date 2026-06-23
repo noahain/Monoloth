@@ -140,8 +140,9 @@ function createHarness(bgState) {
         write() {}
         writeln() {}
         onData() {}
+        onResize(cb) { this._onResize = cb; }
         dispose() {}
-        resize(cols, rows) { this.cols = cols; this.rows = rows; }
+        resize(cols, rows) { this.cols = cols; this.rows = rows; if (this._onResize) this._onResize({ cols, rows }); }
     }
 
     class FakeWebglAddon {

@@ -3,7 +3,7 @@
 
     function buildWindowsOptions() {
         var info = window.__monolithWindowsPty;
-        if (info && info.backend && typeof info.buildNumber === 'number') {
+        if (info && info.backend && info.buildNumber > 0) {
             return { windowsPty: { backend: info.backend, buildNumber: info.buildNumber } };
         }
         return {};
@@ -17,7 +17,7 @@
             var defaults = {
                 allowTransparency: opts.allowTransparency !== false,
                 theme: opts.theme || {},
-                fontFamily: '"Cascadia Mono", "Consolas", "Lucida Console", "Courier New", monospace',
+                fontFamily: '"Cascadia Mono", "Consolas", "Segoe UI Emoji", "Lucida Console", "Courier New", monospace',
                 fontSize: opts.fontSize || 14,
                 cursorBlink: true,
                 cursorStyle: 'block',
@@ -27,7 +27,6 @@
                 scrollSensitivity: 1,
                 allowProposedApi: true,
                 minimumContrastRatio: 1,
-                fastScrollModifier: 'alt',
                 fastScrollSensitivity: 5
             };
 
@@ -76,6 +75,14 @@
                         } else {
                             if (opts.onBusyChange) opts.onBusyChange(true);
                         }
+                    }
+                });
+            }
+
+            if (opts.sessionId) {
+                term.onResize(function (e) {
+                    if (window.monolithApi) {
+                        window.monolithApi.resize_terminal(opts.sessionId, e.cols, e.rows).catch(function () {});
                     }
                 });
             }

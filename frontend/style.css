@@ -2595,6 +2595,10 @@ body.adaptive-light .gradient-btn.active {
     background-color: transparent !important;
 }
 
+.xterm .xterm-scrollable-element {
+    background: transparent !important;
+}
+
 .terminal-view {
     /* Removed mix-blend-mode to avoid rendering lag during fast scrolling */
 }

@@ -599,9 +599,6 @@
 
         if (tab.term && tab.fitAddon) {
             try { tab.fitAddon.fit(); } catch (e) {}
-            if (window.monolithApi) {
-                window.monolithApi.resize_terminal(tab.sessionId, tab.term.cols, tab.term.rows).catch(function () {});
-            }
         }
     }
 
@@ -767,9 +764,6 @@
                         if (tab.closing || !getTab(tab.id)) return;
                         try {
                             tab.fitAddon.fit();
-                            if (window.monolithApi) {
-                                window.monolithApi.resize_terminal(tab.sessionId, tab.term.cols, tab.term.rows).catch(function () {});
-                            }
                             tab.term.focus();
                         } catch (e) {}
                     });
@@ -962,9 +956,6 @@
             try { dims = tab.fitAddon.proposeDimensions(); } catch (e) { return; }
             if (!dims || isNaN(dims.cols) || isNaN(dims.rows)) return;
             if (dims.cols === tab.term.cols && dims.rows === tab.term.rows) return;
-            if (window.monolithApi) {
-                window.monolithApi.resize_terminal(tab.sessionId, dims.cols, dims.rows).catch(function () {});
-            }
             tab.term.resize(dims.cols, dims.rows);
         } catch (e) {
             console.error('Failed to refit active tab:', e);
@@ -1631,14 +1622,6 @@
         settingsContent.appendChild(sidebarPanel);
     }
 
-    // ---- Window Resize Handler ----
-    function onWindowResize() {
-        if (window.MonolothApp && window.MonolothApp.refitTerminals) {
-            window.MonolothApp.refitTerminals();
-        }
-        refitActiveTab();
-    }
-
     // ---- Init ----
     var _initialized = false;
     function init() {
@@ -1664,10 +1647,8 @@
             }
         });
 
-        window.addEventListener('resize', function () {
-            if (window._sidebarResizeTimer) clearTimeout(window._sidebarResizeTimer);
-            window._sidebarResizeTimer = setTimeout(onWindowResize, 100);
-        });
+        // ResizeObserver on the panel terminal handles refit; main terminal uses
+        // its own ResizeObserver to avoid conflicting window.resize timers.
 
         if (cmdPanelTerminal && typeof ResizeObserver !== 'undefined') {
             var ro = new ResizeObserver(function () { scheduleRefitActiveTab(); });
@@ -1733,9 +1714,6 @@
                     if (tab.closing || !getTab(tab.id) || !tab.fitAddon || !tab.term) return;
                     try {
                         tab.fitAddon.fit();
-                        if (window.monolithApi) {
-                            window.monolithApi.resize_terminal(tab.sessionId, tab.term.cols, tab.term.rows).catch(function () {});
-                        }
                     } catch (e) {}
                 }, 300);
             }

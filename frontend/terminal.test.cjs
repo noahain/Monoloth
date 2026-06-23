@@ -111,8 +111,9 @@ function createHarness(bgState) {
         onData() {}
         dispose() {}
         onScroll() {}
+        onResize(cb) { this._onResize = cb; }
         refresh() { this.refreshCount = (this.refreshCount || 0) + 1; }
-        resize(cols, rows) { this.cols = cols; this.rows = rows; this.resizeCount = (this.resizeCount || 0) + 1; }
+        resize(cols, rows) { this.cols = cols; this.rows = rows; this.resizeCount = (this.resizeCount || 0) + 1; if (this._onResize) this._onResize({ cols, rows }); }
         getOption(name) { return this.options[name]; }
         setOption(name, value) { this.options[name] = value; }
     }
@@ -120,6 +121,7 @@ function createHarness(bgState) {
     class FakeWebglAddon {
         constructor() { this.__isWebglAddon = true; }
         dispose() {}
+        onContextLoss() {}
     }
 
     const monolithApi = new Proxy({
@@ -256,6 +258,13 @@ test('does not load WebGL when terminal background is transparent', async () => 
     assert.equal(harness.getWebglLoadCount(), 0);
 });
 
+test('loads WebGL when terminal background is opaque', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 0 });
+    harness.context.window.MonolithTerminal.initTerminal('C:\\dir');
+    await flushAsync();
+    assert.equal(harness.getWebglLoadCount(), 1);
+});
+
 test('writeToTerm drops stale generation', async () => {
     const harness = createHarness({ type: 'none', layer: 'behind', transparency: 0 });
     const T = harness.context.window.MonolithTerminal;
@@ -314,10 +323,11 @@ test('closeTab cancels pending session-exit auto-return', async () => {
 });
 
 // --- Resize-corruption regression tests ---
-// These pin the fix for terminal corruption on repaint/resize: the PTY must be
-// resized before xterm, and refit must NOT force a synchronous term.refresh()
-// (which paints the transitional reflow buffer that diff-based TUI apps never
-// overwrite -> frozen edges + random middle characters).
+// These pin the fix for terminal corruption on repaint/resize: a single
+// term.onResize handler in terminal-view.js syncs the PTY on ANY resize source
+// (fit(), applyResize(), pixel-size fallback). refit must NOT force a
+// synchronous term.refresh() (which paints the transitional reflow buffer that
+// diff-based TUI apps never overwrite -> frozen edges + random middle chars).
 
 function createResizeHarness() {
     const harness = createHarness({ type: 'none', layer: 'behind', transparency: 0 });
@@ -330,7 +340,7 @@ function createResizeHarness() {
     return { harness, order };
 }
 
-test('refit resizes the PTY before xterm', async () => {
+test('refit syncs PTY via onResize after xterm resize', async () => {
     const { harness, order } = createResizeHarness();
     const T = harness.context.window.MonolithTerminal;
     T.initTerminal('C:\\dir');
@@ -347,8 +357,8 @@ test('refit resizes the PTY before xterm', async () => {
     order.length = 0;
     T.refit();
 
-    assert.deepEqual(order, ['pty:40x10', 'term:40x10'],
-        'PTY resize must precede xterm resize, both at the final dimensions');
+    assert.deepEqual(order, ['term:40x10', 'pty:40x10'],
+        'xterm resize fires onResize which syncs PTY — both at the final dimensions');
 });
 
 test('refit does not force a synchronous refresh', async () => {
