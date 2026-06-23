@@ -94,6 +94,7 @@ impl HistoryManager {
                 end_time: Some(iso_now()),
                 directory: active.directory,
             });
+            save_json(&history_path(), &inner.data);
         }
         inner.active_sessions.insert(session_id, ActiveSession {
             profile: profile.to_string(),
@@ -116,6 +117,7 @@ impl HistoryManager {
                 end_time: Some(iso_now()),
                 directory: active.directory,
             });
+            save_json(&history_path(), &inner.data);
         }
         inner.active_sessions.insert(session_id.to_string(), ActiveSession {
             profile: profile.to_string(),
@@ -160,7 +162,7 @@ impl HistoryManager {
         let mut inner = self.inner.lock();
         let keys: Vec<String> = inner.active_sessions
             .keys()
-            .filter(|k| k.starts_with("panel-"))
+            .filter(|k| k.starts_with("panel-") || k.as_str() == "panel")
             .cloned()
             .collect();
         for key in &keys {
@@ -216,6 +218,17 @@ impl HistoryManager {
     pub fn get_data(&self) -> HistoryData {
         let inner = self.inner.lock();
         let mut data = inner.data.clone();
+        if data.enabled {
+            for (_, active) in &inner.active_sessions {
+                data.sessions.push(SessionEntry {
+                    profile: active.profile.clone(),
+                    command: active.command.clone(),
+                    start_time: active.start_time.clone(),
+                    end_time: None,
+                    directory: active.directory.clone(),
+                });
+            }
+        }
         apply_retention(&mut data.sessions, &data.retention);
         data
     }
@@ -224,7 +237,17 @@ impl HistoryManager {
         let mut inner = self.inner.lock();
         inner.data.enabled = enabled;
         if !enabled {
-            inner.active_sessions.clear();
+            let now = iso_now();
+            let drained: Vec<ActiveSession> = inner.active_sessions.drain().map(|(_, a)| a).collect();
+            for active in drained {
+                inner.data.sessions.push(SessionEntry {
+                    profile: active.profile,
+                    command: active.command,
+                    start_time: active.start_time,
+                    end_time: Some(now.clone()),
+                    directory: active.directory,
+                });
+            }
         }
         save_json(&history_path(), &inner.data);
     }
@@ -288,7 +311,7 @@ fn apply_retention(sessions: &mut Vec<SessionEntry>, retention: &str) {
             .or_else(|| parse_iso_to_epoch(&s.start_time).ok());
         match ts {
             Some(t) => t >= cutoff,
-            None => false,
+            None => true,
         }
     });
 }
@@ -460,15 +483,83 @@ mod tests {
         assert!(main_tab_ended.iter().all(|s| s.end_time.is_some()), "main-tab-* sessions must have end_time");
 
         // The "main" and panel-tab-1 sessions should NOT have ended yet.
+        // Filter for end_time to exclude active sessions (get_data() now includes them).
         let main_ended: Vec<_> = data.sessions.iter()
-            .filter(|s| s.directory == "/dir-main")
+            .filter(|s| s.directory == "/dir-main" && s.end_time.is_some())
             .collect();
         assert!(main_ended.is_empty(), "\"main\" session should NOT be ended by session_end_all_main_tabs");
 
         let panel_ended: Vec<_> = data.sessions.iter()
-            .filter(|s| s.directory == "/dir-panel-tab-1")
+            .filter(|s| s.directory == "/dir-panel-tab-1" && s.end_time.is_some())
             .collect();
         assert!(panel_ended.is_empty(), "panel-tab-* sessions should NOT be ended by session_end_all_main_tabs");
+    }
+
+    #[test]
+    fn session_start_overwrite_persists_to_disk() {
+        let mgr = HistoryManager::new();
+        mgr.session_start("p1", "c1", "/dir-overwrite-test-a");
+        mgr.session_start("p2", "c2", "/dir-overwrite-test-b");
+        drop(mgr);
+
+        let mgr2 = HistoryManager::new();
+        let data = mgr2.get_data();
+        let a_found = data.sessions.iter().any(|s| s.directory == "/dir-overwrite-test-a");
+        assert!(a_found, "overwritten session must persist to disk across restart");
+    }
+
+    #[test]
+    fn set_enabled_false_flushes_active_sessions() {
+        let mgr = HistoryManager::new();
+        mgr.session_start("p1", "c1", "/dir-flush-test");
+        mgr.set_enabled(false);
+
+        let data = mgr.get_data();
+        let found = data.sessions.iter().any(|s| s.directory == "/dir-flush-test");
+        assert!(found, "active session must be flushed to data.sessions when disabled");
+        assert!(!data.enabled, "history should be disabled");
+    }
+
+    #[test]
+    fn get_data_includes_active_sessions() {
+        let mgr = HistoryManager::new();
+        mgr.session_start("p1", "c1", "/dir-active-test");
+
+        let data = mgr.get_data();
+        let found = data.sessions.iter().any(|s| s.directory == "/dir-active-test");
+        assert!(found, "active session must appear in get_data() result");
+    }
+
+    #[test]
+    fn apply_retention_keeps_unparseable_timestamps() {
+        let mut sessions = vec![SessionEntry {
+            profile: "p".into(),
+            command: "c".into(),
+            start_time: "not-a-valid-iso-timestamp".into(),
+            end_time: None,
+            directory: "/dir-unparseable".into(),
+        }];
+        apply_retention(&mut sessions, "30d");
+        assert_eq!(sessions.len(), 1, "unparseable timestamps must not be deleted");
+    }
+
+    #[test]
+    fn session_end_all_panel_tabs_includes_original_panel() {
+        let mgr = HistoryManager::new();
+        mgr.session_start_with_id("panel", "p", "c", "/dir-panel-original");
+        mgr.session_start_with_id("panel-tab-1", "p", "c", "/dir-panel-tab-1");
+        mgr.session_start_with_id("main-tab-1", "p", "c", "/dir-panel-test-main-tab-1");
+
+        mgr.session_end_all_panel_tabs();
+
+        let data = mgr.get_data();
+        let panel_ended = data.sessions.iter().any(|s| s.directory == "/dir-panel-original" && s.end_time.is_some());
+        let panel_tab_ended = data.sessions.iter().any(|s| s.directory == "/dir-panel-tab-1" && s.end_time.is_some());
+        let main_tab_ended = data.sessions.iter().any(|s| s.directory == "/dir-panel-test-main-tab-1" && s.end_time.is_some());
+
+        assert!(panel_ended, "original 'panel' session must be ended");
+        assert!(panel_tab_ended, "'panel-tab-1' session must be ended");
+        assert!(!main_tab_ended, "main-tab-1 session must NOT be ended by session_end_all_panel_tabs");
     }
 }
 

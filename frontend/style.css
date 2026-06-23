@@ -2618,6 +2618,10 @@ body.adaptive-light .gradient-btn.active {
     display: none !important;
 }
 
+.xterm .xterm-scrollable-element > .scrollbar {
+    display: none !important;
+}
+
 .terminal-view {
     overflow: hidden !important;
     background: transparent;
