@@ -21,8 +21,6 @@
   </p>
 </div>
 
-[**Download latest release**](https://github.com/noahain/Monoloth/releases/latest)
-
 [![Monoloth Main Window](assets/screenshots/main.gif?v=2)](https://github.com/noahain/Monoloth/releases/latest)
 
 ---
