@@ -21,7 +21,9 @@
   </p>
 </div>
 
-[![Monoloth Main Window](assets/screenshots/main.gif?v=2)](https://github.com/noahain/Monoloth)
+[**Download latest release**](https://github.com/noahain/Monoloth/releases/latest)
+
+[![Monoloth Main Window](assets/screenshots/main.gif?v=2)](https://github.com/noahain/Monoloth/releases/latest)
 
 ---
 
@@ -74,73 +76,13 @@ The system serves frontend assets directly from the `frontend/` directory, requi
 
 ### Features
 
-#### Terminal
-
-- **xterm.js** with WebGL-accelerated rendering, full addon support, and per-tab xterm instances
-- **Multi-tab workspace** — spawn multiple terminal tabs (`Ctrl+T`), each with its own PTY session, directory, and profile. Tabs persist across restarts (opt-in). Reorder, rename, and close with animations.
-- **CMD Panel** — secondary resizable terminal panel at the bottom (`Ctrl+J`), with its own multi-tab system grouped per main tab. Drag-to-resize handle with animated open/close.
-- **New Tab Card** — overlay with directory picker, recent projects list, and profile selector when opening a new tab
-- **Session generation tokens** — prevents stale output from terminated PTY sessions
-- **Busy detection** — visual indicator when the agent is actively generating output
-- **Session exit countdown** — 5-second auto-return to the launcher when the agent exits
-- **Command palette** (`Ctrl+P`) — grouped actions (navigation, window controls, settings) with fuzzy filtering, sub-palettes, and keyboard navigation
-
-#### Launcher
-
-- **Startup presets** — predefined profiles for OpenCode, Claude Code, Qwen, Kimi, Codex, Pi, and Gemini. Pick one or enter a custom command.
-- **Secondary commands** — run "before" commands synchronously before the main PTY spawns, "parallel" commands in separate windows, and "hidden" headless PTY sessions for background tools
-- **Recent directories** — persistent list of recently used projects on the landing page
-- **File picker** — choose between native OS dialogs or a built-in custom file browser with breadcrumb navigation, quick-access sidebar, image previews, drive listing, and keyboard navigation
-
-#### Sidebar
-
-- **Configurable buttons** — reorderable buttons with custom commands, icons, and execution modes (run in background, open in external terminal, or open in the CMD panel)
-- **22 SVG icons** to choose from, with default actions for open folder, open in CMD panel, and copy project path
-- **Tab bar position** — move the terminal tab bar to the titlebar, standard position, or hide it entirely
-
-#### Themes & Appearance
-
-- **3 theme modes** — dark, light, and auto (detects wallpaper brightness to pick automatically)
-- **4 CTA styles** — blur, glass, solid, and outline
-- **4 background types** — none, solid color, gradient (8 presets with custom color picking), and image (including animated GIFs)
-- **Background layering** — place the background behind the terminal or as an overlay on top
-- **Opacity control** — slider for terminal background transparency
-- **Wallpaper brightness analysis** — analyzes background images to recommend a theme mode
-- **Custom titlebar** — minimize, maximize, and close buttons with OS-accurate maximize/restore sync
-
-#### Profiles
-
-- **Per-user settings isolation** — separate config profiles while sharing global window state
-- **Per-tab profile switching** — assign different profiles to different main terminal tabs; right-click a tab to switch profiles
-- **Full CRUD** — create, rename, and delete profiles from settings, with a switcher modal
-
-#### Shortcuts
-
-Fully rebindable keyboard shortcuts with an interactive editor in settings:
-
-| Action | Default |
-|--------|---------|
-| Command palette | `Ctrl+P` |
-| Settings | `Ctrl+,` |
-| Toggle sidebar | `Ctrl+B` |
-| Toggle CMD panel | `Ctrl+J` |
-| Clear terminal | `Ctrl+K` |
-| New tab | `Ctrl+T` |
-| New panel tab | `Ctrl+Shift+T` |
-| Switch profile | `Ctrl+Shift+P` |
-| Back to launcher | `Ctrl+Shift+W` |
-
-#### Updater
-
-- **In-app update notifications** — download progress bar with stall detection, error recovery (signature, network, rate limit), retry, and abort support
-- **Mini-pill mode** — compact indicator during downloads so it doesn't block your workflow
-- **Signed artifacts** — minisign signature verification before installing
-
-#### History & Sessions
-
-- **Session tracking** — records start time, end time, duration, profile, command, and directory for every session
-- **Configurable retention** — keep sessions for 7, 30, or 90 days, or clear on demand
-- **Tab-scoped** — main tabs and panel tabs each get their own tracked sessions
+- **Multi-tab terminal** with xterm.js WebGL rendering and a resizable secondary panel
+- **Agent-agnostic launcher** — presets for OpenCode, Claude Code, Qwen, Kimi, Codex, Pi, and Gemini, or enter a custom command
+- **Command palette** (`Ctrl+P`) with fuzzy filtering, sub-palettes, and keyboard navigation
+- **Themes** — dark, light, and auto modes with 4 CTA styles and background images, gradients, colors, or GIFs
+- **Profiles** with per-user settings isolation and per-tab switching
+- **Rebindable keyboard shortcuts** with an interactive editor
+- **Session history** with configurable retention and tab-scoped tracking
 
 ### Visual Gallery
 
@@ -164,6 +106,12 @@ Fully rebindable keyboard shortcuts with an interactive editor in settings:
 
 
 
+
+### How it works
+
+Monoloth runs each terminal session in its own PTY (pseudoterminal) managed by `portable-pty`. Each PTY maps to a tab-scoped xterm.js instance with WebGL rendering. Session generation tokens prevent output from terminated sessions from writing to the wrong tab.
+
+The frontend loads as vanilla IIFE modules from `<script>` tags in `index.html`. No bundler, `package.json`, or Node build step. Modules expose one `window.Monolith*` global and communicate through those globals. One command builds and runs everything: `cargo tauri dev`.
 
 ### Prerequisites
 
@@ -289,6 +237,10 @@ As a shell for CLI agents, Monoloth spawns terminal sessions and runs the
 command you configure, and it reads the project directory you choose. Settings
 and profiles stay local in your platform's config directory. For the full
 picture and how to report a vulnerability, see [SECURITY.md](SECURITY.md).
+
+### Credits
+
+xterm.js, Tauri 2, portable-pty, rfd, and the image crate.
 
 ### License
 MIT
