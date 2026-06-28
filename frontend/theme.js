@@ -45,6 +45,9 @@
             }
         }
         syncOutlineOnLightClass();
+        if (window.MonolothApp && typeof window.MonolothApp.applyTerminalBg === 'function') {
+            window.MonolothApp.applyTerminalBg();
+        }
         setTimeout(function () {
             document.body.classList.remove('theme-transitioning');
         }, 350);

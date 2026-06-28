@@ -3,9 +3,10 @@ const fs = require('node:fs');
 const test = require('node:test');
 const vm = require('node:vm');
 
-function load() {
+function load(opts = {}) {
     const body = { classList: { _s: new Set(), add(c){this._s.add(c);}, remove(c){this._s.delete(c);}, contains(c){return this._s.has(c);}, toggle(c,f){ if(f===undefined)f=!this._s.has(c); f?this._s.add(c):this._s.delete(c); return f; } } };
-    const context = { console, document: { body, documentElement: { style:{}, classList: body.classList }, getElementById: () => null, querySelectorAll: () => [] }, window: { monolithApi: {} } };
+    const context = { console, setTimeout: function () { return 0; }, document: { body, documentElement: { style:{}, classList: body.classList }, getElementById: () => null, querySelectorAll: () => [] }, window: { monolithApi: {} } };
+    if (opts.globals) Object.assign(context.window, opts.globals);
     context.window.window = context.window;
     vm.createContext(context);
     vm.runInContext(fs.readFileSync('frontend/theme.js', 'utf8'), context, { filename: 'theme.js' });
@@ -17,4 +18,11 @@ test('hexToLuminance returns 0..1, 0 for invalid', () => {
     assert.equal(T.hexToLuminance('#000000'), 0);
     assert.ok(Math.abs(T.hexToLuminance('#ffffff') - 1) < 1e-9);
     assert.equal(T.hexToLuminance('notacolor'), 0);
+});
+
+test('applyTheme propagates to xterm terminals via MonolothApp.applyTerminalBg', () => {
+    let calls = 0;
+    const T = load({ globals: { MonolothApp: { applyTerminalBg() { calls++; } } } });
+    T.applyTheme('light');
+    assert.equal(calls, 1, 'applyTheme must call MonolothApp.applyTerminalBg so panel/main xterm palettes follow theme changes');
 });
