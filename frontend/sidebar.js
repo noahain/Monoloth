@@ -78,7 +78,6 @@
     var _resizeDebounceTimer = null;
     var _configSaveTimer = null;
     var _panelRestoreNeeded = false;
-    var _activeContextMenuCleanup = null;
 
     _ensurePanelGroup('mtab-1');
 
@@ -677,6 +676,28 @@
         }
     }
 
+    function applyPanelTheme() {
+        var MT = window.MonolithTheme;
+        var App = window.MonolothApp;
+        if (!MT) return;
+        var bg = App ? App.getBgState() : null;
+        var tc = UI.computeTermBgColors(bg ? bg.type : 'none', bg ? bg.layer : 'behind');
+        var themed = tc.isLight ? MT.getTerminalLightTheme() : MT.getTerminalDarkTheme();
+        if (!themed) return;
+        _mainTabPanels.forEach(function (group) {
+            group.tabs.forEach(function (tab) {
+                if (!tab.term || typeof tab.term.setOption !== 'function') return;
+                try {
+                    var existing = Object.assign({}, tab.term.getOption('theme'));
+                    Object.assign(existing, themed);
+                    existing.background = tc.background;
+                    existing.black = tc.black;
+                    tab.term.setOption('theme', existing);
+                } catch (e) {}
+            });
+        });
+    }
+
     function initTabXterm(tab) {
         var terminalDiv = tab.container.querySelector('.cmd-panel-tab-terminal');
 
@@ -685,11 +706,21 @@
 
         var dir = tab.dir || (getCurrentDir() || getDefaultHomeDir());
 
+        var _bg = (window.MonolothApp && window.MonolothApp.getBgState) ? window.MonolothApp.getBgState() : null;
+        var _bgType = _bg ? _bg.type : 'none';
+        var _bgLayer = _bg ? _bg.layer : 'behind';
+        var tc = UI.computeTermBgColors(_bgType, _bgLayer);
+
         var initPromise = window.MonolithTerminalView.create({
             terminalDiv: terminalDiv,
-            theme: { background: 'transparent', foreground: '#b8b8b8', cursor: '#c0c0c0' },
+            theme: Object.assign(
+                (tc.isLight
+                    ? (window.MonolithTheme && window.MonolithTheme.getTerminalLightTheme())
+                    : (window.MonolithTheme && window.MonolithTheme.getTerminalDarkTheme())) || { foreground: '#b8b8b8', cursor: '#c0c0c0' },
+                { background: tc.background, black: tc.black }
+            ),
             fontSize: 13,
-            allowTransparency: true,
+            allowTransparency: _bgType !== 'none' && _bgLayer !== 'overlay',
             sessionId: tab.sessionId,
             busyOnEnter: 'delayed',
             customKeyHandler: function (e) {
@@ -1014,62 +1045,13 @@
     }
 
     function showTabContextMenu(tabId, x, y) {
-        if (typeof _activeContextMenuCleanup === 'function') {
-            _activeContextMenuCleanup();
-            _activeContextMenuCleanup = null;
-        }
-
-        var existing = document.querySelector('.cmd-panel-context-menu');
-        if (existing) existing.remove();
-
-        var menu = document.createElement('div');
-        menu.className = 'cmd-panel-context-menu';
-        menu.style.left = x + 'px';
-        menu.style.top = y + 'px';
-
-        menu.innerHTML =
-            '<div class="cmd-panel-context-menu-item" data-action="new">New Tab</div>' +
-            '<div class="cmd-panel-context-menu-item" data-action="close">Close Tab</div>' +
-            '<div class="cmd-panel-context-menu-divider"></div>' +
-            '<div class="cmd-panel-context-menu-item" data-action="rename">Rename Tab</div>';
-
-        var dismissListeners = [];
-
-        function cleanup() {
-            menu.remove();
-            dismissListeners.forEach(function (l) {
-                document.removeEventListener(l.event, l.handler);
-            });
-            dismissListeners = [];
-            if (_activeContextMenuCleanup === cleanup) {
-                _activeContextMenuCleanup = null;
-            }
-        }
-
-        _activeContextMenuCleanup = cleanup;
-
-        menu.addEventListener('click', function (e) {
-            var action = e.target.getAttribute('data-action');
-            if (action === 'new') createTab();
-            if (action === 'close') closeTab(tabId);
-            if (action === 'rename') startRenameTab(tabId);
-            cleanup();
-        });
-
-        document.body.appendChild(menu);
-
-        setTimeout(function () {
-            var dismiss = function (e) {
-                if (!menu.contains(e.target)) cleanup();
-            };
-            var keyDismiss = function (e) {
-                if (e.key === 'Escape') cleanup();
-            };
-            document.addEventListener('click', dismiss);
-            document.addEventListener('keydown', keyDismiss);
-            dismissListeners.push({ event: 'click', handler: dismiss });
-            dismissListeners.push({ event: 'keydown', handler: keyDismiss });
-        }, 0);
+        var CM = window.MonolithCtxMenu;
+        CM.createContextMenu(x, y, [
+            { action: 'new', label: 'New Tab', icon: 'plus', shortcutHtml: CM.shortcutHtml('new_panel_tab'), onSelect: function () { createTab(); } },
+            { action: 'close', label: 'Close Tab', icon: 'x', danger: true, onSelect: function () { closeTab(tabId); } },
+            { divider: true },
+            { action: 'rename', label: 'Rename Tab', icon: 'pencil', onSelect: function () { startRenameTab(tabId); } }
+        ]);
     }
 
     function showCmdPanel() {
@@ -1808,7 +1790,8 @@
         initTabXterm: initTabXterm,
         writeToTab: SM.writeToTab,
         writeToPanel: SM.writeToPanel,
-        refitActiveTab: refitActiveTab
+        refitActiveTab: refitActiveTab,
+        applyPanelTheme: applyPanelTheme
     };
     SM.settingsUI = {
         renderSettingsTab: renderSettingsTab,

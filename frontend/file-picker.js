@@ -362,9 +362,29 @@
                     if (fpOk && !fpOk.disabled) fpOk.click();
                 }
             });
+            item.addEventListener('contextmenu', function (e) {
+                e.preventDefault();
+                onItemClick(entry);
+                showFpItemContextMenu(entry, e.clientX, e.clientY);
+            });
             fpFileList.appendChild(item);
         });
         loadDrives();
+    }
+
+    function showFpItemContextMenu(entry, x, y) {
+        var fullPath = joinPath(fpState.currentPath, entry.name);
+        var items = [];
+        if (entry.isDir) items.push({ action: 'open', label: 'Open', icon: 'open', onSelect: function () { doNavigate(fullPath); } });
+        items.push(
+            { action: 'copy', label: 'Copy Path', icon: 'copy', onSelect: function () {
+                if (navigator && navigator.clipboard) navigator.clipboard.writeText(fullPath).catch(function () {});
+            } },
+            { action: 'explorer', label: 'Open in File Explorer', icon: 'open', onSelect: function () {
+                if (window.monolithApi) window.monolithApi.open_in_explorer(fullPath).catch(function () {});
+            } }
+        );
+        window.MonolithCtxMenu.createContextMenu(x, y, items);
     }
 
     var FILE_IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];

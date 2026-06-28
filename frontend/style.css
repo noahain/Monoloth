@@ -5562,7 +5562,8 @@ body.outline-on-light.cta-outline .settings-glass,
 body.outline-on-light.cta-outline .fp-modal,
 body.outline-on-light.cta-outline .ps-modal,
 body.outline-on-light.cta-outline .command-palette-modal,
-body.outline-on-light.cta-outline .id-modal {
+body.outline-on-light.cta-outline .id-modal,
+body.outline-on-light.cta-outline .ctx-menu {
     border-color: var(--outline-on-light-border);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
@@ -6678,27 +6679,22 @@ body.adaptive-light.cta-outline #cmd-panel {
     overflow: hidden;
 }
 
-.cmd-panel-exit-banner {
+.cmd-panel-exit-banner,
+.session-exit-banner {
     position: absolute;
     bottom: 40px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(30,30,30,0.9);
+    background: var(--bg-tertiary);
     color: var(--text-secondary);
     padding: 8px 16px;
     border-radius: 6px;
-    font-family: monospace;
-    font-size: 13px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
     border: 1px solid var(--border-muted);
     backdrop-filter: blur(4px);
     cursor: pointer;
     z-index: 101;
-}
-
-body.light-mode .cmd-panel-exit-banner,
-body.adaptive-light .cmd-panel-exit-banner {
-    background: rgba(240, 240, 240, 0.95);
-    border-color: var(--border-muted);
 }
 
 /* Sidebar Settings Tab */
@@ -7034,7 +7030,8 @@ body.adaptive-light .sidebar-setting-name {
     body.cta-glass .id-input,
     body.cta-glass .command-palette-input,
     body.cta-glass .cmd-panel-tab-bar,
-    body.cta-glass .main-tab-bar:not(.in-titlebar) {
+    body.cta-glass .main-tab-bar:not(.in-titlebar),
+    body.cta-glass .ctx-menu {
         background: var(--bg-tertiary) !important;
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
@@ -8435,38 +8432,124 @@ body.adaptive-light.cta-outline .new-tab-card-overlay {
     border-radius: 6px;
     background: var(--bg-tertiary);
     color: var(--text-primary);
+    font-family: var(--font-mono);
     font-size: 0.75rem;
+    border: 1px solid var(--border-muted);
+    backdrop-filter: blur(4px);
     cursor: pointer;
     z-index: 5;
     white-space: nowrap;
 }
 
-/* CMD Panel Tab Context Menu */
-.cmd-panel-context-menu {
+/* Context Menu (shared by tab bars, recent dirs, file picker) */
+.ctx-menu {
     position: fixed;
     background: var(--bg-secondary);
-    border: 1px solid var(--border-dark);
+    border: 1px solid var(--modal-border);
     border-radius: 6px;
-    padding: 4px 0;
-    z-index: 100;
-    min-width: 140px;
+    padding: 4px;
+    z-index: 22000;
+    min-width: 210px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    font-family: var(--font-mono);
 }
 
-.cmd-panel-context-menu-item {
-    padding: 6px 12px;
-    font-size: 0.8rem;
+.ctx-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    font-size: 0.75rem;
     color: var(--text-primary);
     cursor: pointer;
-    transition: background 0.1s;
+    border-radius: 4px;
+    transition: background 0.1s, color 0.1s;
+    user-select: none;
 }
 
-.cmd-panel-context-menu-item:hover {
+.ctx-item:hover {
     background: var(--modal-hover-bg);
 }
 
-.cmd-panel-context-menu-divider {
+.ctx-item .ctx-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+    transition: color 0.1s;
+}
+
+.ctx-item:hover .ctx-icon {
+    color: var(--text-primary);
+}
+
+.ctx-item .ctx-label {
+    flex: 1;
+}
+
+.ctx-shortcut {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid var(--modal-border);
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-family: var(--font-mono);
+    letter-spacing: 0.3px;
+}
+
+.ctx-item.danger {
+    color: var(--text-secondary);
+}
+
+.ctx-item.danger .ctx-icon {
+    color: var(--accent-red);
+    opacity: 0.75;
+}
+
+.ctx-item.danger:hover {
+    background: rgba(224, 108, 117, 0.08);
+    color: var(--accent-red);
+}
+
+.ctx-item.danger:hover .ctx-icon {
+    color: var(--accent-red);
+    opacity: 1;
+}
+
+.ctx-menu-divider {
     height: 1px;
-    background: var(--border-dark);
-    margin: 4px 0;
+    background: var(--modal-border);
+    margin: 4px 2px;
+}
+
+body.cta-glass .ctx-menu {
+    background: var(--modal-bg-glass);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+body.light-mode.cta-glass .ctx-menu,
+body.adaptive-light.cta-glass .ctx-menu {
+    background: var(--modal-bg-glass);
+    border-color: var(--modal-border);
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+body.cta-outline .ctx-menu {
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: 1px solid var(--border-muted);
+    box-shadow: none;
+}
+body.light-mode.cta-outline .ctx-menu,
+body.adaptive-light.cta-outline .ctx-menu {
+    background: transparent;
+    border-color: var(--border-muted);
+    box-shadow: none;
 }

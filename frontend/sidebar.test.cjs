@@ -171,11 +171,23 @@ function createHarness(bgState) {
         removeEventListener() {},
         matchMedia: () => ({ matches: false }),
         MonolothUI: {
-            escapeHtml: (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'),
+            escapeHtml: (s) => String(s == null ? '' : s).replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"').replace(/'/g,'&#39;'),
             silent(fn) { try { return fn && fn(); } catch (e) { return undefined; } },
             openModal() {},
             closeModal() {},
-            isWindows: () => true
+            isWindows: () => true,
+            computeTermBgColors(bgType, bgLayer) {
+                var isLight = document.body.classList.contains('light-mode') || document.body.classList.contains('adaptive-light');
+                var bg, black;
+                if (bgLayer === 'overlay') { bg = '#000000'; black = '#000000'; }
+                else if (bgType !== 'none') { bg = 'transparent'; black = 'rgba(10, 10, 10, 0)'; }
+                else { bg = isLight ? '#f5f5f5' : '#0a0a0a'; black = bg; }
+                return { background: bg, black: black, isLight: isLight };
+            }
+        },
+        MonolithCtxMenu: {
+            createContextMenu() {},
+            shortcutHtml() { return ''; }
         },
         MonolothTooltip: { cleanup() {}, attach() {}, scan() {} },
         MonolithTheme: {
@@ -230,16 +242,13 @@ function createHarness(bgState) {
     };
 }
 
-test('CMD panel always uses transparent canvas with no WebGL', async () => {
-    // The panel xterm reverts to the pre-beta simple setup: hardcoded transparent
-    // theme + allowTransparency:true + no WebGL addon. The container's CSS handles
-    // the visual background (blur/glass/solid tint).
+test('CMD panel uses opaque canvas when bg type is none', async () => {
     const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
     await harness.context.window.SidebarManager.createTab(null, true, 'C:\\repo');
     assert.equal(harness.getWebglLoadCount(), 0, 'panel must never load WebGL');
     const term = harness.getLastTerminal();
-    assert.equal(term.options.allowTransparency, true, 'panel must allow transparency');
-    assert.equal(term.options.theme.background, 'transparent', 'panel bg must be transparent');
+    assert.equal(term.options.allowTransparency, false, 'panel must use opaque canvas when no wallpaper');
+    assert.equal(term.options.theme.background, '#0a0a0a', 'panel bg must match main terminal for none type');
 });
 
 test('switchToMainTab hides the OLD group containers (regression: panel tabs from previous main tab were leaking)', async () => {

@@ -173,6 +173,33 @@
         return null;
     }
 
+    function getCore() {
+        var candidates = [window.__TAURI_CORE__, window.__TAURI__ && window.__TAURI__.core, window.__TAURI_INTERNALS__];
+        for (var i = 0; i < candidates.length; i++) {
+            if (candidates[i] && typeof candidates[i].invoke === 'function') {
+                window.__TAURI_CORE__ = candidates[i];
+                return candidates[i];
+            }
+        }
+        return null;
+    }
+
+    function computeTermBgColors(bgType, bgLayer) {
+        var isLight = document.body.classList.contains('light-mode') || document.body.classList.contains('adaptive-light');
+        var bg, black;
+        if (bgLayer === 'overlay') {
+            bg = '#000000';
+            black = '#000000';
+        } else if (bgType !== 'none') {
+            bg = 'transparent';
+            black = 'rgba(10, 10, 10, 0)';
+        } else {
+            bg = isLight ? '#f5f5f5' : '#0a0a0a';
+            black = isLight ? '#f5f5f5' : '#0a0a0a';
+        }
+        return { background: bg, black: black, isLight: isLight };
+    }
+
     window.MonolothUI = {
         escapeHtml: escapeHtml,
         forceReflow: forceReflow,
@@ -191,6 +218,7 @@
         getPlatform: getPlatform,
         isWindows: isWindows,
         isMac: isMac,
+        computeTermBgColors: computeTermBgColors,
         ANIM_EXIT_MS: ANIM_EXIT_MS,
         ANIM_COLLAPSE_MS: ANIM_COLLAPSE_MS
     };

@@ -278,6 +278,9 @@ function createHarness(backgroundConfig) {
     const domUtilsSource = fs.readFileSync('frontend/lib/dom-utils.js', 'utf8');
     vm.runInContext(domUtilsSource, context, { filename: 'frontend/lib/dom-utils.js' });
 
+    const ctxMenuSource = fs.readFileSync('frontend/ctx-menu.js', 'utf8');
+    vm.runInContext(ctxMenuSource, context, { filename: 'frontend/ctx-menu.js' });
+
     const updaterToastSource = fs.readFileSync('frontend/lib/updater-toast.js', 'utf8');
     vm.runInContext(updaterToastSource, context, { filename: 'frontend/lib/updater-toast.js' });
 

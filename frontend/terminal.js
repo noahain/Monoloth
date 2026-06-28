@@ -264,18 +264,12 @@
         try { existing = Object.assign({}, tab.term.getOption('theme')); } catch (e) {}
         Object.assign(existing, newTheme);
 
-        var bgLayer = (appearance && appearance.bg_layer) || 'behind';
-        var bgType = (appearance && appearance.bg_type) || 'none';
-        if (bgLayer === 'overlay') {
-            existing.background = '#000000';
-            existing.black = '#000000';
-        } else if (bgType !== 'none') {
-            existing.background = 'transparent';
-            existing.black = 'rgba(10, 10, 10, 0)';
-        } else {
-            existing.background = '#0a0a0a';
-            existing.black = '#0a0a0a';
-        }
+        var tc = window.MonolothUI.computeTermBgColors(
+            (appearance && appearance.bg_type) || 'none',
+            (appearance && appearance.bg_layer) || 'behind'
+        );
+        existing.background = tc.background;
+        existing.black = tc.black;
 
         document.body.classList.add('theme-transitioning');
         tab.container.classList.add('tab-theme-transitioning');
@@ -292,12 +286,12 @@
 
         var _bg = window.MonolothApp.getBgState();
         var initBgConfig = { type: _bg.type, bgLayer: _bg.layer };
-        var terminalBg = _bg.layer === 'overlay' ? '#000000' : window.MonolothApp.computeTerminalBg(initBgConfig);
-        var terminalBlack = _bg.layer === 'overlay' ? '#000000' : (_bg.type !== 'none' ? 'rgba(10, 10, 10, 0)' : '#0a0a0a');
+        var tc = window.MonolothUI.computeTermBgColors(_bg.type || 'none', _bg.layer || 'behind');
+        var terminalBg = tc.background;
+        var terminalBlack = tc.black;
         // xterm.js WebGL renderer corrupts with transparent backgrounds; only opaque backgrounds (no wallpaper/color/gradient) are safe.
         tab.useWebgl = _bg && (_bg.layer === 'overlay' || _bg.type === 'none');
-        var isLight = document.body.classList.contains('light-mode') || document.body.classList.contains('adaptive-light');
-        var initTheme = isLight ? window.MonolithTheme.getTerminalLightTheme() : window.MonolithTheme.getTerminalDarkTheme();
+        var initTheme = tc.isLight ? window.MonolithTheme.getTerminalLightTheme() : window.MonolithTheme.getTerminalDarkTheme();
         initTheme.background = terminalBg;
         initTheme.black = terminalBlack;
 
@@ -440,7 +434,6 @@
         var hasOtherTabs = _tabs.size > 1;
         var banner = document.createElement('div');
         banner.className = 'session-exit-banner';
-        banner.style.cssText = 'position:absolute;bottom:40px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,0.9);color:#c0c0c0;padding:8px 16px;border-radius:6px;font-family:monospace;font-size:13px;z-index:101;border:1px solid rgba(255,255,255,0.1);backdrop-filter:blur(4px);pointer-events:auto;cursor:pointer;';
         if (isActive && !hasOtherTabs) {
             banner.textContent = 'Session ended \u2014 returning to launcher in 5s (click to stay)';
         } else if (isActive && hasOtherTabs) {
@@ -781,12 +774,15 @@
 
     function renderNewTabRecentDirs(listEl) {
         if (!window.monolithApi) return;
+        listEl.innerHTML = '';
         window.monolithApi.get_recent_directories().then(function (dirs) {
             if (!Array.isArray(dirs) || dirs.length === 0) {
                 var section = listEl.closest('.recent-projects-section');
                 if (section) section.style.display = 'none';
                 return;
             }
+            var section = listEl.closest('.recent-projects-section');
+            if (section) section.style.display = '';
             dirs.slice(0, 7).forEach(function (dirPath) {
                 var item = document.createElement('div');
                 item.className = 'recent-project-item';
@@ -796,6 +792,12 @@
                 item.title = dirPath;
                 item.addEventListener('click', function () {
                     createTabFromCard(dirPath);
+                });
+                item.addEventListener('contextmenu', function (e) {
+                    e.preventDefault();
+                    if (window.MonolothApp && window.MonolothApp.showRecentContextMenu) {
+                        window.MonolothApp.showRecentContextMenu(dirPath, e.clientX, e.clientY, createTabFromCard, renderNewTabRecentDirs.bind(null, listEl));
+                    }
                 });
                 listEl.appendChild(item);
             });
@@ -861,45 +863,14 @@
     function showMainTabContextMenu(tabId, x, y) {
         var tab = _tabs.get(tabId);
         if (!tab) return;
-        // Remove any existing context menu.
-        var existing = document.querySelector('.main-tab-context-menu');
-        if (existing) existing.remove();
-
-        var menu = document.createElement('div');
-        menu.className = 'main-tab-context-menu';
-        menu.style.cssText = 'position:fixed;left:' + x + 'px;top:' + y + 'px;background:var(--modal-bg-glass,#1e1e1e);border:1px solid var(--modal-border,rgba(255,255,255,0.1));border-radius:8px;padding:4px;z-index:10000;min-width:160px;font-family:inherit;color:var(--modal-text,#e0e0e0);box-shadow:0 4px 12px rgba(0,0,0,0.3);';
-
-        menu.innerHTML =
-            '<div class="main-tab-context-item" data-action="new">New Tab</div>' +
-            '<div class="main-tab-context-item" data-action="close">Close Tab</div>' +
-            '<div class="main-tab-context-divider" style="height:1px;background:rgba(255,255,255,0.08);margin:4px 0;"></div>' +
-            '<div class="main-tab-context-item" data-action="rename">Rename Tab</div>' +
-            '<div class="main-tab-context-item" data-action="profile">Switch Profile</div>';
-
-        // Style the menu items.
-        menu.querySelectorAll('.main-tab-context-item').forEach(function (item) {
-            item.style.cssText = 'padding:6px 12px;cursor:pointer;font-size:0.8rem;border-radius:4px;';
-            item.addEventListener('mouseenter', function () { item.style.background = 'rgba(255,255,255,0.08)'; });
-            item.addEventListener('mouseleave', function () { item.style.background = 'transparent'; });
-        });
-
-        menu.addEventListener('click', function (e) {
-            var action = e.target.getAttribute('data-action');
-            menu.remove();
-            if (action === 'new') promptNewTab();
-            if (action === 'close') closeTab(tabId);
-            if (action === 'rename') startRenameTab(tabId);
-            if (action === 'profile') showProfileSwitchForTab(tabId);
-        });
-
-        document.body.appendChild(menu);
-        // Dismiss on outside click.
-        setTimeout(function () {
-            document.addEventListener('click', function dismiss () {
-                menu.remove();
-                document.removeEventListener('click', dismiss);
-            });
-        }, 0);
+        var CM = window.MonolithCtxMenu;
+        CM.createContextMenu(x, y, [
+            { action: 'new', label: 'New Tab', icon: 'plus', shortcutHtml: CM.shortcutHtml('new_main_tab'), onSelect: function () { promptNewTab(); } },
+            { action: 'close', label: 'Close Tab', icon: 'x', danger: true, onSelect: function () { closeTab(tabId); } },
+            { divider: true },
+            { action: 'rename', label: 'Rename Tab', icon: 'pencil', onSelect: function () { startRenameTab(tabId); } },
+            { action: 'profile', label: 'Switch Profile', icon: 'profile', shortcutHtml: CM.shortcutHtml('switch_profile'), onSelect: function () { showProfileSwitchForTab(tabId); } }
+        ]);
     }
 
     function restartTabWithProfile(tab) {

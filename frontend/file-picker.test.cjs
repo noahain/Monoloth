@@ -16,7 +16,7 @@ function load(isWindows) {
     const context = {
         console, setTimeout, clearTimeout, Promise,
         document: { getElementById: () => fakeEl(), createElement: () => fakeEl(), querySelectorAll: () => [], addEventListener() {} },
-        window: { monolithApi: {}, MonolothUI: { escapeHtml: s => s, isWindows: () => isWindows } }
+        window: { monolithApi: {}, MonolothUI: { escapeHtml: s => s, isWindows: () => isWindows }, MonolithCtxMenu: { createContextMenu() {}, shortcutHtml() { return ''; } } }
     };
     context.window.window = context.window;
     vm.createContext(context);

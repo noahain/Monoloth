@@ -161,8 +161,36 @@
                 addToRecentDirectories(dirPath);
                 showTerminal(dirPath);
             });
+            item.addEventListener('contextmenu', function (e) {
+                e.preventDefault();
+                showRecentContextMenu(dirPath, e.clientX, e.clientY);
+            });
             recentProjectsList.appendChild(item);
         });
+    }
+
+    function showRecentContextMenu(dirPath, x, y, onOpen, onRemove) {
+        var CM = window.MonolithCtxMenu;
+        CM.createContextMenu(x, y, [
+            { action: 'open', label: 'Open', icon: 'folder', onSelect: function () {
+                if (onOpen) { onOpen(dirPath); } else { addToRecentDirectories(dirPath); showTerminal(dirPath); }
+            } },
+            { divider: true },
+            { action: 'copy', label: 'Copy Path', icon: 'copy', onSelect: function () { copyToClipboard(dirPath); } },
+            { action: 'explorer', label: 'Open in File Explorer', icon: 'open', onSelect: function () {
+                if (window.monolithApi) window.monolithApi.open_in_explorer(dirPath).catch(function () {});
+            } },
+            { divider: true },
+            { action: 'remove', label: 'Remove from Recent', icon: 'x', danger: true, onSelect: function () {
+                var idx = _recentDirs.indexOf(dirPath);
+                if (idx !== -1) {
+                    _recentDirs.splice(idx, 1);
+                    if (window.monolithApi) window.monolithApi.set_recent_directories(_recentDirs).catch(function () {});
+                    renderRecentDirectories();
+                    if (onRemove) onRemove(dirPath);
+                }
+            } }
+        ]);
     }
 
     // Show loading indicator while bridge initializes
@@ -497,9 +525,8 @@
     }
 
     function computeTerminalBg(config) {
-        var type = config.type || 'none';
-        if (type === 'none') return '#0a0a0a';
-        return 'transparent';
+        var tc = UI.computeTermBgColors(config.type || 'none', config.bgLayer || 'behind');
+        return tc.background;
     }
 
     function applyBackground(config) {
@@ -567,26 +594,23 @@
             };
         }
         var layer = config.bgLayer || 'behind';
-        var themeBg = layer === 'overlay' ? '#000000' : computeTerminalBg(config);
-        var isLight = document.body.classList.contains('light-mode') || document.body.classList.contains('adaptive-light');
+        var tc = UI.computeTermBgColors(config.type || 'none', layer);
+        var themeBg = tc.background;
         try {
             var existing = {};
             try { existing = Object.assign({}, term.getOption('theme')); } catch (e) {}
             existing.background = themeBg;
 
-            var textTheme = isLight ? window.MonolithTheme.getTerminalLightTheme() : window.MonolithTheme.getTerminalDarkTheme();
+            var textTheme = tc.isLight ? window.MonolithTheme.getTerminalLightTheme() : window.MonolithTheme.getTerminalDarkTheme();
             Object.assign(existing, textTheme);
 
-            if (layer === 'overlay') {
-                existing.black = '#000000';
-            } else if (config.type !== 'none') {
-                existing.black = 'rgba(10, 10, 10, 0)';
-            } else {
-                existing.black = '#0a0a0a';
-            }
+            existing.black = tc.black;
 
             term.setOption('theme', existing);
         } catch (e) { /* ignore */ }
+        if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.terminal && window.SidebarManager.terminal.applyPanelTheme) {
+            window.SidebarManager.terminal.applyPanelTheme();
+        }
     }
 
     function applyProfileBackground(appearance) {
@@ -2154,6 +2178,7 @@
             setEditingProfile: function (name) { _editingProfile = name || null; },
             getEditingProfile: function () { return _editingProfile; },
             addToRecentDirectories: function (path) { addToRecentDirectories(path); },
+            showRecentContextMenu: function (dirPath, x, y, onOpen, onRemove) { showRecentContextMenu(dirPath, x, y, onOpen, onRemove); },
             reloadProfileSettings: function () {
                 loadBackgroundConfig();
                 loadStartupConfig();
@@ -2190,6 +2215,7 @@
     window.MonolothApp.openProfileSwitcher = window.MonolothApp.ui.openProfileSwitcher;
     window.MonolothApp.showStatus = window.MonolothApp.ui.showStatus;
     window.MonolothApp.addToRecentDirectories = window.MonolothApp.settings.addToRecentDirectories;
+    window.MonolothApp.showRecentContextMenu = window.MonolothApp.settings.showRecentContextMenu;
     window.MonolothApp.reloadProfileSettings = window.MonolothApp.settings.reloadProfileSettings;
     window.MonolothApp.reloadStartupConfig = window.MonolothApp.settings.reloadStartupConfig;
 
