@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.6] - 2026-07-17
+
+### Fixed
+- History no longer tracks CMD panel sessions; only main agent terminals are measured.
+- History labels sessions by agent/preset name (`opencode`, `claude`, …) instead of the resolved shell executable (`cmd` or full `.exe` paths).
+- Switching a tab's profile now ends the previous agent segment and starts a new one for the new agent.
+- History unit tests no longer write to the real AppData `history.json`.
+- Retention is purged when an active session is overwritten; invalid retention values are rejected at the IPC boundary.
+- Corrupt history timestamps no longer inflate "Time by Tool" totals; daily breakdowns use UTC day keys.
+- Parallel secondary commands are now tracked and killed when the main session ends, on window close, and before they are respawned.
+
 ## [2.2.5] - 2026-07-16
 
 ### Fixed
@@ -433,7 +444,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release.
 
-[Unreleased]: https://github.com/noahain/Monoloth/compare/v2.2.4...beta
+[Unreleased]: https://github.com/noahain/Monoloth/compare/v2.2.6...beta
+[2.2.6]: https://github.com/noahain/Monoloth/compare/v2.2.5...v2.2.6
+[2.2.5]: https://github.com/noahain/Monoloth/compare/v2.2.4...v2.2.5
 [2.2.4]: https://github.com/noahain/Monoloth/compare/v2.2.3...v2.2.4
 [2.2.3]: https://github.com/noahain/Monoloth/compare/v2.2.2...v2.2.3
 [2.2.2]: https://github.com/noahain/Monoloth/compare/v2.2.1...v2.2.2
