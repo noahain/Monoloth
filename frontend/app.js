@@ -1668,22 +1668,25 @@
 
         for (var i = 0; i < sessions.length; i++) {
             var s = sessions[i];
+            var startTs = parseISO(s.start_time);
+            if (startTs === null) continue;
+            var endTs = s.end_time ? parseISO(s.end_time) : (Date.now() / 1000);
+            if (s.end_time && endTs === null) continue;
+            var duration = Math.max(0, endTs - startTs);
+
             var tool = s.command || s.profile || 'Unknown';
             if (!toolMap[tool]) {
                 toolMap[tool] = {
                     totalSeconds: 0,
-                    daily: {} // date -> seconds
+                    daily: {}
                 };
             }
-            var startTs = parseISO(s.start_time);
-            var endTs = s.end_time ? parseISO(s.end_time) : Date.now() / 1000;
-            var duration = Math.max(0, endTs - startTs);
             toolMap[tool].totalSeconds += duration;
 
             var d = new Date(startTs * 1000);
-            var date = d.getFullYear() + '-' +
-                       String(d.getMonth() + 1).padStart(2, '0') + '-' +
-                       String(d.getDate()).padStart(2, '0');
+            var date = d.getUTCFullYear() + '-' +
+                       String(d.getUTCMonth() + 1).padStart(2, '0') + '-' +
+                       String(d.getUTCDate()).padStart(2, '0');
             if (!toolMap[tool].daily[date]) {
                 toolMap[tool].daily[date] = 0;
             }
@@ -1730,9 +1733,9 @@
     }
 
     function parseISO(iso) {
-        if (!iso) return 0;
+        if (!iso) return null;
         var t = new Date(iso).getTime();
-        if (isNaN(t)) return 0;
+        if (isNaN(t)) return null;
         return t / 1000;
     }
 

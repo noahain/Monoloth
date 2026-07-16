@@ -17,8 +17,12 @@ pub fn set_history_enabled(history: State<HistoryManager>, enabled: bool) {
 }
 
 #[tauri::command]
-pub fn set_history_retention(history: State<HistoryManager>, retention: String) {
+pub fn set_history_retention(history: State<HistoryManager>, retention: String) -> Result<(), String> {
+    if !crate::history::is_valid_retention(&retention) {
+        return Err(format!("Invalid retention: {}", retention));
+    }
     history.set_retention(&retention);
+    Ok(())
 }
 
 #[tauri::command]

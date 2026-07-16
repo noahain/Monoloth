@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use log::warn;
 
-fn history_path() -> PathBuf {
+fn default_history_path() -> PathBuf {
     crate::config::config_dir().join("history.json")
 }
 
@@ -39,6 +39,7 @@ impl Default for HistoryData {
 #[derive(Clone)]
 pub struct HistoryManager {
     inner: Arc<Mutex<HistoryInner>>,
+    path: PathBuf,
 }
 
 struct HistoryInner {
@@ -55,28 +56,24 @@ struct ActiveSession {
 
 impl HistoryManager {
     pub fn new() -> Self {
-        let path = history_path();
+        Self::new_with_path(default_history_path())
+    }
+
+    pub fn new_with_path(path: PathBuf) -> Self {
         let data = if path.exists() {
-            let loaded = load_json(&path);
-            let mgr = Self {
-                inner: Arc::new(Mutex::new(HistoryInner {
-                    data: loaded,
-                    active_sessions: HashMap::new(),
-                })),
-            };
-            let mut inner = mgr.inner.lock();
-            mgr.purge_inner(&mut inner);
-            save_json(&history_path(), &inner.data);
-            inner.data.clone()
+            let mut data = load_json(&path);
+            apply_retention(&mut data.sessions, &data.retention.clone());
+            save_json(&path, &data);
+            data
         } else {
             HistoryData::default()
         };
-
         Self {
             inner: Arc::new(Mutex::new(HistoryInner {
                 data,
                 active_sessions: HashMap::new(),
             })),
+            path,
         }
     }
 
@@ -94,7 +91,8 @@ impl HistoryManager {
                 end_time: Some(iso_now()),
                 directory: active.directory,
             });
-            save_json(&history_path(), &inner.data);
+            self.purge_inner(&mut inner);
+            save_json(&self.path, &inner.data);
         }
         inner.active_sessions.insert(session_id, ActiveSession {
             profile: profile.to_string(),
@@ -117,7 +115,8 @@ impl HistoryManager {
                 end_time: Some(iso_now()),
                 directory: active.directory,
             });
-            save_json(&history_path(), &inner.data);
+            self.purge_inner(&mut inner);
+            save_json(&self.path, &inner.data);
         }
         inner.active_sessions.insert(session_id.to_string(), ActiveSession {
             profile: profile.to_string(),
@@ -139,7 +138,7 @@ impl HistoryManager {
                 directory: active.directory,
             });
             self.purge_inner(&mut inner);
-            save_json(&history_path(), &inner.data);
+            save_json(&self.path, &inner.data);
         }
     }
 
@@ -154,7 +153,7 @@ impl HistoryManager {
                 directory: active.directory,
             });
             self.purge_inner(&mut inner);
-            save_json(&history_path(), &inner.data);
+            save_json(&self.path, &inner.data);
         }
     }
 
@@ -178,7 +177,7 @@ impl HistoryManager {
         }
         if !keys.is_empty() {
             self.purge_inner(&mut inner);
-            save_json(&history_path(), &inner.data);
+            save_json(&self.path, &inner.data);
         }
     }
 
@@ -202,7 +201,7 @@ impl HistoryManager {
         }
         if !keys.is_empty() {
             self.purge_inner(&mut inner);
-            save_json(&history_path(), &inner.data);
+            save_json(&self.path, &inner.data);
         }
     }
 
@@ -249,21 +248,28 @@ impl HistoryManager {
                 });
             }
         }
-        save_json(&history_path(), &inner.data);
+        save_json(&self.path, &inner.data);
     }
 
     pub fn set_retention(&self, retention: &str) {
         let mut inner = self.inner.lock();
         inner.data.retention = retention.to_string();
         self.purge_inner(&mut inner);
-        save_json(&history_path(), &inner.data);
+        save_json(&self.path, &inner.data);
     }
 
     pub fn clear_history(&self) {
         let mut inner = self.inner.lock();
         inner.data.sessions.clear();
         inner.active_sessions.clear();
-        save_json(&history_path(), &inner.data);
+        save_json(&self.path, &inner.data);
+    }
+
+    #[cfg(test)]
+    pub fn inject_session_for_test(&self, entry: SessionEntry) {
+        let mut inner = self.inner.lock();
+        inner.data.sessions.push(entry);
+        save_json(&self.path, &inner.data);
     }
 }
 
@@ -277,6 +283,10 @@ fn epoch_seconds() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+pub fn is_valid_retention(retention: &str) -> bool {
+    matches!(retention, "7d" | "30d" | "forever")
 }
 
 fn retention_days(retention: &str) -> Option<i64> {
@@ -408,9 +418,22 @@ fn is_leap(year: i64) -> bool {
 mod tests {
     use super::*;
 
+    fn test_mgr() -> (HistoryManager, PathBuf) {
+        let dir = std::env::temp_dir().join(format!(
+            "monoloth_hist_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("history.json");
+        (HistoryManager::new_with_path(path), dir)
+    }
+
     #[test]
     fn parse_iso_rejects_multibyte_input_without_panic() {
-        // 3 multibyte chars at the start; byte 4 would land mid-codepoint.
         let multibyte = "ééé-12-12T12:00:00Z";
         assert!(parse_iso_to_epoch(multibyte).is_err());
     }
@@ -431,7 +454,6 @@ mod tests {
 
     #[test]
     fn parse_iso_rejects_pre_1970() {
-        // Year < 1970 must reject because the for-loop subtraction assumes >= 1970.
         assert!(parse_iso_to_epoch("1969-12-31T23:59:59Z").is_err());
     }
 
@@ -440,18 +462,14 @@ mod tests {
         assert_eq!(retention_days("7d"), Some(7));
         assert_eq!(retention_days("30d"), Some(30));
         assert_eq!(retention_days("100d"), Some(100));
-        // Beyond the 100-year cap the value is treated as invalid (no retention).
         assert_eq!(retention_days("100000d"), None);
         assert_eq!(retention_days("0d"), None);
-        // No trailing 'd' or empty body is not parseable.
         assert_eq!(retention_days("d"), None);
         assert_eq!(retention_days("forever"), None);
     }
 
     #[test]
     fn apply_retention_handles_huge_days_without_overflow() {
-        // A huge retention that would overflow i64 epoch when multiplied by 86400
-        // must be silently dropped (no panic, no negative cutoff).
         let mut sessions = vec![SessionEntry {
             profile: "p".into(),
             command: "c".into(),
@@ -461,73 +479,6 @@ mod tests {
         }];
         apply_retention(&mut sessions, "9999999999d");
         assert_eq!(sessions.len(), 1, "unparseable retention must not drop sessions");
-    }
-
-    #[test]
-    fn session_end_all_main_tabs_ends_only_main_tab_prefixed_sessions() {
-        let mgr = HistoryManager::new();
-        // Start sessions with unique directories so we can identify them after ending.
-        mgr.session_start_with_id("main-tab-1", "p", "c1", "/dir-main-tab-1");
-        mgr.session_start_with_id("main-tab-2", "p", "c2", "/dir-main-tab-2");
-        mgr.session_start_with_id("panel-tab-1", "p", "c3", "/dir-panel-tab-1");
-        mgr.session_start_with_id("main", "p", "c4", "/dir-main");
-
-        mgr.session_end_all_main_tabs();
-
-        let data = mgr.get_data();
-        // The two main-tab-* sessions should have ended (have end_time).
-        let main_tab_ended: Vec<_> = data.sessions.iter()
-            .filter(|s| s.directory == "/dir-main-tab-1" || s.directory == "/dir-main-tab-2")
-            .collect();
-        assert_eq!(main_tab_ended.len(), 2, "both main-tab-* sessions should have ended");
-        assert!(main_tab_ended.iter().all(|s| s.end_time.is_some()), "main-tab-* sessions must have end_time");
-
-        // The "main" and panel-tab-1 sessions should NOT have ended yet.
-        // Filter for end_time to exclude active sessions (get_data() now includes them).
-        let main_ended: Vec<_> = data.sessions.iter()
-            .filter(|s| s.directory == "/dir-main" && s.end_time.is_some())
-            .collect();
-        assert!(main_ended.is_empty(), "\"main\" session should NOT be ended by session_end_all_main_tabs");
-
-        let panel_ended: Vec<_> = data.sessions.iter()
-            .filter(|s| s.directory == "/dir-panel-tab-1" && s.end_time.is_some())
-            .collect();
-        assert!(panel_ended.is_empty(), "panel-tab-* sessions should NOT be ended by session_end_all_main_tabs");
-    }
-
-    #[test]
-    fn session_start_overwrite_persists_to_disk() {
-        let mgr = HistoryManager::new();
-        mgr.session_start("p1", "c1", "/dir-overwrite-test-a");
-        mgr.session_start("p2", "c2", "/dir-overwrite-test-b");
-        drop(mgr);
-
-        let mgr2 = HistoryManager::new();
-        let data = mgr2.get_data();
-        let a_found = data.sessions.iter().any(|s| s.directory == "/dir-overwrite-test-a");
-        assert!(a_found, "overwritten session must persist to disk across restart");
-    }
-
-    #[test]
-    fn set_enabled_false_flushes_active_sessions() {
-        let mgr = HistoryManager::new();
-        mgr.session_start("p1", "c1", "/dir-flush-test");
-        mgr.set_enabled(false);
-
-        let data = mgr.get_data();
-        let found = data.sessions.iter().any(|s| s.directory == "/dir-flush-test");
-        assert!(found, "active session must be flushed to data.sessions when disabled");
-        assert!(!data.enabled, "history should be disabled");
-    }
-
-    #[test]
-    fn get_data_includes_active_sessions() {
-        let mgr = HistoryManager::new();
-        mgr.session_start("p1", "c1", "/dir-active-test");
-
-        let data = mgr.get_data();
-        let found = data.sessions.iter().any(|s| s.directory == "/dir-active-test");
-        assert!(found, "active session must appear in get_data() result");
     }
 
     #[test]
@@ -544,8 +495,80 @@ mod tests {
     }
 
     #[test]
+    fn session_end_all_main_tabs_ends_only_main_tab_prefixed_sessions() {
+        let (mgr, dir) = test_mgr();
+        mgr.session_start_with_id("main-tab-1", "p", "c1", "/dir-main-tab-1");
+        mgr.session_start_with_id("main-tab-2", "p", "c2", "/dir-main-tab-2");
+        mgr.session_start_with_id("panel-tab-1", "p", "c3", "/dir-panel-tab-1");
+        mgr.session_start_with_id("main", "p", "c4", "/dir-main");
+
+        mgr.session_end_all_main_tabs();
+
+        let data = mgr.get_data();
+        let main_tab_ended: Vec<_> = data.sessions.iter()
+            .filter(|s| s.directory == "/dir-main-tab-1" || s.directory == "/dir-main-tab-2")
+            .collect();
+        assert_eq!(main_tab_ended.len(), 2, "both main-tab-* sessions should have ended");
+        assert!(main_tab_ended.iter().all(|s| s.end_time.is_some()), "main-tab-* sessions must have end_time");
+
+        let main_ended: Vec<_> = data.sessions.iter()
+            .filter(|s| s.directory == "/dir-main" && s.end_time.is_some())
+            .collect();
+        assert!(main_ended.is_empty(), "\"main\" session should NOT be ended by session_end_all_main_tabs");
+
+        let panel_ended: Vec<_> = data.sessions.iter()
+            .filter(|s| s.directory == "/dir-panel-tab-1" && s.end_time.is_some())
+            .collect();
+        assert!(panel_ended.is_empty(), "panel-tab-* sessions should NOT be ended by session_end_all_main_tabs");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn session_start_overwrite_persists_to_disk() {
+        let (mgr, dir) = test_mgr();
+        let path = dir.join("history.json");
+        mgr.session_start("p1", "c1", "/dir-overwrite-test-a");
+        mgr.session_start("p2", "c2", "/dir-overwrite-test-b");
+        drop(mgr);
+
+        let mgr2 = HistoryManager::new_with_path(path);
+        let data = mgr2.get_data();
+        let a_found = data.sessions.iter().any(|s| s.directory == "/dir-overwrite-test-a");
+        assert!(a_found, "overwritten session must persist to disk across restart");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn set_enabled_false_flushes_active_sessions() {
+        let (mgr, dir) = test_mgr();
+        mgr.session_start("p1", "c1", "/dir-flush-test");
+        mgr.set_enabled(false);
+
+        let data = mgr.get_data();
+        let found = data.sessions.iter().any(|s| s.directory == "/dir-flush-test");
+        assert!(found, "active session must be flushed to data.sessions when disabled");
+        assert!(!data.enabled, "history should be disabled");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn get_data_includes_active_sessions() {
+        let (mgr, dir) = test_mgr();
+        mgr.session_start("p1", "c1", "/dir-active-test");
+
+        let data = mgr.get_data();
+        let found = data.sessions.iter().any(|s| s.directory == "/dir-active-test");
+        assert!(found, "active session must appear in get_data() result");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn session_end_all_panel_tabs_includes_original_panel() {
-        let mgr = HistoryManager::new();
+        let (mgr, dir) = test_mgr();
         mgr.session_start_with_id("panel", "p", "c", "/dir-panel-original");
         mgr.session_start_with_id("panel-tab-1", "p", "c", "/dir-panel-tab-1");
         mgr.session_start_with_id("main-tab-1", "p", "c", "/dir-panel-test-main-tab-1");
@@ -560,6 +583,56 @@ mod tests {
         assert!(panel_ended, "original 'panel' session must be ended");
         assert!(panel_tab_ended, "'panel-tab-1' session must be ended");
         assert!(!main_tab_ended, "main-tab-1 session must NOT be ended by session_end_all_panel_tabs");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_history_uses_isolated_path_not_appdata() {
+        let (mgr, dir) = test_mgr();
+        let path = dir.join("history.json");
+        mgr.session_start("p", "opencode", "/isolated-dir-marker");
+        mgr.session_end();
+
+        assert!(path.exists(), "history must be written to the injected path");
+        let raw = std::fs::read_to_string(&path).unwrap();
+        assert!(raw.contains("/isolated-dir-marker"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn session_start_overwrite_applies_retention() {
+        let (mgr, dir) = test_mgr();
+        mgr.set_retention("7d");
+
+        mgr.inject_session_for_test(SessionEntry {
+            profile: "p".into(),
+            command: "old".into(),
+            start_time: "2000-01-01T00:00:00Z".into(),
+            end_time: Some("2000-01-01T01:00:00Z".into()),
+            directory: "/ancient".into(),
+        });
+
+        mgr.session_start("p", "new", "/now");
+        mgr.session_start("p", "newer", "/now2");
+
+        let data = mgr.get_data();
+        assert!(
+            !data.sessions.iter().any(|s| s.directory == "/ancient"),
+            "overwrite must purge expired sessions"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn retention_validator_matches_ui() {
+        assert!(is_valid_retention("7d"));
+        assert!(is_valid_retention("30d"));
+        assert!(is_valid_retention("forever"));
+        assert!(!is_valid_retention("90d"));
+        assert!(!is_valid_retention(""));
+        assert!(!is_valid_retention("100d"));
     }
 }
 

@@ -886,7 +886,7 @@
         tab.term.writeln('');
         var cols = tab.term.cols || 80;
         var rows = tab.term.rows || 24;
-        window.monolithApi.start_terminal(tab.sessionId, tab.dir, false, null, cols, rows, tab.profile)
+        window.monolithApi.start_terminal(tab.sessionId, tab.dir, true, null, cols, rows, tab.profile)
             .then(function (result) {
                 if (tab.closing || !_tabs.has(tab.id)) {
                     if (result && result.success && window.monolithApi) {

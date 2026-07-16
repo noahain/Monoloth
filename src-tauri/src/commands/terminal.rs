@@ -15,6 +15,10 @@ fn is_panel_session(session_id: &str) -> bool {
     session_id.starts_with("panel-") || session_id == "panel"
 }
 
+fn should_record_history(session_id: &str, record: bool) -> bool {
+    record && !is_panel_session(session_id)
+}
+
 struct StartupCommand {
     command: String,
     cmd_type: String,
@@ -28,24 +32,15 @@ struct SecondaryPlan {
 
 fn spawn_panel_session(
     pty: &PtyManager,
-    config: &AppConfig,
-    history: &HistoryManager,
     session_id: &str,
     directory: &str,
     shell: Option<&str>,
     cols: u16,
     rows: u16,
-    record: bool,
 ) -> Result<u64, String> {
     let (cmd, args) = resolve_panel_shell(shell)?;
     let args_str: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    let gen = pty.spawn(session_id, &cmd, &args_str, directory, cols, rows)?;
-
-    let active_profile = config.get_active_profile();
-    if record {
-        history.session_start_with_id(session_id, &active_profile, &format!("[Panel] {}", cmd), directory);
-    }
-    Ok(gen)
+    pty.spawn(session_id, &cmd, &args_str, directory, cols, rows)
 }
 
 fn resolve_startup_command(config: &AppConfig, profile_name: Option<&str>) -> StartupCommand {
@@ -154,20 +149,27 @@ fn run_post_commands(
     }
 }
 
+fn history_tool_label(startup_command: &str) -> String {
+    let trimmed = startup_command.trim();
+    if trimmed.is_empty() {
+        "unknown".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
 fn log_terminal_start(
     history: &HistoryManager,
     session_id: &str,
     active_profile: &str,
     startup_command: &str,
-    exe_or_display: &str,
-    cmd_type: &str,
     directory: &str,
 ) {
-    let display_command = if cmd_type == "custom" { startup_command } else { exe_or_display };
+    let display_command = history_tool_label(startup_command);
     if is_main_tab_session(session_id) {
-        history.session_start_with_id(session_id, active_profile, display_command, directory);
+        history.session_start_with_id(session_id, active_profile, &display_command, directory);
     } else {
-        history.session_start(active_profile, display_command, directory);
+        history.session_start(active_profile, &display_command, directory);
     }
 }
 
@@ -216,9 +218,7 @@ pub fn start_terminal(
 
     if is_panel {
         return spawn_panel_session(
-            &pty, &config, &history,
-            &session_id, &directory, shell.as_deref(),
-            cols, rows, record,
+            &pty, &session_id, &directory, shell.as_deref(), cols, rows,
         );
     }
 
@@ -248,10 +248,9 @@ pub fn start_terminal(
         config.save_cached_preset(&startup.command, &cmd, &args);
     }
 
-    if record {
+    if should_record_history(&session_id, record) {
         log_terminal_start(
-            &history, &session_id, &active_profile,
-            &startup.command, &cmd, &startup.cmd_type, &directory,
+            &history, &session_id, &active_profile, &startup.command, &directory,
         );
     }
 
@@ -1161,5 +1160,23 @@ mod tests {
 
         std::env::remove_var("OPENCODE_BIN_PATH");
         let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    #[test]
+    fn should_record_history_excludes_panels_even_when_record_true() {
+        assert!(!should_record_history("panel", true));
+        assert!(!should_record_history("panel-tab-1", true));
+        assert!(!should_record_history("panel-mtab-1-tab-2", true));
+        assert!(should_record_history("main", true));
+        assert!(should_record_history("main-tab-3", true));
+        assert!(!should_record_history("main", false));
+    }
+
+    #[test]
+    fn history_display_uses_preset_name_not_resolved_cmd() {
+        assert_eq!(history_tool_label("claude"), "claude");
+        assert_eq!(history_tool_label("opencode"), "opencode");
+        assert_eq!(history_tool_label("my-agent --flag"), "my-agent --flag");
+        assert_eq!(history_tool_label("  "), "unknown");
     }
 }
