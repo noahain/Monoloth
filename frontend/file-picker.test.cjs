@@ -63,3 +63,12 @@ test('formatDate handles backend relative strings and ISO', () => {
     const m = src.match(/function formatDate\([^)]*\)\s*{[\s\S]*?\n\s{4}\}/);
     assert.ok(m, 'formatDate function must exist');
 });
+
+test('custom file picker is stacked above the new tab card', () => {
+    const css = fs.readFileSync('frontend/style.css', 'utf8');
+    const filePickerZIndex = Number(css.match(/\.file-picker\s*{[^}]*z-index:\s*(\d+)/s)?.[1]);
+    const newTabCardZIndex = Number(css.match(/\.new-tab-card-overlay\s*{[^}]*z-index:\s*(\d+)/s)?.[1]);
+
+    assert.ok(filePickerZIndex > newTabCardZIndex,
+        `file picker z-index (${filePickerZIndex}) must exceed new tab card z-index (${newTabCardZIndex})`);
+});

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Windows: CLI preset resolution now delegates to `cmd /C` instead of hard-coding a single path from `where` output, preventing architecture-mismatch errors when multiple installations exist.
+- The custom file picker now appears above the new-tab card when choosing a project directory for a new tab.
 
 ### Changed
 - Built-in CLI preset resolution is cached persistently after the first successful spawn, skipping `where` and npm probing on subsequent launches and eliminating the discovery delay.

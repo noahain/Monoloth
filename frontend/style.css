@@ -4518,7 +4518,7 @@ body.adaptive-light .profile-selector-btn:hover {
     left: 0;
     width: 100vw;
     height: 100vh;
-    z-index: 11000;
+    z-index: 15001;
     align-items: center;
     justify-content: center;
 }
