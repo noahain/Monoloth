@@ -136,7 +136,7 @@ const GLOBAL_KEYS: &[&str] = &[
     "use_custom_titlebar", "window_x", "window_y",
     "cmdPanelHeight", "panelShell", "cmdPanelOpen", "sidebar_config",
     "recent_directories", "confirm_dialog_prefs",
-    "tabBarPosition",
+    "tabBarPosition", "preset_cache",
 ];
 
 fn is_global_key(key: &str) -> bool {
@@ -449,6 +449,50 @@ impl AppConfig {
     pub fn set_window_maximized(&self, max: bool) {
         self.set("window_maximized", Value::Bool(max));
     }
+
+    pub fn get_cached_preset(&self, preset: &str) -> Option<(String, Vec<String>)> {
+        let cache = self.get("preset_cache");
+        let entry = cache.as_object()?.get(preset)?;
+        let command = entry.get("command")?.as_str()?.to_string();
+        if command.is_empty() {
+            return None;
+        }
+        let args = entry
+            .get("args")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|a| a.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+        Some((command, args))
+    }
+
+    pub fn save_cached_preset(&self, preset: &str, command: &str, args: &[String]) {
+        let mut cache = match self.get("preset_cache") {
+            Value::Object(map) => map,
+            _ => Map::new(),
+        };
+        cache.insert(
+            preset.to_string(),
+            serde_json::json!({
+                "command": command,
+                "args": args,
+            }),
+        );
+        self.set("preset_cache", Value::Object(cache));
+    }
+
+    pub fn clear_cached_preset(&self, preset: &str) {
+        let mut cache = match self.get("preset_cache") {
+            Value::Object(map) => map,
+            _ => return,
+        };
+        if cache.remove(preset).is_some() {
+            self.set("preset_cache", Value::Object(cache));
+        }
+    }
 }
 
 #[cfg(test)]
@@ -665,6 +709,40 @@ mod tests {
         assert_eq!(obj.get("settings").and_then(|v| v.as_str()), Some("Ctrl+,"));
         assert_eq!(obj.get("back_to_launcher").and_then(|v| v.as_str()), Some("Ctrl+Shift+W"));
 
+        cleanup_test_env(&test_dir);
+    }
+
+    #[test]
+    fn preset_cache_roundtrip_and_clear() {
+        let (test_dir, _lock) = setup_test_env();
+        let config = AppConfig::new();
+        assert!(config.get_cached_preset("opencode").is_none());
+
+        config.save_cached_preset(
+            "opencode",
+            "cmd",
+            &["/C".to_string(), "opencode".to_string()],
+        );
+        let (cmd, args) = config.get_cached_preset("opencode").unwrap();
+        assert_eq!(cmd, "cmd");
+        assert_eq!(args, vec!["/C".to_string(), "opencode".to_string()]);
+
+        config.clear_cached_preset("opencode");
+        assert!(config.get_cached_preset("opencode").is_none());
+        cleanup_test_env(&test_dir);
+    }
+
+    #[test]
+    fn preset_cache_is_global_across_profiles() {
+        let (test_dir, _lock) = setup_test_env();
+        let config = AppConfig::new();
+        config.create_profile("ProfileA").unwrap();
+        config.switch_profile("ProfileA").unwrap();
+        config.save_cached_preset("claude", "claude", &[]);
+        config.switch_profile("Default").unwrap();
+        let (cmd, args) = config.get_cached_preset("claude").unwrap();
+        assert_eq!(cmd, "claude");
+        assert!(args.is_empty());
         cleanup_test_env(&test_dir);
     }
 }

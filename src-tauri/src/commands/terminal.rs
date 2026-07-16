@@ -171,6 +171,23 @@ fn log_terminal_start(
     }
 }
 
+fn resolve_preset_with_cache(
+    config: &AppConfig,
+    startup: &StartupCommand,
+) -> Result<(String, Vec<String>, bool), String> {
+    if startup.cmd_type == "custom" {
+        let resolved = resolve_custom_command(&startup.command)?;
+        return Ok((resolved.0, resolved.1, false));
+    }
+
+    if let Some((command, args)) = config.get_cached_preset(&startup.command) {
+        return Ok((command, args, true));
+    }
+
+    let resolved = resolve_executable(startup)?;
+    Ok((resolved.0, resolved.1, false))
+}
+
 #[tauri::command]
 pub fn start_terminal(
     pty: State<PtyManager>,
@@ -200,13 +217,27 @@ pub fn start_terminal(
     let active_profile = resolve_active_profile(&config, profile_name.as_deref());
     let panel_shell = config.get("panelShell").as_str().unwrap_or("cmd").to_string();
 
-    let (cmd, args): (String, Vec<String>) = resolve_executable(&startup)?;
+    let (cmd, args, used_cache) = resolve_preset_with_cache(&config, &startup)?;
 
     let plan = build_secondary_plan(&config, &session_id, &panel_shell);
     run_before_commands(&plan.before, &directory);
 
     let args_str: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    let gen = pty.spawn(&session_id, &cmd, &args_str, &directory, cols, rows)?;
+    let (cmd, args, gen) = match pty.spawn(&session_id, &cmd, &args_str, &directory, cols, rows) {
+        Ok(gen) => (cmd, args, gen),
+        Err(_) if used_cache => {
+            config.clear_cached_preset(&startup.command);
+            let (cmd2, args2) = resolve_executable(&startup)?;
+            let args2_str: Vec<&str> = args2.iter().map(|s| s.as_str()).collect();
+            let gen = pty.spawn(&session_id, &cmd2, &args2_str, &directory, cols, rows)?;
+            (cmd2, args2, gen)
+        }
+        Err(e) => return Err(e),
+    };
+
+    if startup.cmd_type != "custom" {
+        config.save_cached_preset(&startup.command, &cmd, &args);
+    }
 
     if record {
         log_terminal_start(
@@ -440,6 +471,10 @@ fn pick_windows_executable(where_output: &str) -> Option<String> {
         .cloned()
 }
 
+fn resolve_windows_where_command(where_output: &str) -> Option<String> {
+    pick_windows_executable(where_output).map(|_| "opencode".to_string())
+}
+
 /// Build a `Command` that never allocates/flashes a console window.
 ///
 /// In release builds the app runs under the `windows` subsystem (no console).
@@ -473,8 +508,8 @@ fn find_opencode() -> Result<String, String> {
         if let Ok(output) = no_window_command("where").arg("opencode").output() {
             if output.status.success() {
                 let path = String::from_utf8_lossy(&output.stdout);
-                if let Some(best) = pick_windows_executable(&path) {
-                    return Ok(best);
+                if let Some(command) = resolve_windows_where_command(&path) {
+                    return Ok(command);
                 }
             }
         }
@@ -912,6 +947,37 @@ mod tests {
     }
 
     #[test]
+    fn pick_exec_preserves_path_precedence_between_installations() {
+        let output = concat!(
+            "C:\\first\\opencode\r\n",
+            "C:\\first\\opencode.exe\r\n",
+            "C:\\second\\opencode.cmd\r\n",
+        );
+        let picked = pick_windows_executable(output).unwrap();
+        assert_eq!(picked, "C:\\first\\opencode.exe");
+    }
+
+    #[test]
+    fn pick_exec_uses_same_installation_cmd_sibling() {
+        let output = concat!(
+            "C:\\first\\opencode\r\n",
+            "C:\\first\\opencode.cmd\r\n",
+            "C:\\second\\opencode.exe\r\n",
+        );
+        let picked = pick_windows_executable(output).unwrap();
+        assert_eq!(picked, "C:\\first\\opencode.cmd");
+    }
+
+    #[test]
+    fn where_match_delegates_final_resolution_to_cmd() {
+        let output = concat!(
+            "C:\\first\\opencode.exe\r\n",
+            "C:\\second\\opencode.cmd\r\n",
+        );
+        assert_eq!(resolve_windows_where_command(output), Some("opencode".to_string()));
+    }
+
+    #[test]
     fn pick_exec_falls_back_to_first_when_no_exec_ext() {
         let output = "C:\\some\\opencode\r\n";
         let picked = pick_windows_executable(output).unwrap();
@@ -1021,5 +1087,86 @@ mod tests {
     fn resolve_custom_only_whitespace_returns_err() {
         let result = resolve_custom_command("   ");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn resolve_preset_with_cache_hits_saved_entry() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let test_dir = std::env::temp_dir().join("monoloth_test_preset_cache_hit");
+        let _ = std::fs::remove_dir_all(&test_dir);
+        std::fs::create_dir_all(&test_dir).unwrap();
+        std::env::set_var("APPDATA", test_dir.to_str().unwrap());
+
+        let config = AppConfig::new();
+        config.save_cached_preset(
+            "opencode",
+            "cmd",
+            &["/C".to_string(), "opencode".to_string()],
+        );
+        let startup = StartupCommand {
+            command: "opencode".into(),
+            cmd_type: "preset".into(),
+        };
+        let (cmd, args, used_cache) = resolve_preset_with_cache(&config, &startup).unwrap();
+        assert!(used_cache);
+        assert_eq!(cmd, "cmd");
+        assert_eq!(args, vec!["/C".to_string(), "opencode".to_string()]);
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    #[test]
+    fn resolve_preset_with_cache_skips_custom_commands() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let test_dir = std::env::temp_dir().join("monoloth_test_preset_cache_custom");
+        let _ = std::fs::remove_dir_all(&test_dir);
+        std::fs::create_dir_all(&test_dir).unwrap();
+        std::env::set_var("APPDATA", test_dir.to_str().unwrap());
+
+        let config = AppConfig::new();
+        config.save_cached_preset("claude", "should-not-use", &[]);
+        let startup = StartupCommand {
+            command: "claude".into(),
+            cmd_type: "custom".into(),
+        };
+        let (cmd, args, used_cache) = resolve_preset_with_cache(&config, &startup).unwrap();
+        assert!(!used_cache);
+        #[cfg(windows)]
+        {
+            assert_eq!(cmd, "cmd");
+            assert_eq!(args, vec!["/C".to_string(), "claude".to_string()]);
+        }
+        #[cfg(not(windows))]
+        {
+            assert_eq!(cmd, "claude");
+            assert!(args.is_empty());
+        }
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    #[test]
+    fn resolve_preset_with_cache_miss_does_not_write_until_spawn_succeeds() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let test_dir = std::env::temp_dir().join("monoloth_test_preset_cache_miss");
+        let _ = std::fs::remove_dir_all(&test_dir);
+        std::fs::create_dir_all(&test_dir).unwrap();
+        std::env::set_var("APPDATA", test_dir.to_str().unwrap());
+        std::env::set_var("OPENCODE_BIN_PATH", r"C:\monoloth_cache_test\opencode.exe");
+
+        let config = AppConfig::new();
+        assert!(config.get_cached_preset("opencode").is_none());
+        let startup = StartupCommand {
+            command: "opencode".into(),
+            cmd_type: "preset".into(),
+        };
+        let (cmd, args, used_cache) = resolve_preset_with_cache(&config, &startup).unwrap();
+        assert!(!used_cache);
+        assert_eq!(cmd, r"C:\monoloth_cache_test\opencode.exe");
+        assert!(args.is_empty());
+        assert!(config.get_cached_preset("opencode").is_none());
+
+        std::env::remove_var("OPENCODE_BIN_PATH");
+        let _ = std::fs::remove_dir_all(&test_dir);
     }
 }
