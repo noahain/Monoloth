@@ -7,12 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.5] - 2026-07-16
+
 ### Fixed
 - Windows: CLI preset resolution now delegates to `cmd /C` instead of hard-coding a single path from `where` output, preventing architecture-mismatch errors when multiple installations exist.
+- `OPENCODE_BIN_PATH` environment variable now overrides the cached preset path, ensuring the latest binary path is used.
 - The custom file picker now appears above the new-tab card when choosing a project directory for a new tab.
 
 ### Changed
 - Built-in CLI preset resolution is cached persistently after the first successful spawn, skipping `where` and npm probing on subsequent launches and eliminating the discovery delay.
+- Preset cache writes are now skipped when the value is unchanged, reducing unnecessary disk I/O.
 
 ## [2.2.4] - 2026-06-29
 
