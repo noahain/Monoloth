@@ -469,28 +469,43 @@ impl AppConfig {
         Some((command, args))
     }
 
-    pub fn save_cached_preset(&self, preset: &str, command: &str, args: &[String]) {
-        let mut cache = match self.get("preset_cache") {
-            Value::Object(map) => map,
-            _ => Map::new(),
-        };
-        cache.insert(
-            preset.to_string(),
-            serde_json::json!({
-                "command": command,
-                "args": args,
-            }),
-        );
-        self.set("preset_cache", Value::Object(cache));
+    pub fn save_cached_preset(&self, preset: &str, command: &str, args: &[String]) -> bool {
+        let mut inner = self.inner.lock();
+        let entry = serde_json::json!({
+            "command": command,
+            "args": args,
+        });
+        let existing = inner
+            .global
+            .get("preset_cache")
+            .and_then(|v| v.as_object())
+            .and_then(|cache| cache.get(preset));
+        if existing == Some(&entry) {
+            return false;
+        }
+        let cache = inner
+            .global
+            .entry("preset_cache".to_string())
+            .or_insert_with(|| Value::Object(Map::new()));
+        if let Value::Object(ref mut map) = cache {
+            map.insert(preset.to_string(), entry);
+        } else {
+            let mut map = Map::new();
+            map.insert(preset.to_string(), entry);
+            *cache = Value::Object(map);
+        }
+        save_json(&config_path(), &inner.global);
+        true
     }
 
     pub fn clear_cached_preset(&self, preset: &str) {
-        let mut cache = match self.get("preset_cache") {
-            Value::Object(map) => map,
+        let mut inner = self.inner.lock();
+        let cache = match inner.global.get_mut("preset_cache") {
+            Some(Value::Object(map)) => map,
             _ => return,
         };
         if cache.remove(preset).is_some() {
-            self.set("preset_cache", Value::Object(cache));
+            save_json(&config_path(), &inner.global);
         }
     }
 }
@@ -743,6 +758,41 @@ mod tests {
         let (cmd, args) = config.get_cached_preset("claude").unwrap();
         assert_eq!(cmd, "claude");
         assert!(args.is_empty());
+        cleanup_test_env(&test_dir);
+    }
+
+    #[test]
+    fn saving_unchanged_preset_cache_is_a_noop() {
+        let (test_dir, _lock) = setup_test_env();
+        let config = AppConfig::new();
+        let changed = config.save_cached_preset(
+            "opencode",
+            "cmd",
+            &["/C".to_string(), "opencode".to_string()],
+        );
+        assert!(changed);
+        let unchanged = config.save_cached_preset(
+            "opencode",
+            "cmd",
+            &["/C".to_string(), "opencode".to_string()],
+        );
+        assert!(!unchanged);
+        let (cmd, args) = config.get_cached_preset("opencode").unwrap();
+        assert_eq!(cmd, "cmd");
+        assert_eq!(args, vec!["/C".to_string(), "opencode".to_string()]);
+        cleanup_test_env(&test_dir);
+    }
+
+    #[test]
+    fn preset_cache_updates_preserve_other_entries() {
+        let (test_dir, _lock) = setup_test_env();
+        let config = AppConfig::new();
+        config.save_cached_preset("opencode", "cmd", &["/C".to_string(), "opencode".to_string()]);
+        config.save_cached_preset("claude", "claude", &[]);
+        let (cmd1, _) = config.get_cached_preset("opencode").unwrap();
+        assert_eq!(cmd1, "cmd");
+        let (cmd2, _) = config.get_cached_preset("claude").unwrap();
+        assert_eq!(cmd2, "claude");
         cleanup_test_env(&test_dir);
     }
 }

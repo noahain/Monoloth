@@ -180,11 +180,20 @@ fn resolve_preset_with_cache(
         return Ok((resolved.0, resolved.1, false));
     }
 
+    if startup.command == "opencode" {
+        if let Ok(p) = std::env::var("OPENCODE_BIN_PATH") {
+            if !p.trim().is_empty() {
+                let resolved = resolve_command("opencode")?;
+                return Ok((resolved.0, resolved.1, false));
+            }
+        }
+    }
+
     if let Some((command, args)) = config.get_cached_preset(&startup.command) {
         return Ok((command, args, true));
     }
 
-    let resolved = resolve_executable(startup)?;
+    let resolved = resolve_command(&startup.command)?;
     Ok((resolved.0, resolved.1, false))
 }
 
@@ -444,35 +453,11 @@ fn resolve_custom_command(cmd_line: &str) -> Result<(String, Vec<String>), Strin
     Ok((exe.to_string(), parts[1..].to_vec()))
 }
 
-/// Pick the best spawnable executable from `where`-style output (one path per line).
-///
-/// npm global installs create three sibling files: an extensionless POSIX shell
-/// script (`opencode`), plus `opencode.cmd` and `opencode.ps1`. `where` lists the
-/// extensionless file first, but Windows `CreateProcessW` cannot execute it and
-/// fails with "%1 is not a valid Win32 application" (os error 193). Prefer a line
-/// whose extension is in the PATHEXT-style executable set; fall back to the first line.
-fn pick_windows_executable(where_output: &str) -> Option<String> {
-    let lines: Vec<String> = where_output
-        .lines()
-        .map(|l| l.trim().to_string())
-        .filter(|l| !l.is_empty())
-        .collect();
-    if lines.is_empty() {
-        return None;
-    }
-    const EXEC_EXTS: [&str; 4] = [".cmd", ".exe", ".bat", ".com"];
-    lines
-        .iter()
-        .find(|l| {
-            let lower = l.to_ascii_lowercase();
-            EXEC_EXTS.iter().any(|ext| lower.ends_with(ext))
-        })
-        .or_else(|| lines.first())
-        .cloned()
-}
-
 fn resolve_windows_where_command(where_output: &str) -> Option<String> {
-    pick_windows_executable(where_output).map(|_| "opencode".to_string())
+    where_output
+        .lines()
+        .any(|l| !l.trim().is_empty())
+        .then(|| "opencode".to_string())
 }
 
 /// Build a `Command` that never allocates/flashes a console window.
@@ -928,46 +913,6 @@ mod tests {
         assert!(started.elapsed() < std::time::Duration::from_secs(2));
     }
 
-    // pick_windows_executable tests — the root-cause fix for the npm extensionless
-    // shell script. `where opencode` lists the extensionless POSIX script first;
-    // CreateProcessW can't run it (os error 193). We must prefer the .cmd/.exe sibling.
-
-    #[test]
-    fn pick_exec_prefers_cmd_over_extensionless() {
-        let output = "C:\\Users\\GamerZ\\AppData\\Roaming\\npm\\opencode\r\nC:\\Users\\GamerZ\\AppData\\Roaming\\npm\\opencode.cmd\r\n";
-        let picked = pick_windows_executable(output).unwrap();
-        assert_eq!(picked, "C:\\Users\\GamerZ\\AppData\\Roaming\\npm\\opencode.cmd");
-    }
-
-    #[test]
-    fn pick_exec_prefers_exe() {
-        let output = "C:\\bin\\opencode\r\nC:\\bin\\opencode.exe\r\n";
-        let picked = pick_windows_executable(output).unwrap();
-        assert_eq!(picked, "C:\\bin\\opencode.exe");
-    }
-
-    #[test]
-    fn pick_exec_preserves_path_precedence_between_installations() {
-        let output = concat!(
-            "C:\\first\\opencode\r\n",
-            "C:\\first\\opencode.exe\r\n",
-            "C:\\second\\opencode.cmd\r\n",
-        );
-        let picked = pick_windows_executable(output).unwrap();
-        assert_eq!(picked, "C:\\first\\opencode.exe");
-    }
-
-    #[test]
-    fn pick_exec_uses_same_installation_cmd_sibling() {
-        let output = concat!(
-            "C:\\first\\opencode\r\n",
-            "C:\\first\\opencode.cmd\r\n",
-            "C:\\second\\opencode.exe\r\n",
-        );
-        let picked = pick_windows_executable(output).unwrap();
-        assert_eq!(picked, "C:\\first\\opencode.cmd");
-    }
-
     #[test]
     fn where_match_delegates_final_resolution_to_cmd() {
         let output = concat!(
@@ -978,21 +923,8 @@ mod tests {
     }
 
     #[test]
-    fn pick_exec_falls_back_to_first_when_no_exec_ext() {
-        let output = "C:\\some\\opencode\r\n";
-        let picked = pick_windows_executable(output).unwrap();
-        assert_eq!(picked, "C:\\some\\opencode");
-    }
-
-    #[test]
-    fn pick_exec_empty_returns_none() {
-        assert_eq!(pick_windows_executable("   \r\n  \r\n"), None);
-    }
-
-    #[test]
-    fn pick_exec_single_cmd_line() {
-        let picked = pick_windows_executable("C:\\bin\\opencode.cmd").unwrap();
-        assert_eq!(picked, "C:\\bin\\opencode.cmd");
+    fn resolve_windows_where_command_whitespace_returns_none() {
+        assert_eq!(resolve_windows_where_command("   \r\n  \r\n"), None);
     }
 
     // resolve_custom_command tests — mirror the v2.0.1 fix for resolve_command:
@@ -1165,6 +1097,67 @@ mod tests {
         assert_eq!(cmd, r"C:\monoloth_cache_test\opencode.exe");
         assert!(args.is_empty());
         assert!(config.get_cached_preset("opencode").is_none());
+
+        std::env::remove_var("OPENCODE_BIN_PATH");
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    #[test]
+    fn opencode_bin_path_overrides_cached_preset() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let test_dir = std::env::temp_dir().join("monoloth_test_opencode_bin_override");
+        let _ = std::fs::remove_dir_all(&test_dir);
+        std::fs::create_dir_all(&test_dir).unwrap();
+        std::env::set_var("APPDATA", test_dir.to_str().unwrap());
+
+        let config = AppConfig::new();
+        config.save_cached_preset(
+            "opencode",
+            "cmd",
+            &["/C".to_string(), "opencode".to_string()],
+        );
+
+        let sentinel = r"C:\monoloth_test_sentinel_overrides_cache\opencode.exe";
+        std::env::set_var("OPENCODE_BIN_PATH", sentinel);
+
+        let startup = StartupCommand {
+            command: "opencode".into(),
+            cmd_type: "preset".into(),
+        };
+        let (cmd, args, used_cache) = resolve_preset_with_cache(&config, &startup).unwrap();
+        assert!(!used_cache);
+        assert_eq!(cmd, sentinel);
+        assert!(args.is_empty());
+
+        std::env::remove_var("OPENCODE_BIN_PATH");
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    #[test]
+    fn whitespace_opencode_bin_path_uses_cached_preset() {
+        let _lock = TEST_LOCK.lock().unwrap();
+        let test_dir = std::env::temp_dir().join("monoloth_test_ws_bin_path");
+        let _ = std::fs::remove_dir_all(&test_dir);
+        std::fs::create_dir_all(&test_dir).unwrap();
+        std::env::set_var("APPDATA", test_dir.to_str().unwrap());
+
+        let config = AppConfig::new();
+        config.save_cached_preset(
+            "opencode",
+            "cmd",
+            &["/C".to_string(), "opencode".to_string()],
+        );
+
+        std::env::set_var("OPENCODE_BIN_PATH", "   ");
+
+        let startup = StartupCommand {
+            command: "opencode".into(),
+            cmd_type: "preset".into(),
+        };
+        let (cmd, args, used_cache) = resolve_preset_with_cache(&config, &startup).unwrap();
+        assert!(used_cache);
+        assert_eq!(cmd, "cmd");
+        assert_eq!(args, vec!["/C".to_string(), "opencode".to_string()]);
 
         std::env::remove_var("OPENCODE_BIN_PATH");
         let _ = std::fs::remove_dir_all(&test_dir);
