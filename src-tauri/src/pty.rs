@@ -2,6 +2,7 @@ use parking_lot::Mutex;
 use portable_pty::{CommandBuilder, PtySize, PtySystem};
 use std::collections::HashMap;
 use std::io::Write;
+use std::process::Child;
 use std::sync::{Arc, OnceLock};
 use std::thread;
 use tauri::Emitter;
@@ -26,6 +27,7 @@ struct PtySession {
 #[derive(Clone)]
 pub struct PtyManager {
     sessions: Arc<Mutex<HashMap<String, PtySession>>>,
+    parallel_children: Arc<Mutex<HashMap<String, Child>>>,
     app_handle: Arc<OnceLock<tauri::AppHandle>>,
     session_generation: Arc<Mutex<HashMap<String, u64>>>,
 }
@@ -34,6 +36,7 @@ impl PtyManager {
     pub fn new() -> Self {
         Self {
             sessions: Arc::new(Mutex::new(HashMap::new())),
+            parallel_children: Arc::new(Mutex::new(HashMap::new())),
             app_handle: Arc::new(OnceLock::new()),
             session_generation: Arc::new(Mutex::new(HashMap::new())),
         }
@@ -246,6 +249,24 @@ impl PtyManager {
             // Do not join here: PTY reader backends can stay blocked briefly after kill.
             let _ = s.read_thread.take();
         }
+
+        if session_id == "main" {
+            self.kill_all_parallel();
+        }
+    }
+
+    pub fn track_parallel_child(&self, key: String, child: Child) {
+        let mut map = self.parallel_children.lock();
+        if let Some(mut prev) = map.insert(key, child) {
+            let _ = prev.kill();
+        }
+    }
+
+    pub fn kill_all_parallel(&self) {
+        let mut map = self.parallel_children.lock();
+        for (_, mut child) in map.drain() {
+            let _ = child.kill();
+        }
     }
 
     pub fn retire_session(&self, session_id: &str) {
@@ -275,6 +296,7 @@ impl PtyManager {
         for sid in all_sessions {
             self.terminate(&sid);
         }
+        self.kill_all_parallel();
     }
 
     pub fn terminate_by_prefix(&self, prefix: &str) {

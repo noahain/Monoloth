@@ -129,10 +129,14 @@ fn run_post_commands(
     if plan.parallel.is_empty() && plan.hidden.is_empty() {
         return;
     }
+    pty.kill_all_parallel();
     pty.terminate_by_prefix("hidden-");
-    for (_idx, cmd_str) in &plan.parallel {
-        if let Err(e) = run_parallel_command(cmd_str.clone(), cwd.to_string(), panel_shell) {
-            warn!("Parallel command failed: {}", e);
+    for (idx, cmd_str) in &plan.parallel {
+        match run_parallel_command(cmd_str.clone(), cwd.to_string(), panel_shell) {
+            Ok(child) => {
+                pty.track_parallel_child(format!("parallel-main-{}", idx), child);
+            }
+            Err(e) => warn!("Parallel command failed: {}", e),
         }
     }
     for (idx, cmd_str) in &plan.hidden {
@@ -304,7 +308,11 @@ pub fn terminate_hidden(pty: State<PtyManager>) {
     pty.terminate_by_prefix("hidden-");
 }
 
-pub fn run_parallel_command(cmd: String, cwd: String, shell: &str) -> Result<bool, String> {
+pub fn run_parallel_command(
+    cmd: String,
+    cwd: String,
+    shell: &str,
+) -> Result<std::process::Child, String> {
     let mut command = shell_command(&cmd, shell);
     command.current_dir(&cwd);
     #[cfg(windows)]
@@ -315,8 +323,7 @@ pub fn run_parallel_command(cmd: String, cwd: String, shell: &str) -> Result<boo
     }
     command
         .spawn()
-        .map_err(|e| format!("Failed to spawn: {}", e))?;
-    Ok(true)
+        .map_err(|e| format!("Failed to spawn: {}", e))
 }
 
 /// Resolve the executable + args for the secondary CMD panel.
