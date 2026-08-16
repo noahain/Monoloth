@@ -1224,18 +1224,7 @@
         html += '<div class="adv-section"><h4>Custom Buttons</h4>';
         html += '<div class="sidebar-custom-buttons" id="sidebar-custom-buttons">';
         (cfg.customButtons || []).slice().sort(function (a, b) { return a.order - b.order; }).forEach(function (b) {
-            html += '<div class="sidebar-setting-row" data-id="' + b.id + '" data-type="custom">';
-            html += '<span class="sidebar-drag-handle" data-tooltip="Drag to reorder"><svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.4"/><circle cx="6" cy="2" r="1.4"/><circle cx="2" cy="7" r="1.4"/><circle cx="6" cy="7" r="1.4"/><circle cx="2" cy="12" r="1.4"/><circle cx="6" cy="12" r="1.4"/></svg></span>';
-            html += '<span class="sidebar-setting-icon">' + (ICONS[b.icon] || ICONS.terminal) + '</span>';
-            html += '<span class="sidebar-setting-name">' + escapeHtml(b.name) + '</span>';
-            html += '<span class="sidebar-setting-mode">' + escapeHtml(b.mode || 'background') + '</span>';
-            html += '<label class="sidebar-toggle-label">';
-            html += '<input type="checkbox"' + (b.visible ? ' checked' : '') + ' data-action="toggle-visibility" data-id="' + b.id + '" data-type="custom">';
-            html += '<span class="toggle-track"></span>';
-            html += '</label>';
-            html += '<button class="sidebar-edit-btn" data-action="edit-custom" data-id="' + b.id + '" data-tooltip="Edit">' + ICONS.edit + '</button>';
-            html += '<button class="sidebar-remove-btn" data-action="remove-custom" data-id="' + b.id + '" data-tooltip="Remove">&times;</button>';
-            html += '</div>';
+            html += '<div class="sidebar-setting-row" data-id="' + b.id + '" data-type="custom">' + customRowInner(b) + '</div>';
         });
         html += '</div>';
 
@@ -1269,17 +1258,11 @@
 
         html += '<div id="sidebar-status" class="appearance-status"></div>';
 
-        var _scroller = document.querySelector('.settings-content');
-        var _prevTop = _scroller ? _scroller.scrollTop : 0;
-        if (window.MonolothTooltip) {
-            window.MonolothTooltip.cleanup();
-        }
+        var _ctx = saveScroll();
+        if (window.MonolothTooltip) window.MonolothTooltip.cleanup();
         panel.innerHTML = html;
-
-        if (_scroller) _scroller.scrollTop = _prevTop;
-        if (window.MonolothTooltip) {
-            window.MonolothTooltip.scan(panel);
-        }
+        restoreScroll(_ctx);
+        if (window.MonolothTooltip) window.MonolothTooltip.scan(panel);
         wireSettingsEvents();
     }
 
@@ -1480,11 +1463,24 @@
         if (!container) return;
         var map = {};
         container.querySelectorAll('.sidebar-setting-row').forEach(function (r) { map[r.dataset.id] = r; });
-        arr.slice().sort(function (a, b) { return a.order - b.order; }).forEach(function (b) {
+        arr.forEach(function (b) {
             var row = map[b.id];
             if (row) container.appendChild(row);
         });
         if (window.MonolothTooltip) window.MonolothTooltip.scan(container);
+    }
+
+    function saveScroll() { var s = document.querySelector ? document.querySelector('.settings-content') : null; return { s: s, t: s ? s.scrollTop : 0 }; }
+    function restoreScroll(c) { if (c.s) c.s.scrollTop = c.t; }
+
+    function customRowInner(b) {
+        return '<span class="sidebar-drag-handle" data-tooltip="Drag to reorder"><svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.4"/><circle cx="6" cy="2" r="1.4"/><circle cx="2" cy="7" r="1.4"/><circle cx="6" cy="7" r="1.4"/><circle cx="2" cy="12" r="1.4"/><circle cx="6" cy="12" r="1.4"/></svg></span>' +
+            '<span class="sidebar-setting-icon">' + (ICONS[b.icon] || ICONS.terminal) + '</span>' +
+            '<span class="sidebar-setting-name">' + escapeHtml(b.name) + '</span>' +
+            '<span class="sidebar-setting-mode">' + escapeHtml(b.mode || 'background') + '</span>' +
+            '<label class="sidebar-toggle-label"><input type="checkbox"' + (b.visible ? ' checked' : '') + ' data-action="toggle-visibility" data-id="' + b.id + '" data-type="custom"><span class="toggle-track"></span></label>' +
+            '<button class="sidebar-edit-btn" data-action="edit-custom" data-id="' + b.id + '" data-tooltip="Edit">' + ICONS.edit + '</button>' +
+            '<button class="sidebar-remove-btn" data-action="remove-custom" data-id="' + b.id + '" data-tooltip="Remove">&times;</button>';
     }
 
     function patchCustomRow(row, btnData) {
@@ -1505,14 +1501,7 @@
         row.className = 'sidebar-setting-row';
         row.dataset.id = b.id;
         row.dataset.type = 'custom';
-        row.innerHTML =
-            '<span class="sidebar-drag-handle" data-tooltip="Drag to reorder"><svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.4"/><circle cx="6" cy="2" r="1.4"/><circle cx="2" cy="7" r="1.4"/><circle cx="6" cy="7" r="1.4"/><circle cx="2" cy="12" r="1.4"/><circle cx="6" cy="12" r="1.4"/></svg></span>' +
-            '<span class="sidebar-setting-icon">' + (ICONS[b.icon] || ICONS.terminal) + '</span>' +
-            '<span class="sidebar-setting-name">' + escapeHtml(b.name) + '</span>' +
-            '<span class="sidebar-setting-mode">' + escapeHtml(b.mode || 'background') + '</span>' +
-            '<label class="sidebar-toggle-label"><input type="checkbox"' + (b.visible ? ' checked' : '') + ' data-action="toggle-visibility" data-id="' + b.id + '" data-type="custom"><span class="toggle-track"></span></label>' +
-            '<button class="sidebar-edit-btn" data-action="edit-custom" data-id="' + b.id + '" data-tooltip="Edit">' + ICONS.edit + '</button>' +
-            '<button class="sidebar-remove-btn" data-action="remove-custom" data-id="' + b.id + '" data-tooltip="Remove">&times;</button>';
+        row.innerHTML = customRowInner(b);
         row.querySelector('input[data-action="toggle-visibility"]').addEventListener('change', function () {
             var visible = this.checked;
             (_sidebarConfig.customButtons || []).forEach(function (x) { if (x.id === b.id) x.visible = visible; });
@@ -1619,20 +1608,9 @@
             saveSidebarConfigImmediate();
             applySidebar();
             if (isEdit) {
-                var existingRow = document.querySelector('#sidebar-custom-buttons .sidebar-setting-row[data-id="' + id + '"]');
-                if (existingRow) {
-                    patchCustomRow(existingRow, btnData);
-                } else {
-                    renderSettingsTab();
-                }
+                patchCustomRow(document.querySelector('#sidebar-custom-buttons .sidebar-setting-row[data-id="' + id + '"]'), btnData);
             } else {
-                var container = document.getElementById('sidebar-custom-buttons');
-                if (container) {
-                    var newRow = createCustomRowElement(btnData);
-                    container.appendChild(newRow);
-                } else {
-                    renderSettingsTab();
-                }
+                document.getElementById('sidebar-custom-buttons').appendChild(createCustomRowElement(btnData));
             }
             editor.style.display = 'none';
             editor.innerHTML = '';

@@ -1254,11 +1254,18 @@
         return item;
     }
 
+    function saveScroll() { var s = document.querySelector ? document.querySelector('.settings-content') : null; return { s: s, t: s ? s.scrollTop : 0 }; }
+    function restoreScroll(c) { if (c.s) c.s.scrollTop = c.t; }
+    function findEmptyPlaceholder(list) {
+        if (list.querySelector) { var e = list.querySelector('.secondary-cmd-empty'); if (e) return e; }
+        for (var i = 0; i < list.children.length; i++) if (list.children[i].className === 'secondary-cmd-empty') return list.children[i];
+        return null;
+    }
+
     function renderSecondaryCommands() {
         var list = document.getElementById('secondary-commands-list');
         if (!list) return;
-        var scroller = (document.querySelector ? document.querySelector('.settings-content') : null);
-        var prevTop = scroller ? scroller.scrollTop : 0;
+        var ctx = saveScroll();
         list.innerHTML = '';
         if (window.MonolothTooltip) window.MonolothTooltip.cleanup();
         if (_secondaryCommands.length === 0) {
@@ -1266,14 +1273,14 @@
             empty.className = 'secondary-cmd-empty';
             empty.textContent = 'No secondary commands configured.';
             list.appendChild(empty);
-            if (scroller) scroller.scrollTop = prevTop;
+            restoreScroll(ctx);
             return;
         }
         _secondaryCommands.forEach(function (cmd) {
             list.appendChild(createSecondaryRow(cmd));
         });
         if (window.MonolothTooltip) window.MonolothTooltip.scan(list);
-        if (scroller) scroller.scrollTop = prevTop;
+        restoreScroll(ctx);
     }
 
     function saveSecondaryCommands() {
@@ -1294,13 +1301,10 @@
             _secondaryCommands.push(newCmd);
             var list = document.getElementById('secondary-commands-list');
             if (list) {
-                var empty = list.querySelector('.secondary-cmd-empty');
+                var empty = findEmptyPlaceholder(list);
                 if (empty) empty.remove();
                 list.appendChild(createSecondaryRow(newCmd));
                 if (window.MonolothTooltip) window.MonolothTooltip.scan(list);
-                var scroller = (document.querySelector ? document.querySelector('.settings-content') : null);
-                var prevTop = scroller ? scroller.scrollTop : 0;
-                if (scroller) scroller.scrollTop = prevTop;
             } else {
                 renderSecondaryCommands();
             }
@@ -1668,8 +1672,7 @@
     }
 
     function renderHistoryUI(data) {
-        var _scroller = (document.querySelector ? document.querySelector('.settings-content') : null);
-        var _prevTop = _scroller ? _scroller.scrollTop : 0;
+        var _ctx = saveScroll();
         // Toggle state
         var toggleContainer = document.getElementById('history-toggle');
         if (toggleContainer) {
@@ -1692,7 +1695,7 @@
 
         if (!data.sessions || data.sessions.length === 0) {
             rankingEl.innerHTML = '<span class="history-empty">No history data yet. Start a session to begin tracking.</span>';
-            if (_scroller) _scroller.scrollTop = _prevTop;
+            restoreScroll(_ctx);
             return;
         }
 
@@ -1764,7 +1767,7 @@
         }
 
         rankingEl.innerHTML = html;
-        if (_scroller) _scroller.scrollTop = _prevTop;
+        restoreScroll(_ctx);
     }
 
     function parseISO(iso) {

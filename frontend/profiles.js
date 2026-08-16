@@ -12,6 +12,9 @@
     var _profiles = [];
     var _activeProfile = 'Default';
 
+    function saveScroll() { var s = document.querySelector ? document.querySelector('.settings-content') : null; return { s: s, t: s ? s.scrollTop : 0 }; }
+    function restoreScroll(c) { if (c.s) c.s.scrollTop = c.t; }
+
     function loadProfiles() {
         if (!window.monolithApi) return Promise.resolve();
         return window.monolithApi.get_profiles()
@@ -35,8 +38,7 @@
     function renderProfilesList() {
         var list = document.getElementById('profiles-list');
         if (!list) return;
-        var _scroller = (document.querySelector ? document.querySelector('.settings-content') : null);
-        var _prevTop = _scroller ? _scroller.scrollTop : 0;
+        var _ctx = saveScroll();
         if (window.MonolothTooltip) {
             window.MonolothTooltip.cleanup();
         }
@@ -112,7 +114,7 @@
             item.appendChild(actions);
             list.appendChild(item);
         });
-        if (_scroller) _scroller.scrollTop = _prevTop;
+        restoreScroll(_ctx);
     }
 
     function switchToProfile(name) {
