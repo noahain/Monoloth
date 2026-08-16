@@ -35,15 +35,11 @@
         finishTop(result);
     }
 
-    if (idClose) {
-        idClose.addEventListener('click', function () { closeDialog(); });
+    function bindDialogClose(idClose, idEl) {
+        if (idClose) idClose.addEventListener('click', function () { closeDialog(); });
+        if (idEl) idEl.addEventListener('click', function (e) { if (e.target === idEl || e.target.classList.contains('id-overlay')) closeDialog(); });
     }
-
-    if (idEl) {
-        idEl.addEventListener('click', function (e) {
-            if (e.target === idEl || e.target.classList.contains('id-overlay')) closeDialog();
-        });
-    }
+    bindDialogClose(idClose, idEl);
 
     function wireFooterButtons() {
         if (!idFooter) return;

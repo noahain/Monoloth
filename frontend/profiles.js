@@ -253,21 +253,12 @@
         closeModal(profileSwitcher);
     }
 
-    if (profileSelectorBtn) {
-        profileSelectorBtn.addEventListener('click', openProfileSwitcher);
+    function bindSwitcherClose(profileSelectorBtn, psClose, profileSwitcher) {
+        if (profileSelectorBtn) profileSelectorBtn.addEventListener('click', openProfileSwitcher);
+        if (psClose) psClose.addEventListener('click', closeProfileSwitcher);
+        if (profileSwitcher) profileSwitcher.addEventListener('click', function (e) { if (e.target === profileSwitcher || e.target.classList.contains('ps-overlay')) closeProfileSwitcher(); });
     }
-
-    if (psClose) {
-        psClose.addEventListener('click', closeProfileSwitcher);
-    }
-
-    if (profileSwitcher) {
-        profileSwitcher.addEventListener('click', function (e) {
-            if (e.target === profileSwitcher || e.target.classList.contains('ps-overlay')) {
-                closeProfileSwitcher();
-            }
-        });
-    }
+    bindSwitcherClose(profileSelectorBtn, psClose, profileSwitcher);
 
     window.MonolithProfiles = {
         loadProfiles: loadProfiles,

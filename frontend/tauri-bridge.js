@@ -285,9 +285,7 @@
     };
 
     api.set_many_config = function (entries) {
-        return invoke('set_many_config', { entries: entries || {} })
-            .then(function () { return { success: true }; })
-            .catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('set_many_config', { entries: entries || {} });
     };
 
     api.clear_background_image = function () {
@@ -437,9 +435,7 @@
 
     // --- History ---
     api.get_history_data = function () {
-        return invoke('get_history_data', {}).then(function (data) {
-            return { success: true, data: data };
-        }).catch(function (err) { return { success: false, error: String(err) }; });
+        return callApi('get_history_data', {}, function (data) { return { data: data }; });
     };
 
     api.set_history_enabled = function (enabled) {

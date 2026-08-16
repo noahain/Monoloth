@@ -253,17 +253,11 @@
         }
     }
 
-    if (paletteInput) {
-        paletteInput.addEventListener('input', function () { filterPaletteCommands(this.value); });
+    function bindPaletteEvents(paletteInput, paletteEl) {
+        if (paletteInput) paletteInput.addEventListener('input', function () { filterPaletteCommands(this.value); });
+        if (paletteEl) paletteEl.addEventListener('click', function (e) { if (e.target === paletteEl || e.target.classList.contains('command-palette-overlay')) closePalette(); });
     }
-
-    if (paletteEl) {
-        paletteEl.addEventListener('click', function (e) {
-            if (e.target === paletteEl || e.target.classList.contains('command-palette-overlay')) {
-                closePalette();
-            }
-        });
-    }
+    bindPaletteEvents(paletteInput, paletteEl);
 
     window.MonolithPalette = {
         open: openPalette,
