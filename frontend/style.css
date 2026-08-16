@@ -2909,6 +2909,7 @@ body.adaptive-light .gradient-btn.active {
 
 .fp-file-list {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -4543,12 +4544,13 @@ body.cta-blur .fp-overlay {
 
 .fp-modal {
     position: relative;
-    width: 860px;
-    max-width: 94vw;
-    max-height: 88vh;
-    border-radius: 12px;
+    width: 720px;
+    max-width: 92vw;
+    height: 88vh;
+    border-radius: 16px;
     display: flex;
     flex-direction: column;
+    animation: settingsFadeIn 0.25s ease;
 }
 
 body.cta-blur .fp-modal {
@@ -4773,6 +4775,7 @@ body.cta-blur .fp-close:hover,
     display: flex;
     flex-direction: column;
     min-width: 0;
+    min-height: 0;
     overflow: hidden;
 }
 
@@ -4795,6 +4798,7 @@ body.cta-blur .fp-close:hover,
 
 .fp-file-list {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     scrollbar-width: none;
     -ms-overflow-style: none;

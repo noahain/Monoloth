@@ -5,8 +5,6 @@
     var openModal = UI.openModal;
     var closeModal = UI.closeModal;
 
-    // Status reporter is injected by app.js (which owns the showStatus helper
-    // and its timer state). Falls back to a no-op until wired.
     var _statusReporter = function () {};
     function setStatusReporter(fn) {
         if (typeof fn === 'function') _statusReporter = fn;
@@ -14,8 +12,6 @@
     function showStatus(id, message, isError) { _statusReporter(id, message, isError); }
 
     var _filePickerType = 'native';
-
-    // --- File Picker config (settings UI) ---
 
     function loadFilePickerConfig() {
         if (!window.monolithApi) return;
@@ -106,45 +102,81 @@
         return isWindows() ? '%USERPROFILE%' : '~';
     }
 
-    var QUICK_PATHS = {
-        desktop:   joinPath(getHomePath(), 'Desktop'),
-        documents: joinPath(getHomePath(), 'Documents'),
-        downloads: joinPath(getHomePath(), 'Downloads'),
-        pictures:  joinPath(getHomePath(), 'Pictures'),
-    };
-
-    var _lastDirectories = {};
-    var _pickerLastDirsLoaded = false;
-
-    function _loadPickerLastDirs() {
-        if (!window.monolithApi) return;
-        if (_pickerLastDirsLoaded) return;
-        _pickerLastDirsLoaded = true;
-        ['bg', 'choose'].forEach(function (id) {
-            window.monolithApi.get_picker_last_dir(id)
-                .then(function (res) {
-                    if (res && res.success && res.path) _lastDirectories[id] = res.path;
-                })
-                .catch(function () {});
-        });
+    var QUICK_NAMES = { desktop: 'Desktop', documents: 'Documents', downloads: 'Downloads', pictures: 'Pictures' };
+    function getQuickPath(kind) {
+        var name = QUICK_NAMES[kind];
+        return name ? joinPath(getHomePath(), name) : '';
+    }
+    function getQuickCandidates(kind) {
+        var primary = getQuickPath(kind);
+        if (!primary) return [];
+        if (kind === 'pictures' || kind === 'documents' || kind === 'desktop') {
+            var alt = joinPath(joinPath(getHomePath(), 'OneDrive'), QUICK_NAMES[kind]);
+            if (alt && alt !== primary) return [primary, alt];
+        }
+        return [primary];
     }
 
+    var _lastDirectories = {};
+    var _pickerLastDirsPromise = null;
+
+    function _normalizePickerId(id) {
+        return id === 'bg' ? 'bg' : 'choose';
+    }
+
+    function _loadPickerLastDirs() {
+        if (!window.monolithApi || typeof window.monolithApi.get_picker_last_dir !== 'function') return Promise.resolve();
+        if (_pickerLastDirsPromise) return _pickerLastDirsPromise;
+        var ids = ['bg', 'choose'];
+        var promises = ids.map(function (id) {
+            try {
+                var p = window.monolithApi.get_picker_last_dir(id);
+                if (!p || typeof p.then !== 'function') return Promise.resolve();
+                return p.then(function (res) {
+                    if (res && res.success && res.path) _lastDirectories[id] = res.path;
+                }).catch(function () {});
+            } catch (e) { return Promise.resolve(); }
+        });
+        _pickerLastDirsPromise = Promise.all(promises).then(function () { return; }).catch(function () {});
+        return _pickerLastDirsPromise;
+    }
+
+    // Eager preload so first open doesn't fall back to root
+    try { _loadPickerLastDirs().catch(function () {}); } catch (e) {}
+
     function _getLastDirectory(pickerId) {
-        return _lastDirectories[pickerId] || '';
+        var key = _normalizePickerId(pickerId || '');
+        return _lastDirectories[key] || '';
     }
 
     function _setLastDirectory(pickerId, path) {
         if (!path) return;
+        var key = _normalizePickerId(pickerId || '');
         var dir = path;
-        if (path.indexOf('\\') !== -1) {
-            dir = path.substring(0, path.lastIndexOf('\\'));
-        } else if (path.indexOf('/') !== -1) {
-            dir = path.substring(0, path.lastIndexOf('/'));
+        if (fpState.mode === 'folder') {
+            dir = path.replace(/[\\/]+$/, '');
+            if (!dir) dir = path;
+            // keep the folder itself
+        } else {
+            // file mode: strip filename
+            var lastSlash = dir.lastIndexOf('/');
+            var lastBack = dir.lastIndexOf('\\');
+            var idx = Math.max(lastSlash, lastBack);
+            if (idx > 0) {
+                dir = dir.substring(0, idx);
+                // keep drive root slash
+                if (/^[A-Za-z]:$/.test(dir)) dir += '\\';
+            } else if (idx === 0) {
+                dir = dir.charAt(0) === '\\' ? '\\' : '/';
+            } else {
+                // no separator, nothing to remember
+                return;
+            }
         }
         if (dir) {
-            _lastDirectories[pickerId] = dir;
+            _lastDirectories[key] = dir;
             if (window.monolithApi) {
-                window.monolithApi.set_picker_last_dir(pickerId, dir).catch(function () {});
+                window.monolithApi.set_picker_last_dir(key, dir).catch(function () {});
             }
         }
     }
@@ -164,7 +196,10 @@
                 _filePickerType = pickerType || 'native';
                 if (_filePickerType === 'native') {
                     var nativeMethod = opts.mode === 'file' ? 'native_pick_file' : 'native_pick_directory';
-                    return window.monolithApi[nativeMethod](opts.filter)
+                    var nativePromise = opts.mode === 'file'
+                        ? window.monolithApi[nativeMethod](opts.filter)
+                        : window.monolithApi[nativeMethod]();
+                    return nativePromise
                         .then(function (res) { return (res && res.success && res.path) ? res.path : null; })
                         .catch(function () { return null; });
                 }
@@ -178,8 +213,6 @@
         if (!window.monolithApi) { console.error('[Monoloth][Picker] monolithApi not available'); return Promise.reject(new Error('Picker not available')); }
         if (fpState.resolve) { return Promise.reject(new Error('Picker already open')); }
 
-        _loadPickerLastDirs();
-
         fpState.mode = opts.mode || 'file';
         fpState.history = [];
         fpState.historyIndex = -1;
@@ -189,13 +222,22 @@
         fpState._navToken++;
         fpState.pickerId = opts.id || '';
 
-        fpTitle.textContent = opts.title || (fpState.mode === 'folder' ? 'Choose Directory' : 'Choose File');
+        if (fpTitle) fpTitle.textContent = opts.title || (fpState.mode === 'folder' ? 'Choose Directory' : 'Choose File');
         buildFilterSelect(opts.filter || '*.*');
         openModal(fpEl);
-        fpOk.textContent = fpState.mode === 'folder' ? 'Select Folder' : 'Open';
+        if (fpOk) fpOk.textContent = fpState.mode === 'folder' ? 'Select Folder' : 'Open';
+        syncSidebarActive();
 
-        var startPath = opts.startPath || _getLastDirectory(fpState.pickerId) || (isWindows() ? 'C:\\' : '/');
-        navigateToPath(startPath);
+        function doStartNavigate() {
+            var startPath = opts.startPath || _getLastDirectory(fpState.pickerId) || (isWindows() ? 'C:\\' : '/');
+            navigateToPath(startPath);
+        }
+
+        if (opts.startPath) {
+            doStartNavigate();
+        } else {
+            _loadPickerLastDirs().then(doStartNavigate).catch(doStartNavigate);
+        }
 
         return new Promise(function (resolve, reject) {
             fpState.resolve = resolve;
@@ -221,10 +263,10 @@
         for (var i = 0; i < parts.length; i += 2) {
             var label = parts[i] || 'Files';
             var pattern = parts[i + 1] || '*.*';
-            var opt = document.createElement('option');
-            opt.value = pattern;
-            opt.textContent = label + ' (' + pattern + ')';
-            fpFilter.appendChild(opt);
+            var opt2 = document.createElement('option');
+            opt2.value = pattern;
+            opt2.textContent = label + ' (' + pattern + ')';
+            fpFilter.appendChild(opt2);
         }
         if (fpFilter.options.length > 0) {
             fpFilter.selectedIndex = 0;
@@ -242,6 +284,15 @@
         var val = fpFilter ? fpFilter.value : '*.*';
         fpState.filter = val;
         fpState.filterExts = val === '*.*' ? [] : val.split(';').map(function (p) { return p.trim().toLowerCase(); });
+    }
+
+    function rerenderCurrentFilter() {
+        var entries = fpState._listings[fpState.currentPath];
+        if (entries) {
+            renderEntries(entries);
+        } else if (fpState.currentPath) {
+            loadDirectory(fpState.currentPath, null, false);
+        }
     }
 
     function navigateToPath(path) {
@@ -273,33 +324,37 @@
         if (!absPath) return;
         if (token == null) token = ++fpState._navToken;
         if (token !== fpState._navToken) return;
-        fpState.currentPath = absPath;
-
-        if (fpState.historyIndex < fpState.history.length - 1) {
-            fpState.history = fpState.history.slice(0, fpState.historyIndex + 1);
-        }
-        fpState.history.push(absPath);
-        fpState.historyIndex = fpState.history.length - 1;
-        updateNavButtons();
-        loadDirectory(absPath, token);
+        loadDirectory(absPath, token, true);
     }
 
-    function loadDirectory(path, token) {
-        if (token == null) token = fpState._navToken;
+    function loadDirectory(path, token, isNewNavigation) {
+        var isNew = !!isNewNavigation;
+        if (token == null) token = ++fpState._navToken;
+        // token already incremented by caller for isNew, so don't double increment
         showLoading(true);
         window.monolithApi.list_directory(path).then(function (result) {
-            if (token !== fpState._navToken || path !== fpState.currentPath) return;
+            if (token !== fpState._navToken) return;
             showLoading(false);
             if (!result || !result.success) { console.warn('[Monoloth][Picker] list_directory failed'); showError('Access denied'); return; }
             fpState._listings[path] = result.entries;
+            if (isNew) {
+                if (fpState.historyIndex < fpState.history.length - 1) {
+                    fpState.history = fpState.history.slice(0, fpState.historyIndex + 1);
+                }
+                fpState.history.push(path);
+                fpState.historyIndex = fpState.history.length - 1;
+            }
+            fpState.currentPath = path;
+            updateNavButtons();
+            syncSidebarActive();
             renderEntries(result.entries);
             renderBreadcrumb(path);
             clearPreview();
             fpState.selectedPath = '';
-            fpFilename.value = '';
-            fpOk.disabled = (fpState.mode !== 'folder');
+            if (fpFilename) fpFilename.value = '';
+            if (fpOk) fpOk.disabled = (fpState.mode !== 'folder');
         }).catch(function (err) {
-            if (token !== fpState._navToken || path !== fpState.currentPath) return;
+            if (token !== fpState._navToken) return;
             console.error('[Monoloth][Picker] list_directory error:', err);
             showLoading(false);
             showError('Access denied or network error');
@@ -309,7 +364,7 @@
     function renderEntries(entries) {
         if (!fpFileList) return;
         fpFileList.innerHTML = '';
-        fpEmpty.style.display = 'none';
+        if (fpEmpty) fpEmpty.style.display = 'none';
 
         var fe = fpState.filterExts;
         var displayed = [];
@@ -318,13 +373,18 @@
             if (!e.isDir && fe.length > 0) {
                 var match = false;
                 for (var f = 0; f < fe.length; f++) {
-                    if (e.name.toLowerCase().endsWith(fe[f].replace('*', ''))) { match = true; break; }
+                    var pat = fe[f].replace(/\*/g, '');
+                    if (!pat) { match = true; break; }
+                    if (e.name.toLowerCase().endsWith(pat)) { match = true; break; }
                 }
                 if (!match) continue;
             }
             displayed.push(e);
         }
-        if (displayed.length === 0) { fpEmpty.style.display = 'flex'; return; }
+        if (displayed.length === 0) { if (fpEmpty) fpEmpty.style.display = 'flex'; }
+        else {
+            if (fpEmpty) fpEmpty.style.display = 'none';
+        }
 
         displayed.forEach(function (entry) {
             var item = document.createElement('div');
@@ -369,6 +429,8 @@
             });
             fpFileList.appendChild(item);
         });
+        // keep file-list scroll at top on navigation
+        if (fpFileList) fpFileList.scrollTop = 0;
         loadDrives();
     }
 
@@ -409,7 +471,9 @@
     }
 
     function isWindowsPath(path) {
-        return /^[A-Za-z]:/.test(path) || path.indexOf('\\') !== -1;
+        if (!path) return false;
+        // Only drive-letter form is Windows; a Unix filename may legally contain '\'
+        return /^[A-Za-z]:[\\/]/.test(path);
     }
 
     function isRootPath(path) {
@@ -448,6 +512,8 @@
             var match = normalized.match(/^([A-Za-z]:)\\*/);
             var root = match ? match[1] + '\\' : '';
             var rest = match ? normalized.substring(match[0].length) : normalized;
+            // handle bare drive letter like "C:" -> treat as "C:\"
+            if (normalized === match[1]) root = match[1] + '\\';
             return { windows: true, root: root, parts: rest.split('\\').filter(Boolean) };
         }
         var absolute = path.charAt(0) === '/';
@@ -456,10 +522,17 @@
     }
 
     function isAbsoluteInputPath(path) {
-        return path.charAt(0) === '/' || path.charAt(0) === '~' || /^[A-Za-z]:[\\/]/.test(path) || (path.indexOf(':') !== -1 && path.indexOf('\\') !== -1);
+        if (!path) return false;
+        var s = path.trim();
+        if (s.charAt(0) === '/' || s.charAt(0) === '~') return true;
+        if (/^[A-Za-z]:[\\/]/.test(s)) return true;
+        // UNC \\server\share or //server/share
+        if (/^\\\\[^\\]/.test(s) || /^\/\/[^\/]/.test(s)) return true;
+        return false;
     }
 
     function onItemClick(entry) {
+        if (!fpFileList) return;
         var items = fpFileList.querySelectorAll('.fp-file-item');
         var fullPath = joinPath(fpState.currentPath, entry.name);
         fpState.selectedPath = fullPath;
@@ -468,15 +541,15 @@
         }
         if (entry.isDir && fpState.mode === 'folder') {
             fpFilename.value = entry.name;
-            fpOk.disabled = false;
+            if (fpOk) fpOk.disabled = false;
             clearPreview();
         } else if (!entry.isDir) {
             fpFilename.value = entry.name;
-            fpOk.disabled = (fpState.mode === 'folder');
+            if (fpOk) fpOk.disabled = (fpState.mode === 'folder');
             if (fpState.mode === 'file') showPreview(fullPath, entry); else clearPreview();
         } else {
             fpFilename.value = '';
-            fpOk.disabled = (fpState.mode !== 'folder');
+            if (fpOk) fpOk.disabled = (fpState.mode !== 'folder');
             clearPreview();
         }
     }
@@ -493,7 +566,6 @@
         fpPreviewPane.classList.remove('anim-enter');
         void fpPreviewPane.offsetWidth;
         fpPreviewPane.classList.add('anim-enter');
-        // Reset image opacity for fade-in
         if (fpPreviewImg) fpPreviewImg.classList.remove('loaded');
         var token = fpState._navToken;
         window.monolithApi.get_file_preview(filePath).then(function (res) {
@@ -501,15 +573,14 @@
             if (res && res.success && res.dataUrl) {
                 fpPreviewImg.src = res.dataUrl;
                 fpPreviewImg.style.display = 'block';
-                // Fade in image after load
                 fpPreviewImg.onload = function () { fpPreviewImg.classList.add('loaded'); };
-                fpPreviewInfo.textContent = formatSize(entry.size) + ' | ' + ext.toUpperCase();
+                if (fpPreviewInfo) fpPreviewInfo.textContent = formatSize(entry.size) + ' | ' + ext.toUpperCase();
             } else { noPreview(); }
         }).catch(function () {
             if (token !== fpState._navToken || fpState.selectedPath !== filePath) return;
             noPreview();
         });
-        function noPreview() { fpPreviewImg.src = ''; fpPreviewImg.style.display = 'none'; fpPreviewInfo.textContent = 'Preview not available'; }
+        function noPreview() { if (fpPreviewImg) { fpPreviewImg.src = ''; fpPreviewImg.style.display = 'none'; } if (fpPreviewInfo) fpPreviewInfo.textContent = 'Preview not available'; }
     }
 
     function clearPreview() {
@@ -552,6 +623,18 @@
         });
     }
 
+    function syncSidebarActive() {
+        if (!fpEl) return;
+        var norm = (fpState.currentPath || '').toLowerCase().replace(/[\\/]+$/, '');
+        var items = fpEl.querySelectorAll('.fp-sidebar-item');
+        for (var i = 0; i < items.length; i++) {
+            var kind = items[i].dataset.path;
+            var suffix = kind && QUICK_NAMES[kind] ? QUICK_NAMES[kind].toLowerCase() : '';
+            var on = suffix && (norm === suffix || norm.endsWith('\\' + suffix) || norm.endsWith('/' + suffix));
+            items[i].classList.toggle('active', on);
+        }
+    }
+
     function updateNavButtons() {
         if (fpBack) fpBack.disabled = fpState.historyIndex <= 0;
         if (fpForward) fpForward.disabled = fpState.historyIndex >= fpState.history.length - 1;
@@ -567,19 +650,17 @@
 
     function showEmpty() {
         if (fpEmpty) fpEmpty.style.display = 'flex';
-        if (fpEmpty) fpEmpty.querySelector('span').textContent = 'This folder is empty';
+        if (fpEmpty) { var s = fpEmpty.querySelector('span'); if (s) s.textContent = 'This folder is empty'; }
         if (fpFileList) fpFileList.innerHTML = '';
         if (fpLoading) fpLoading.style.display = 'none';
-        if (fpBreadcrumb) fpBreadcrumb.innerHTML = '';
         clearPreview();
     }
 
     function showError(msg) {
         if (fpEmpty) fpEmpty.style.display = 'flex';
-        if (fpEmpty) fpEmpty.querySelector('span').textContent = msg;
+        if (fpEmpty) { var s2 = fpEmpty.querySelector('span'); if (s2) s2.textContent = msg; }
         if (fpFileList) fpFileList.innerHTML = '';
         if (fpLoading) fpLoading.style.display = 'none';
-        if (fpBreadcrumb) fpBreadcrumb.innerHTML = '';
         clearPreview();
     }
 
@@ -589,8 +670,6 @@
             return new Date(value * 1000).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' });
         }
         if (typeof value === 'string') {
-            // Backend now returns relative strings like "3d ago", "5h ago", "12m ago", "just now".
-            // Display them as-is; only fall back to Date parsing if it looks like an ISO timestamp.
             if (/^\d+(\.\d+)?$/.test(value)) {
                 var n = Number(value);
                 if (n > 0) return new Date(n * 1000).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' });
@@ -639,28 +718,73 @@
     if (fpOk) {
         fpOk.addEventListener('click', function () {
             var path = fpState.selectedPath;
-            if (!path && fpFilename.value) path = joinPath(fpState.currentPath, fpFilename.value);
+            if (!path && fpFilename.value) {
+                var typed = fpFilename.value.trim();
+                if (typed) path = joinPath(fpState.currentPath, typed);
+            }
             if (!path && fpState.mode === 'folder') path = fpState.currentPath;
-            if (path) closePicker(path);
+            if (!path) return;
+            // Validate existence before closing
+            if (fpFilename.value && !fpState.selectedPath) {
+                // User typed a name; verify it exists for the current mode
+                var isFolderMode = fpState.mode === 'folder';
+                window.monolithApi.get_path_info(path).then(function (info) {
+                    if (!info || !info.success || !info.exists) {
+                        showError(isFolderMode ? 'Folder not found' : 'File not found');
+                        return;
+                    }
+                    if (isFolderMode && !info.isDir) {
+                        showError('Not a directory');
+                        return;
+                    }
+                    if (!isFolderMode && info.isDir) {
+                        // In file mode, selecting a directory via typing should navigate into it
+                        navigateToPath(info.absolute);
+                        return;
+                    }
+                    closePicker(isFolderMode ? info.absolute : path);
+                }).catch(function () { showError('Path not found'); });
+                return;
+            }
+            // For selectedPath case, trust it but still verify file existence in file mode
+            if (fpState.mode === 'file' && path) {
+                // If selectedPath is a file we already know exists (from listing), close directly
+                closePicker(path);
+                return;
+            }
+            closePicker(path);
         });
     }
 
     if (fpBack) fpBack.addEventListener('click', function () {
-        if (fpState.historyIndex > 0) { fpState.historyIndex--; fpState.currentPath = fpState.history[fpState.historyIndex]; updateNavButtons(); loadDirectory(fpState.currentPath); }
+        if (fpState.historyIndex > 0) {
+            fpState.historyIndex--;
+            fpState.currentPath = fpState.history[fpState.historyIndex];
+            updateNavButtons();
+            syncSidebarActive();
+            loadDirectory(fpState.currentPath, null, false);
+        }
     });
 
     if (fpForward) fpForward.addEventListener('click', function () {
-        if (fpState.historyIndex < fpState.history.length - 1) { fpState.historyIndex++; fpState.currentPath = fpState.history[fpState.historyIndex]; updateNavButtons(); loadDirectory(fpState.currentPath); }
+        if (fpState.historyIndex < fpState.history.length - 1) {
+            fpState.historyIndex++;
+            fpState.currentPath = fpState.history[fpState.historyIndex];
+            updateNavButtons();
+            syncSidebarActive();
+            loadDirectory(fpState.currentPath, null, false);
+        }
     });
 
     if (fpUp) fpUp.addEventListener('click', function () {
-        if (!fpState.currentPath) return;
+        if (!fpState.currentPath || isRootPath(fpState.currentPath)) return;
         var result = getParentPath(fpState.currentPath);
+        if (!result) return;
         doNavigate(result);
     });
 
-    if (fpRefresh) fpRefresh.addEventListener('click', function () { if (fpState.currentPath) loadDirectory(fpState.currentPath); });
-    if (fpFilter) fpFilter.addEventListener('change', function () { updateFilterExts(); if (fpState.currentPath) loadDirectory(fpState.currentPath); });
+    if (fpRefresh) fpRefresh.addEventListener('click', function () { if (fpState.currentPath) loadDirectory(fpState.currentPath, null, false); });
+    if (fpFilter) fpFilter.addEventListener('change', function () { updateFilterExts(); rerenderCurrentFilter(); });
 
     // Path input: click on breadcrumb to edit
     if (fpPathBar && fpBreadcrumb) {
@@ -676,7 +800,9 @@
     // Path input: handle Enter key to navigate
     if (fpPathInput) {
         fpPathInput.addEventListener('keydown', function (e) {
-            if (e.code === 'Enter') {
+            var isEnter = e.key === 'Enter' || e.code === 'Enter';
+            var isEsc = e.key === 'Escape' || e.code === 'Escape';
+            if (isEnter) {
                 e.preventDefault();
                 var path = fpPathInput.value.trim();
                 if (path) {
@@ -684,7 +810,7 @@
                     navigateToPath(path);
                 }
             }
-            if (e.code === 'Escape') {
+            if (isEsc) {
                 e.preventDefault();
                 fpPathBar.classList.remove('editing');
                 if (fpState.currentPath) {
@@ -704,7 +830,8 @@
     // Filename input: Enter to navigate if absolute path, otherwise OK
     if (fpFilename) {
         fpFilename.addEventListener('keydown', function (e) {
-            if (e.code === 'Enter') {
+            var isEnter = e.key === 'Enter' || e.code === 'Enter';
+            if (isEnter) {
                 e.preventDefault();
                 var val = fpFilename.value.trim();
                 if (!val) return;
@@ -718,23 +845,50 @@
     }
 
     // Sidebar clicks
-    var sidebarItems = fpEl.querySelectorAll('.fp-sidebar-item');
-    sidebarItems.forEach(function (item) {
-        item.addEventListener('click', function () {
-            var p = item.dataset.path;
-            var sidebarItems = fpEl.querySelectorAll('.fp-sidebar-item');
-            for (var si2 = 0; si2 < sidebarItems.length; si2++) {
-                sidebarItems[si2].classList.remove('active');
-            }
-            item.classList.add('active');
-            if (QUICK_PATHS[p]) {
+    if (fpEl) {
+        var sidebarItems = fpEl.querySelectorAll('.fp-sidebar-item');
+        sidebarItems.forEach(function (item) {
+            item.addEventListener('click', function () {
+                var p = item.dataset.path;
+                if (!p) return;
+                var candidates = getQuickCandidates(p);
+                if (!candidates || candidates.length === 0) return;
+                var all = fpEl.querySelectorAll('.fp-sidebar-item');
+                for (var si2 = 0; si2 < all.length; si2++) all[si2].classList.remove('active');
+                item.classList.add('active');
                 var token = ++fpState._navToken;
-                window.monolithApi.get_path_info(QUICK_PATHS[p]).then(function (info) {
-                    if (token === fpState._navToken && info && info.success && info.isDir) doNavigate(info.absolute, token);
-                });
-            }
+                function tryCandidate(idx) {
+                    if (idx >= candidates.length) {
+                        var fallback = getHomePath();
+                        if (!fallback) return;
+                        window.monolithApi.get_path_info(fallback).then(function (fbInfo) {
+                            if (token !== fpState._navToken) return;
+                            var t = fbInfo && fbInfo.success ? (fbInfo.isDir ? fbInfo.absolute : fbInfo.parent) : null;
+                            if (t) doNavigate(t, token);
+                        }).catch(function () {});
+                        return;
+                    }
+                    var qp = candidates[idx];
+                    window.monolithApi.get_path_info(qp).then(function (info) {
+                        if (token !== fpState._navToken) return;
+                        if (info && info.success && info.isDir) {
+                            doNavigate(info.absolute, token);
+                        } else if (idx + 1 < candidates.length) {
+                            tryCandidate(idx + 1);
+                        } else {
+                            var target = info && info.success ? (info.parent || info.absolute) : null;
+                            if (target) doNavigate(target, token);
+                            else tryCandidate(candidates.length);
+                        }
+                    }).catch(function () {
+                        if (idx + 1 < candidates.length) tryCandidate(idx + 1);
+                        else tryCandidate(candidates.length);
+                    });
+                }
+                tryCandidate(0);
+            });
         });
-    });
+    }
 
     if (fpEl) fpEl.addEventListener('click', function (e) {
         if (e.target === fpEl || e.target.classList.contains('fp-overlay')) closePicker(null);
@@ -743,21 +897,24 @@
     // Keyboard
     document.addEventListener('keydown', function (e) {
         if (!fpEl || !fpEl.classList.contains('active')) return;
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
-            if (e.code === 'Escape') { e.preventDefault(); closePicker(null); }
+        var tag = (e.target && e.target.tagName) || '';
+        var isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+        if (isInput) {
+            if (e.key === 'Escape' || e.code === 'Escape') { e.preventDefault(); closePicker(null); }
             return;
         }
-        if (e.code === 'Escape') { e.preventDefault(); closePicker(null); return; }
-        if (e.code === 'Enter') { e.preventDefault(); if (fpOk && !fpOk.disabled) fpOk.click(); return; }
-        if (e.code === 'Backspace') { e.preventDefault(); if (fpUp && !fpUp.disabled) fpUp.click(); return; }
-        if (e.code === 'ArrowDown' || e.code === 'ArrowUp') {
+        if (e.key === 'Escape' || e.code === 'Escape') { e.preventDefault(); closePicker(null); return; }
+        if (e.key === 'Enter' || e.code === 'Enter') { e.preventDefault(); if (fpOk && !fpOk.disabled) fpOk.click(); return; }
+        if (e.key === 'Backspace' || e.code === 'Backspace') { e.preventDefault(); if (fpUp && !fpUp.disabled) fpUp.click(); return; }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.code === 'ArrowDown' || e.code === 'ArrowUp') {
             e.preventDefault();
-            var items = fpFileList.querySelectorAll('.fp-file-item');
+            var items = fpFileList ? fpFileList.querySelectorAll('.fp-file-item') : [];
             if (items.length === 0) return;
             var sel = fpFileList.querySelector('.fp-file-item.selected');
             var idx = -1;
             if (sel) { for (var k = 0; k < items.length; k++) { if (items[k] === sel) { idx = k; break; } } }
-            idx = e.code === 'ArrowDown' ? Math.min(idx + 1, items.length - 1) : Math.max(idx === -1 ? 0 : idx - 1, 0);
+            var isDown = e.key === 'ArrowDown' || e.code === 'ArrowDown';
+            idx = isDown ? Math.min(idx + 1, items.length - 1) : Math.max(idx === -1 ? 0 : idx - 1, 0);
             items.forEach(function (it) { it.classList.remove('selected'); });
             items[idx].classList.add('selected');
             var en = items[idx].dataset.name;
@@ -769,6 +926,22 @@
 
     function closePicker(result) {
         if (!fpEl) return;
+        if (!fpState.resolve) {
+            // Already closing/closed - just ensure token cancelled
+            if (fpEl.classList.contains('active')) {
+                fpState._navToken++;
+                closeModal(fpEl);
+            }
+            return;
+        }
+        if (!fpEl.classList.contains('active')) {
+            fpState._navToken++;
+            var r = fpState.resolve;
+            fpState.resolve = null;
+            fpState.reject = null;
+            if (r) r(result);
+            return;
+        }
         fpState._navToken++;
         closeModal(fpEl);
         fpState.selectedPath = '';
@@ -781,11 +954,10 @@
             _setLastDirectory(fpState.pickerId, result);
         }
 
-        if (fpState.resolve) {
-            fpState.resolve(result);
-            fpState.resolve = null;
-            fpState.reject = null;
-        }
+        var resolve = fpState.resolve;
+        fpState.resolve = null;
+        fpState.reject = null;
+        if (resolve) resolve(result);
     }
 
     window.MonolithFilePicker = {
