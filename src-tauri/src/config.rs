@@ -518,9 +518,15 @@ mod tests {
     static TEST_LOCK: Mutex<()> = Mutex::new(());
 
     fn setup_test_env() -> (PathBuf, std::sync::MutexGuard<'static, ()>) {
-        let lock = TEST_LOCK.lock().unwrap();
-        let test_dir = std::env::temp_dir().join("monoloth_test_config");
-        let _ = fs::remove_dir_all(&test_dir);
+        let lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let test_dir = std::env::temp_dir().join(format!(
+            "monoloth_test_config_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         fs::create_dir_all(&test_dir).unwrap();
         std::env::set_var("APPDATA", test_dir.to_str().unwrap());
         (test_dir, lock)
