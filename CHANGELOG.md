@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.7] - 2026-08-16
+
+### Fixed
+- Custom file picker stabilized: token-guarded async navigations, history only on `list_directory` success, double-close guard and focus-trap fix, stale preview suppression, breadcrumb retained on error, and `z-index`/keyboard (`e.key`) handling so the picker reliably sits above the new-tab card.
+- File picker path handling hardened: folder-mode keeps the selected folder for last-directory tracking while file-mode stores the parent, bare drive roots (`C:`) normalized, `isWindowsPath` now matches only drive-letter paths, UNC paths recognized via `isAbsoluteInputPath`, `joinPath`/`splitPath` edge cases fixed, and typed filenames are validated via `get_path_info` before close.
+- File picker filtering corrected: native directory-filter flag fixed and filtering now re-renders client-side without refetching; OneDrive fallback candidates and suffix-based sidebar sync (`QUICK_NAMES` dedup) improve active-item highlighting, with dead `QUICK_PATHS` getter and candidate logic removed.
+- File picker modal now matches the settings glass size (720 px × 88 vh, `min-height: 0` on flex children) for a constant layout without flex-shrink jank.
+- Settings no longer flicker when reordering/removing Workspace rows or adding/removing/editing Secondary Commands: those paths now surgically re-parent or patch single rows (`syncRowsOrder`, `createCustomRowElement`/`patchCustomRow`, `createSecondaryRow`) instead of rebuilding via `innerHTML`; scroll positions are preserved via `saveScroll`/`restoreScroll` helpers (also covering profiles and history fallbacks) and the WebView2 blur flash is eliminated.
+- Workspace settings now shows a visible drag-handle grip for reordering rows.
+
+### Changed
+- Frontend maintainability: deduped row templates and scroll helpers across `sidebar.js`, `app.js`, and `profiles.js` (shared `customRowInner`/`saveScroll`/`restoreScroll`/`findEmptyPlaceholder` helpers, ~18 lines net reduction); inlined single-caller wrappers in `command-palette`, `dialog`, `file-picker`, and `profiles`; narrowed large-method extracts and extracted panel-tab restart logic into a shared `restartPanelTab` helper.
+- Rust backend: flattened complexity in `pty.rs`, window handling in `lib.rs`, `config.rs`, `history.rs`, and `commands/terminal.rs` via guard clauses, early returns, and extracted helpers; deduped window-geometry sanitization against the shared `MIN/MAX` constants and switched to borrowed `Path` where cloning was unnecessary.
+
 ## [2.2.6] - 2026-07-17
 
 ### Fixed
@@ -444,7 +458,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release.
 
-[Unreleased]: https://github.com/noahain/Monoloth/compare/v2.2.6...beta
+[Unreleased]: https://github.com/noahain/Monoloth/compare/v2.2.7...beta
+[2.2.7]: https://github.com/noahain/Monoloth/compare/v2.2.6...v2.2.7
 [2.2.6]: https://github.com/noahain/Monoloth/compare/v2.2.5...v2.2.6
 [2.2.5]: https://github.com/noahain/Monoloth/compare/v2.2.4...v2.2.5
 [2.2.4]: https://github.com/noahain/Monoloth/compare/v2.2.3...v2.2.4
