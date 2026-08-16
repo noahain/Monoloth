@@ -1269,11 +1269,14 @@
 
         html += '<div id="sidebar-status" class="appearance-status"></div>';
 
+        var _scroller = document.querySelector('.settings-content');
+        var _prevTop = _scroller ? _scroller.scrollTop : 0;
         if (window.MonolothTooltip) {
             window.MonolothTooltip.cleanup();
         }
         panel.innerHTML = html;
 
+        if (_scroller) _scroller.scrollTop = _prevTop;
         if (window.MonolothTooltip) {
             window.MonolothTooltip.scan(panel);
         }
@@ -1341,7 +1344,7 @@
             });
         });
 
-        // Remove custom button
+        // Remove custom button — surgical: remove one row, no full rebuild
         var removeBtns = document.querySelectorAll('#tab-sidebar .sidebar-remove-btn');
         removeBtns.forEach(function (btn) {
             btn.addEventListener('click', function () {
@@ -1351,7 +1354,9 @@
                 });
                 saveSidebarConfigImmediate();
                 applySidebar();
-                renderSettingsTab();
+                var row = document.querySelector('#sidebar-custom-buttons .sidebar-setting-row[data-id="' + id + '"]');
+                if (row) row.remove();
+                if (window.MonolothTooltip) window.MonolothTooltip.cleanup();
             });
         });
 
@@ -1434,7 +1439,11 @@
                     }
                     debounceSaveConfig();
                     applySidebar();
-                    renderSettingsTab();
+                    if (_dragData.type === 'default') {
+                        syncRowsOrder('sidebar-default-buttons', _sidebarConfig.buttons);
+                    } else {
+                        syncRowsOrder('sidebar-custom-buttons', _sidebarConfig.customButtons);
+                    }
                 }
             }
             clearDragState();
@@ -1464,6 +1473,66 @@
         for (var j = 0; j < arr.length; j++) {
             arr[j].order = j;
         }
+    }
+
+    function syncRowsOrder(containerId, arr) {
+        var container = document.getElementById(containerId);
+        if (!container) return;
+        var map = {};
+        container.querySelectorAll('.sidebar-setting-row').forEach(function (r) { map[r.dataset.id] = r; });
+        arr.slice().sort(function (a, b) { return a.order - b.order; }).forEach(function (b) {
+            var row = map[b.id];
+            if (row) container.appendChild(row);
+        });
+        if (window.MonolothTooltip) window.MonolothTooltip.scan(container);
+    }
+
+    function patchCustomRow(row, btnData) {
+        if (!row) return;
+        var iconEl = row.querySelector('.sidebar-setting-icon');
+        if (iconEl) iconEl.innerHTML = ICONS[btnData.icon] || ICONS.terminal;
+        var nameEl = row.querySelector('.sidebar-setting-name');
+        if (nameEl) nameEl.textContent = btnData.name;
+        var modeEl = row.querySelector('.sidebar-setting-mode');
+        if (modeEl) modeEl.textContent = btnData.mode || 'background';
+        var vis = row.querySelector('input[data-action="toggle-visibility"]');
+        if (vis) vis.checked = btnData.visible !== false;
+        if (window.MonolothTooltip) window.MonolothTooltip.scan(row);
+    }
+
+    function createCustomRowElement(b) {
+        var row = document.createElement('div');
+        row.className = 'sidebar-setting-row';
+        row.dataset.id = b.id;
+        row.dataset.type = 'custom';
+        row.innerHTML =
+            '<span class="sidebar-drag-handle" data-tooltip="Drag to reorder"><svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.4"/><circle cx="6" cy="2" r="1.4"/><circle cx="2" cy="7" r="1.4"/><circle cx="6" cy="7" r="1.4"/><circle cx="2" cy="12" r="1.4"/><circle cx="6" cy="12" r="1.4"/></svg></span>' +
+            '<span class="sidebar-setting-icon">' + (ICONS[b.icon] || ICONS.terminal) + '</span>' +
+            '<span class="sidebar-setting-name">' + escapeHtml(b.name) + '</span>' +
+            '<span class="sidebar-setting-mode">' + escapeHtml(b.mode || 'background') + '</span>' +
+            '<label class="sidebar-toggle-label"><input type="checkbox"' + (b.visible ? ' checked' : '') + ' data-action="toggle-visibility" data-id="' + b.id + '" data-type="custom"><span class="toggle-track"></span></label>' +
+            '<button class="sidebar-edit-btn" data-action="edit-custom" data-id="' + b.id + '" data-tooltip="Edit">' + ICONS.edit + '</button>' +
+            '<button class="sidebar-remove-btn" data-action="remove-custom" data-id="' + b.id + '" data-tooltip="Remove">&times;</button>';
+        row.querySelector('input[data-action="toggle-visibility"]').addEventListener('change', function () {
+            var visible = this.checked;
+            (_sidebarConfig.customButtons || []).forEach(function (x) { if (x.id === b.id) x.visible = visible; });
+            saveSidebarConfigImmediate();
+            applySidebar();
+        });
+        row.querySelector('.sidebar-edit-btn').addEventListener('click', function () {
+            var found = (_sidebarConfig.customButtons || []).find(function (x) { return x.id === b.id; });
+            if (found) showCustomBtnEditor(found);
+        });
+        row.querySelector('.sidebar-remove-btn').addEventListener('click', function () {
+            _sidebarConfig.customButtons = (_sidebarConfig.customButtons || []).filter(function (x) { return x.id !== b.id; });
+            saveSidebarConfigImmediate();
+            applySidebar();
+            var cur = document.querySelector('#sidebar-custom-buttons .sidebar-setting-row[data-id="' + b.id + '"]');
+            if (cur) cur.remove();
+            if (window.MonolothTooltip) window.MonolothTooltip.cleanup();
+        });
+        if (window.MonolothTooltip) window.MonolothTooltip.scan(row);
+        return row;
     }
 
 
@@ -1549,7 +1618,24 @@
 
             saveSidebarConfigImmediate();
             applySidebar();
-            renderSettingsTab();
+            if (isEdit) {
+                var existingRow = document.querySelector('#sidebar-custom-buttons .sidebar-setting-row[data-id="' + id + '"]');
+                if (existingRow) {
+                    patchCustomRow(existingRow, btnData);
+                } else {
+                    renderSettingsTab();
+                }
+            } else {
+                var container = document.getElementById('sidebar-custom-buttons');
+                if (container) {
+                    var newRow = createCustomRowElement(btnData);
+                    container.appendChild(newRow);
+                } else {
+                    renderSettingsTab();
+                }
+            }
+            editor.style.display = 'none';
+            editor.innerHTML = '';
         });
 
         document.getElementById('cust-cancel-btn').addEventListener('click', function () {

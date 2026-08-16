@@ -35,6 +35,8 @@
     function renderProfilesList() {
         var list = document.getElementById('profiles-list');
         if (!list) return;
+        var _scroller = (document.querySelector ? document.querySelector('.settings-content') : null);
+        var _prevTop = _scroller ? _scroller.scrollTop : 0;
         if (window.MonolothTooltip) {
             window.MonolothTooltip.cleanup();
         }
@@ -110,6 +112,7 @@
             item.appendChild(actions);
             list.appendChild(item);
         });
+        if (_scroller) _scroller.scrollTop = _prevTop;
     }
 
     function switchToProfile(name) {

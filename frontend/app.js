@@ -1178,83 +1178,102 @@
             .catch(function () {});
     }
 
+    function createSecondaryRow(cmd) {
+        var item = document.createElement('div');
+        item.className = 'secondary-cmd-item';
+
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'secondary-cmd-input';
+        input.value = cmd.command || '';
+        input.placeholder = 'Command to run...';
+        input.addEventListener('change', function () {
+            cmd.command = this.value;
+            saveSecondaryCommands();
+        });
+
+        var modeSelect = document.createElement('select');
+        modeSelect.className = 'secondary-cmd-mode';
+        var optBefore = document.createElement('option');
+        optBefore.value = 'before';
+        optBefore.textContent = 'Before';
+        var optParallel = document.createElement('option');
+        optParallel.value = 'parallel';
+        optParallel.textContent = 'Parallel';
+        var optHidden = document.createElement('option');
+        optHidden.value = 'hidden';
+        optHidden.textContent = 'Hidden';
+        modeSelect.appendChild(optBefore);
+        modeSelect.appendChild(optParallel);
+        modeSelect.appendChild(optHidden);
+        modeSelect.value = cmd.mode || 'before';
+        modeSelect.addEventListener('change', function () {
+            cmd.mode = this.value;
+            saveSecondaryCommands();
+        });
+
+        var toggleLabel = document.createElement('label');
+        toggleLabel.className = 'secondary-cmd-toggle';
+        var toggleInput = document.createElement('input');
+        toggleInput.type = 'checkbox';
+        toggleInput.checked = cmd.enabled !== false;
+        toggleInput.addEventListener('change', function () {
+            cmd.enabled = this.checked;
+            saveSecondaryCommands();
+        });
+        var toggleTrack = document.createElement('span');
+        toggleTrack.className = 'toggle-track';
+        toggleLabel.appendChild(toggleInput);
+        toggleLabel.appendChild(toggleTrack);
+
+        var removeBtn = document.createElement('button');
+        removeBtn.className = 'secondary-cmd-remove';
+        removeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        if (window.MonolothTooltip) {
+            window.MonolothTooltip.attach(removeBtn, 'Remove this command');
+        }
+        removeBtn.addEventListener('click', function () {
+            var idx = _secondaryCommands.indexOf(cmd);
+            if (idx !== -1) _secondaryCommands.splice(idx, 1);
+            var list = document.getElementById('secondary-commands-list');
+            if (item.parentNode) item.remove();
+            if (window.MonolothTooltip) window.MonolothTooltip.cleanup();
+            if (list && _secondaryCommands.length === 0) {
+                var empty = document.createElement('div');
+                empty.className = 'secondary-cmd-empty';
+                empty.textContent = 'No secondary commands configured.';
+                list.appendChild(empty);
+            }
+            saveSecondaryCommands();
+        });
+
+        item.appendChild(input);
+        item.appendChild(modeSelect);
+        item.appendChild(toggleLabel);
+        item.appendChild(removeBtn);
+        return item;
+    }
+
     function renderSecondaryCommands() {
         var list = document.getElementById('secondary-commands-list');
         if (!list) return;
+        var scroller = (document.querySelector ? document.querySelector('.settings-content') : null);
+        var prevTop = scroller ? scroller.scrollTop : 0;
         list.innerHTML = '';
+        if (window.MonolothTooltip) window.MonolothTooltip.cleanup();
         if (_secondaryCommands.length === 0) {
             var empty = document.createElement('div');
             empty.className = 'secondary-cmd-empty';
             empty.textContent = 'No secondary commands configured.';
             list.appendChild(empty);
+            if (scroller) scroller.scrollTop = prevTop;
             return;
         }
-        _secondaryCommands.forEach(function (cmd, idx) {
-            var item = document.createElement('div');
-            item.className = 'secondary-cmd-item';
-
-            var input = document.createElement('input');
-            input.type = 'text';
-            input.className = 'secondary-cmd-input';
-            input.value = cmd.command || '';
-            input.placeholder = 'Command to run...';
-            input.addEventListener('change', function () {
-                _secondaryCommands[idx].command = this.value;
-                saveSecondaryCommands();
-            });
-
-            var modeSelect = document.createElement('select');
-            modeSelect.className = 'secondary-cmd-mode';
-            var optBefore = document.createElement('option');
-            optBefore.value = 'before';
-            optBefore.textContent = 'Before';
-            var optParallel = document.createElement('option');
-            optParallel.value = 'parallel';
-            optParallel.textContent = 'Parallel';
-            var optHidden = document.createElement('option');
-            optHidden.value = 'hidden';
-            optHidden.textContent = 'Hidden';
-            modeSelect.appendChild(optBefore);
-            modeSelect.appendChild(optParallel);
-            modeSelect.appendChild(optHidden);
-            modeSelect.value = cmd.mode || 'before';
-            modeSelect.addEventListener('change', function () {
-                _secondaryCommands[idx].mode = this.value;
-                saveSecondaryCommands();
-            });
-
-            var toggleLabel = document.createElement('label');
-            toggleLabel.className = 'secondary-cmd-toggle';
-            var toggleInput = document.createElement('input');
-            toggleInput.type = 'checkbox';
-            toggleInput.checked = cmd.enabled !== false;
-            toggleInput.addEventListener('change', function () {
-                _secondaryCommands[idx].enabled = this.checked;
-                saveSecondaryCommands();
-            });
-            var toggleTrack = document.createElement('span');
-            toggleTrack.className = 'toggle-track';
-            toggleLabel.appendChild(toggleInput);
-            toggleLabel.appendChild(toggleTrack);
-
-            var removeBtn = document.createElement('button');
-            removeBtn.className = 'secondary-cmd-remove';
-            removeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-            if (window.MonolothTooltip) {
-                window.MonolothTooltip.attach(removeBtn, 'Remove this command');
-            }
-            removeBtn.addEventListener('click', function () {
-                _secondaryCommands.splice(idx, 1);
-                renderSecondaryCommands();
-                saveSecondaryCommands();
-            });
-
-            item.appendChild(input);
-            item.appendChild(modeSelect);
-            item.appendChild(toggleLabel);
-            item.appendChild(removeBtn);
-            list.appendChild(item);
+        _secondaryCommands.forEach(function (cmd) {
+            list.appendChild(createSecondaryRow(cmd));
         });
+        if (window.MonolothTooltip) window.MonolothTooltip.scan(list);
+        if (scroller) scroller.scrollTop = prevTop;
     }
 
     function saveSecondaryCommands() {
@@ -1271,8 +1290,20 @@
     var addSecondaryCmdBtn = document.getElementById('add-secondary-cmd-btn');
     if (addSecondaryCmdBtn) {
         addSecondaryCmdBtn.addEventListener('click', function () {
-            _secondaryCommands.push({ command: '', mode: 'before', enabled: true });
-            renderSecondaryCommands();
+            var newCmd = { command: '', mode: 'before', enabled: true };
+            _secondaryCommands.push(newCmd);
+            var list = document.getElementById('secondary-commands-list');
+            if (list) {
+                var empty = list.querySelector('.secondary-cmd-empty');
+                if (empty) empty.remove();
+                list.appendChild(createSecondaryRow(newCmd));
+                if (window.MonolothTooltip) window.MonolothTooltip.scan(list);
+                var scroller = (document.querySelector ? document.querySelector('.settings-content') : null);
+                var prevTop = scroller ? scroller.scrollTop : 0;
+                if (scroller) scroller.scrollTop = prevTop;
+            } else {
+                renderSecondaryCommands();
+            }
             saveSecondaryCommands();
         });
     }
@@ -1637,6 +1668,8 @@
     }
 
     function renderHistoryUI(data) {
+        var _scroller = (document.querySelector ? document.querySelector('.settings-content') : null);
+        var _prevTop = _scroller ? _scroller.scrollTop : 0;
         // Toggle state
         var toggleContainer = document.getElementById('history-toggle');
         if (toggleContainer) {
@@ -1659,6 +1692,7 @@
 
         if (!data.sessions || data.sessions.length === 0) {
             rankingEl.innerHTML = '<span class="history-empty">No history data yet. Start a session to begin tracking.</span>';
+            if (_scroller) _scroller.scrollTop = _prevTop;
             return;
         }
 
@@ -1730,6 +1764,7 @@
         }
 
         rankingEl.innerHTML = html;
+        if (_scroller) _scroller.scrollTop = _prevTop;
     }
 
     function parseISO(iso) {
