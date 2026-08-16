@@ -33,6 +33,7 @@ class FakeElement {
         this.textContent = '';
         this.value = '';
         this.className = '';
+        this._top = 0;
     }
     addEventListener(type, handler) {
         if (!this.eventListeners[type]) this.eventListeners[type] = [];
@@ -77,6 +78,19 @@ class FakeElement {
     focus() {}
     select() {}
     click() {}
+    closest(selector) {
+        let el = this;
+        const cls = selector.startsWith('.') ? selector.slice(1) : selector;
+        while (el) {
+            if (el.classList && el.classList.contains(cls)) return el;
+            if (el.className && String(el.className).split(/\s+/).includes(cls)) return el;
+            el = el.parentNode;
+        }
+        return null;
+    }
+    getBoundingClientRect() {
+        return { top: this._top || 0, bottom: (this._top || 0) + 24, height: 24, left: 0, width: 200, right: 200, x: 0, y: this._top || 0 };
+    }
 }
 
 function findChildByClass(element, className) {
@@ -96,8 +110,15 @@ function createDocument() {
         body: new FakeElement('body'),
         documentElement: new FakeElement('html'),
         activeElement: null,
-        addEventListener() {},
-        removeEventListener() {},
+        eventListeners: {},
+        addEventListener(type, handler) {
+            if (!this.eventListeners[type]) this.eventListeners[type] = [];
+            this.eventListeners[type].push(handler);
+        },
+        removeEventListener(type, handler) {
+            if (!this.eventListeners[type]) return;
+            this.eventListeners[type] = this.eventListeners[type].filter((fn) => fn !== handler);
+        },
         createElement(tag) { return new FakeElement(tag); },
         createTextNode(text) {
             const el = new FakeElement('text');
@@ -108,8 +129,20 @@ function createDocument() {
             if (!elements.has(id)) elements.set(id, new FakeElement(id));
             return elements.get(id);
         },
-        querySelector(selector) { return this.getElementById('selector:' + selector); },
-        querySelectorAll() { return []; }
+        querySelector(selector) {
+            if (selector.startsWith('#')) {
+                const id = selector.split(' ')[0].slice(1).split('.')[0].split('[')[0];
+                return this.getElementById(id);
+            }
+            return this.getElementById('selector:' + selector);
+        },
+        querySelectorAll(selector) {
+            if (selector === '#tab-sidebar .sidebar-setting-row') {
+                const container = this.getElementById('tab-sidebar');
+                return container.children.filter(c => c.classList.contains('sidebar-setting-row') || String(c.className||'').split(/\s+/).includes('sidebar-setting-row'));
+            }
+            return [];
+        }
     };
     return document;
 }
@@ -252,58 +285,34 @@ test('CMD panel uses opaque canvas when bg type is none', async () => {
 });
 
 test('switchToMainTab hides the OLD group containers (regression: panel tabs from previous main tab were leaking)', async () => {
-    // Bug: switchToMainTab read the "old group" via _getActiveGroup(), which calls
-    // MonolithTerminal.getActiveTabId(). By the time terminal.js's hook calls
-    // switchToMainTab (terminal.js:231-233), terminal.js has already updated its
-    // own _activeTabId to the NEW main tab. So _getActiveGroup() returned the NEW
-    // group (or null for a not-yet-created group), and the OLD group's containers
-    // were never hidden. New panel tabs created in the NEW group visually overlapped
-    // with the still-visible OLD group containers.
-    //
-    // Fix: read sidebar.js's own _activeMainTabId (still the OLD value here) instead
-    // of asking terminal.js.
-
     const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
 
-    // Mimic app.js bootstrap: sidebar.js's _activeMainTabId starts as the initial main tab.
     harness.context.window.SidebarManager.initForMainTab('mtab-1');
 
-    // Simulate terminal.js reporting the current active main tab.
-    // Start with mtab-1 so createTab (without explicit mainTabId) puts tabs in mtab-1.
     let terminalActiveTab = 'mtab-1';
     harness.context.window.MonolithTerminal.getActiveTabId = function () { return terminalActiveTab; };
 
-    // Create 2 panel tabs in mtab-1.
     await harness.context.window.SidebarManager.createTab(null, true, 'C:\\repo');
     await harness.context.window.SidebarManager.createTab(null, true, 'C:\\repo');
 
-    // Create 1 panel tab in mtab-2 (passing mainTabId explicitly).
     await harness.context.window.SidebarManager.createTab(null, true, 'C:\\repo', 'mtab-2');
 
-    // Save container references while terminal.js still says mtab-1 is active.
     const mtab1Tabs = harness.context.window.SidebarManager.getAllTabs();
     assert.equal(mtab1Tabs.length, 2, 'expected 2 panel tabs in mtab-1');
     const mtab1ContainerA = mtab1Tabs[0].container;
     const mtab1ContainerB = mtab1Tabs[1].container;
 
-    // Get mtab-2's tab via getTab (uses tabId, not active main tab).
     const mtab2Container = harness.context.window.SidebarManager.getTab('ptab-mtab-2-1').container;
 
-    // Simulate terminal.js having already switched its active tab to mtab-2.
-    // This is the production order: terminal.js sets _activeTabId, then calls
-    // SidebarManager.switchToMainTab(tabId) at terminal.js:232.
     terminalActiveTab = 'mtab-2';
 
-    // Trigger the switch.
     harness.context.window.SidebarManager.switchToMainTab('mtab-2');
 
-    // The OLD group (mtab-1) containers must be hidden.
     assert.equal(mtab1ContainerA.style.display, 'none',
         'mtab-1 first panel container should be hidden after switching to mtab-2');
     assert.equal(mtab1ContainerB.style.display, 'none',
         'mtab-1 second panel container should be hidden after switching to mtab-2');
 
-    // The NEW group (mtab-2) container must be visible.
     assert.equal(mtab2Container.style.display, '',
         'mtab-2 panel container should be visible after switching to mtab-2');
 });
@@ -316,4 +325,99 @@ test('looksLikePrompt clears busy dot with ANSI-colored prompt at start of chunk
     tab.busy = true;
     harness.context.window.SidebarManager.writeToTab(tab.id, '\x1B[32mPS C:\\test> \x1B[0m', false);
     assert.equal(tab.busy, false, 'busy should be cleared after ANSI-colored prompt');
+});
+
+test('drag reorder via DOM events reorders sidebar config', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const doc = harness.context.document;
+    const win = harness.context.window;
+
+    let savedConfig = null;
+    win.monolithApi.set_config = (key, val) => {
+        if (key === 'sidebar_config') savedConfig = JSON.parse(JSON.stringify(val));
+        return Promise.resolve();
+    };
+
+    await new Promise(r => setTimeout(r, 30));
+    if (win.SidebarManager.renderSettingsTab) win.SidebarManager.renderSettingsTab();
+
+    const container = doc.getElementById('tab-sidebar');
+    container.children = [];
+    container.innerHTML = '';
+
+    function makeRow(id, type, top) {
+        const row = doc.createElement('div');
+        row.className = 'sidebar-setting-row';
+        row.classList.add('sidebar-setting-row');
+        row.dataset.id = id;
+        row.dataset.type = type;
+        row._top = top;
+        row.getBoundingClientRect = () => ({ top, bottom: top + 24, height: 24, left: 0, width: 200, right: 200, x: 0, y: top });
+        const handle = doc.createElement('span');
+        handle.className = 'sidebar-drag-handle';
+        handle.classList.add('sidebar-drag-handle');
+        row.appendChild(handle);
+        return { row, handle };
+    }
+
+    const a = makeRow('open_folder', 'default', 0);
+    const b = makeRow('open_cmd_project', 'default', 24);
+    const c = makeRow('open_cmd_panel', 'default', 48);
+    container.appendChild(a.row);
+    container.appendChild(b.row);
+    container.appendChild(c.row);
+
+    const originalQSA = doc.querySelectorAll.bind(doc);
+    doc.querySelectorAll = (sel) => {
+        if (sel === '#tab-sidebar .sidebar-setting-row') return [a.row, b.row, c.row];
+        return originalQSA(sel);
+    };
+
+    const mousedownHandlers = container.eventListeners['mousedown'] || [];
+    assert.ok(mousedownHandlers.length > 0, 'drag mousedown handler should be wired');
+    const onMousedown = mousedownHandlers[0];
+    const mousedownEvent = {
+        target: c.handle,
+        preventDefault() {}
+    };
+    onMousedown(mousedownEvent);
+
+    const moveHandlers = doc.eventListeners['mousemove'] || [];
+    const upHandlers = doc.eventListeners['mouseup'] || [];
+    assert.ok(moveHandlers.length > 0, 'mousemove should be registered after mousedown');
+    assert.ok(upHandlers.length > 0, 'mouseup should be registered after mousedown');
+
+    const moveEvent = { clientY: 10 };
+    moveHandlers.forEach(fn => fn(moveEvent));
+    assert.equal(a.row.classList.contains('drag-over'), true, 'target row should have drag-over');
+
+    const upEvent = { clientY: 10 };
+    upHandlers.forEach(fn => fn(upEvent));
+
+    await new Promise(r => setTimeout(r, 450));
+
+    assert.ok(savedConfig, 'config should have been saved after drag');
+    const ids = savedConfig.buttons.map(b => b.id);
+    const idxA = ids.indexOf('open_folder');
+    const idxB = ids.indexOf('open_cmd_project');
+    const idxC = ids.indexOf('open_cmd_panel');
+    assert.ok(idxC < idxA && idxA < idxB, `expected order c,a,b after drag but got ${ids.join(',')}`);
+});
+
+test('panel groups are isolated per main tab', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const win = harness.context.window;
+    win.SidebarManager.initForMainTab('mtab-1');
+    await win.SidebarManager.createTab(null, true, 'C:\\repo');
+    await win.SidebarManager.createTab(null, true, 'C:\\repo');
+    assert.equal(win.SidebarManager.getAllTabs().length, 2, 'mtab-1 should have 2 tabs initially');
+    await win.SidebarManager.createTab(null, true, 'C:\\repo', 'mtab-2');
+    assert.equal(win.SidebarManager.getAllTabs().length, 2, 'active group still mtab-1 after creating mtab-2 tab');
+    win.SidebarManager.switchToMainTab('mtab-2');
+    const mtab2Tabs = win.SidebarManager.getAllTabs();
+    assert.equal(mtab2Tabs.length, 1, 'mtab-2 should have 1 tab after switch');
+    assert.equal(mtab2Tabs[0].mainTabId, 'mtab-2');
+    win.SidebarManager.switchToMainTab('mtab-1');
+    const backTabs = win.SidebarManager.getAllTabs();
+    assert.equal(backTabs.length, 2, 'switch back should restore mtab-1 tabs');
 });

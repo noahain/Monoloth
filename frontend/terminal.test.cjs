@@ -394,3 +394,16 @@ test('refit is a no-op when dimensions are unchanged', async () => {
     assert.equal(order.length, 0, 'no PTY resize when dimensions are unchanged');
     assert.equal(term.resizeCount || 0, resizeBefore, 'no xterm resize when dimensions are unchanged');
 });
+
+test('terminal tab lifecycle create → activate → close', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 0 });
+    const T = harness.context.window.MonolithTerminal;
+    const t1 = await T.tabs.createTab('C:\\repo', false);
+    const t2 = await T.tabs.createTab('C:\\repo', false);
+    assert.equal(T.tabs.getAllTabs().length, 2, 'should have 2 tabs after creation');
+    T.tabs.activateTab(t1.id);
+    assert.equal(T.tabs.getActiveTab().id, t1.id, 'activate should switch active tab');
+    T.tabs.closeTab(t2.id);
+    assert.equal(T.tabs.getAllTabs().length, 1, 'should have 1 tab after closing one');
+    assert.equal(T.tabs.getAllTabs()[0].id, t1.id, 'remaining tab should be the first one');
+});

@@ -305,3 +305,23 @@ impl PtyManager {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn write_input_errors_on_missing_session() {
+        let mgr = PtyManager::new();
+        assert!(mgr.write_input("nope", "ls\n").is_err());
+    }
+    #[test]
+    fn resize_errors_on_missing_session() {
+        let mgr = PtyManager::new();
+        assert!(mgr.resize("nope", 80, 24).is_err());
+    }
+    #[test]
+    fn terminate_unknown_is_noop() {
+        let mgr = PtyManager::new();
+        mgr.terminate("ghost");
+    }
+}
