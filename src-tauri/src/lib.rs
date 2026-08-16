@@ -131,13 +131,7 @@ impl WindowStateHandler {
     }
 
     fn save_window_geometry(&self) {
-        if !self.is_wayland {
-            if let Ok(pos) = self.window.outer_position() {
-                if is_valid_window_position(pos.x, pos.y) {
-                    self.cfg.set_window_position(pos.x, pos.y);
-                }
-            }
-        }
+        self.maybe_save_position();
         if let Ok(size) = self.window.inner_size() {
             if is_valid_window_size(size.width, size.height) {
                 self.cfg.set_window_size(size.width, size.height);
@@ -155,15 +149,13 @@ impl WindowStateHandler {
         if !is_valid_window_position(pos.x, pos.y) {
             return;
         }
-        if !self.window.is_maximized().unwrap_or(false) {
-            let mut last = self.last_pos_save.lock();
-            let now = std::time::Instant::now();
-            if now.duration_since(*last) > std::time::Duration::from_millis(500) {
-                *last = now;
-                drop(last);
-                self.cfg.set_window_position(pos.x, pos.y);
-            }
+        if self.window.is_maximized().unwrap_or(false) {
+            return;
         }
+        if !throttle(&self.last_pos_save) {
+            return;
+        }
+        self.cfg.set_window_position(pos.x, pos.y);
     }
 
     fn on_close_requested(&self) {

@@ -48,17 +48,14 @@
 
     function getPickerType() { return _filePickerType; }
 
-    function bindPickerTypeButtons() {
-        var pickerTypeBtns = document.querySelectorAll('.picker-type-btn');
-        pickerTypeBtns.forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                var type = this.dataset.type;
-                updatePickerTypeUI(type);
-                savePickerType(type);
-            });
+    var pickerTypeBtns = document.querySelectorAll('.picker-type-btn');
+    pickerTypeBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var type = this.dataset.type;
+            updatePickerTypeUI(type);
+            savePickerType(type);
         });
-    }
-    bindPickerTypeButtons();
+    });
 
     // ================================================================
     // Custom File / Folder Picker

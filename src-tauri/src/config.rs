@@ -153,7 +153,7 @@ fn is_default_profile(name: &str) -> bool {
     name.eq_ignore_ascii_case("Default")
 }
 
-fn profile_name_from_path(path: PathBuf) -> Option<String> {
+fn profile_name_from_path(path: &Path) -> Option<String> {
     if !path
         .extension()
         .and_then(|e| e.to_str())
@@ -376,7 +376,7 @@ impl AppConfig {
         let mut profiles = vec![default_profile()];
         if let Ok(entries) = fs::read_dir(profiles_dir()) {
             for entry in entries.flatten() {
-                if let Some(name) = profile_name_from_path(entry.path()) {
+                if let Some(name) = profile_name_from_path(&entry.path()) {
                     if !is_default_profile(&name) {
                         profiles.push(profile_entry(name));
                     }
