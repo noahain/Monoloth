@@ -21,6 +21,24 @@ fn is_valid_window_position(x: i32, y: i32) -> bool {
         && (y as i64) <= MAX_WINDOW_POSITION
 }
 
+fn is_valid_window_size(width: u32, height: u32) -> bool {
+    (width as i64) >= MIN_WINDOW_WIDTH
+        && (height as i64) >= MIN_WINDOW_HEIGHT
+        && (width as i64) <= MAX_WINDOW_DIMENSION
+        && (height as i64) <= MAX_WINDOW_DIMENSION
+}
+
+fn throttle(last: &parking_lot::Mutex<std::time::Instant>) -> bool {
+    let mut guard = last.lock();
+    let now = std::time::Instant::now();
+    if now.duration_since(*guard) > std::time::Duration::from_millis(500) {
+        *guard = now;
+        true
+    } else {
+        false
+    }
+}
+
 fn setup_window(app: &mut tauri::App, cfg: &AppConfig) -> Result<tauri::WebviewWindow, String> {
     let width = cfg.get("window_width").as_i64().unwrap_or(1200) as u32;
     let height = cfg.get("window_height").as_i64().unwrap_or(700) as u32;
@@ -80,34 +98,49 @@ impl WindowStateHandler {
     }
 
     fn on_resized(&self, size: tauri::PhysicalSize<u32>) {
-        if size.width >= MIN_WINDOW_WIDTH as u32 && size.height >= MIN_WINDOW_HEIGHT as u32
-            && (size.width as i64) <= MAX_WINDOW_DIMENSION
-            && (size.height as i64) <= MAX_WINDOW_DIMENSION
-        {
-            let is_minimized = self.window.is_minimized().unwrap_or(false);
-            if is_minimized {
-                return;
+        if !is_valid_window_size(size.width, size.height) {
+            return;
+        }
+        if self.window.is_minimized().unwrap_or(false) {
+            return;
+        }
+        let is_max = self.window.is_maximized().unwrap_or(false);
+        let was_max = self.cfg.get("window_maximized").as_bool().unwrap_or(false);
+        if is_max != was_max {
+            self.cfg.set_window_maximized(is_max);
+        }
+        if is_max {
+            return;
+        }
+        if !throttle(&self.last_size_save) {
+            return;
+        }
+        self.cfg.set_window_size(size.width, size.height);
+        self.maybe_save_position();
+    }
+
+    fn maybe_save_position(&self) {
+        if self.is_wayland {
+            return;
+        }
+        if let Ok(pos) = self.window.outer_position() {
+            if is_valid_window_position(pos.x, pos.y) {
+                self.cfg.set_window_position(pos.x, pos.y);
             }
-            let is_max = self.window.is_maximized().unwrap_or(false);
-            let was_max = self.cfg.get("window_maximized").as_bool().unwrap_or(false);
-            if is_max != was_max {
-                self.cfg.set_window_maximized(is_max);
-            }
-            if !is_max {
-                let mut last = self.last_size_save.lock();
-                let now = std::time::Instant::now();
-                if now.duration_since(*last) > std::time::Duration::from_millis(500) {
-                    *last = now;
-                    drop(last);
-                    self.cfg.set_window_size(size.width, size.height);
-                    if !self.is_wayland {
-                        if let Ok(pos) = self.window.outer_position() {
-                            if is_valid_window_position(pos.x, pos.y) {
-                                self.cfg.set_window_position(pos.x, pos.y);
-                            }
-                        }
-                    }
+        }
+    }
+
+    fn save_window_geometry(&self) {
+        if !self.is_wayland {
+            if let Ok(pos) = self.window.outer_position() {
+                if is_valid_window_position(pos.x, pos.y) {
+                    self.cfg.set_window_position(pos.x, pos.y);
                 }
+            }
+        }
+        if let Ok(size) = self.window.inner_size() {
+            if is_valid_window_size(size.width, size.height) {
+                self.cfg.set_window_size(size.width, size.height);
             }
         }
     }
@@ -136,24 +169,9 @@ impl WindowStateHandler {
     fn on_close_requested(&self) {
         let is_max = self.window.is_maximized().unwrap_or(false);
         if !is_max {
-            let is_minimized = self.window.is_minimized().unwrap_or(false);
-            if !is_minimized {
-                if !self.is_wayland {
-                    if let Ok(pos) = self.window.outer_position() {
-                        if is_valid_window_position(pos.x, pos.y) {
-                            self.cfg.set_window_position(pos.x, pos.y);
-                        }
-                    }
-                }
-                if let Ok(size) = self.window.inner_size() {
-                    if size.width >= MIN_WINDOW_WIDTH as u32
-                        && size.height >= MIN_WINDOW_HEIGHT as u32
-                        && (size.width as i64) <= MAX_WINDOW_DIMENSION
-                        && (size.height as i64) <= MAX_WINDOW_DIMENSION
-                    {
-                        self.cfg.set_window_size(size.width, size.height);
-                    }
-                }
+            let is_min = self.window.is_minimized().unwrap_or(false);
+            if !is_min {
+                self.save_window_geometry();
             }
         }
         self.cfg.set_window_maximized(is_max);

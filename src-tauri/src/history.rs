@@ -84,13 +84,7 @@ impl HistoryManager {
         }
         let session_id = "main".to_string();
         if let Some(active) = inner.active_sessions.remove(&session_id) {
-            inner.data.sessions.push(SessionEntry {
-                profile: active.profile,
-                command: active.command,
-                start_time: active.start_time,
-                end_time: Some(iso_now()),
-                directory: active.directory,
-            });
+            self.archive_active(&mut inner, active);
             self.purge_inner(&mut inner);
             save_json(&self.path, &inner.data);
         }
@@ -108,13 +102,7 @@ impl HistoryManager {
             return;
         }
         if let Some(active) = inner.active_sessions.remove(session_id) {
-            inner.data.sessions.push(SessionEntry {
-                profile: active.profile,
-                command: active.command,
-                start_time: active.start_time,
-                end_time: Some(iso_now()),
-                directory: active.directory,
-            });
+            self.archive_active(&mut inner, active);
             self.purge_inner(&mut inner);
             save_json(&self.path, &inner.data);
         }
@@ -130,13 +118,7 @@ impl HistoryManager {
         let mut inner = self.inner.lock();
         let session_id = "main";
         if let Some(active) = inner.active_sessions.remove(session_id) {
-            inner.data.sessions.push(SessionEntry {
-                profile: active.profile,
-                command: active.command,
-                start_time: active.start_time,
-                end_time: Some(iso_now()),
-                directory: active.directory,
-            });
+            self.archive_active(&mut inner, active);
             self.purge_inner(&mut inner);
             save_json(&self.path, &inner.data);
         }
@@ -145,13 +127,7 @@ impl HistoryManager {
     pub fn session_end_by_id(&self, session_id: &str) {
         let mut inner = self.inner.lock();
         if let Some(active) = inner.active_sessions.remove(session_id) {
-            inner.data.sessions.push(SessionEntry {
-                profile: active.profile,
-                command: active.command,
-                start_time: active.start_time,
-                end_time: Some(iso_now()),
-                directory: active.directory,
-            });
+            self.archive_active(&mut inner, active);
             self.purge_inner(&mut inner);
             save_json(&self.path, &inner.data);
         }
@@ -166,13 +142,7 @@ impl HistoryManager {
             .collect();
         for key in &keys {
             if let Some(active) = inner.active_sessions.remove(key) {
-                inner.data.sessions.push(SessionEntry {
-                    profile: active.profile,
-                    command: active.command,
-                    start_time: active.start_time,
-                    end_time: Some(iso_now()),
-                    directory: active.directory,
-                });
+                self.archive_active(&mut inner, active);
             }
         }
         if !keys.is_empty() {
@@ -190,13 +160,7 @@ impl HistoryManager {
             .collect();
         for key in &keys {
             if let Some(active) = inner.active_sessions.remove(key) {
-                inner.data.sessions.push(SessionEntry {
-                    profile: active.profile,
-                    command: active.command,
-                    start_time: active.start_time,
-                    end_time: Some(iso_now()),
-                    directory: active.directory,
-                });
+                self.archive_active(&mut inner, active);
             }
         }
         if !keys.is_empty() {
@@ -207,6 +171,16 @@ impl HistoryManager {
 
     pub fn session_end_all_main_tabs(&self) {
         self.session_end_by_prefix("main-tab-");
+    }
+
+    fn archive_active(&self, inner: &mut HistoryInner, active: ActiveSession) {
+        inner.data.sessions.push(SessionEntry {
+            profile: active.profile,
+            command: active.command,
+            start_time: active.start_time,
+            end_time: Some(iso_now()),
+            directory: active.directory,
+        });
     }
 
     fn purge_inner(&self, inner: &mut HistoryInner) {

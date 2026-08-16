@@ -79,6 +79,29 @@ fn resolve_executable(startup: &StartupCommand) -> Result<(String, Vec<String>),
     }
 }
 
+fn push_secondary_entry(
+    cmd_obj: &serde_json::Map<String, Value>,
+    idx: usize,
+    panel_shell: &str,
+    before: &mut Vec<(String, String)>,
+    parallel: &mut Vec<(usize, String)>,
+    hidden: &mut Vec<(usize, String)>,
+) {
+    if cmd_obj.get("enabled").and_then(|v| v.as_bool()) != Some(true) {
+        return;
+    }
+    let cmd_str = match cmd_obj.get("command").and_then(|v| v.as_str()) {
+        Some(s) => s.to_string(),
+        None => return,
+    };
+    match cmd_obj.get("mode").and_then(|v| v.as_str()) {
+        Some("before") => before.push((cmd_str, panel_shell.to_string())),
+        Some("parallel") => parallel.push((idx, cmd_str)),
+        Some("hidden") => hidden.push((idx, cmd_str)),
+        _ => {}
+    }
+}
+
 fn build_secondary_plan(config: &AppConfig, session_id: &str, panel_shell: &str) -> SecondaryPlan {
     let secondary = if session_id == "main" {
         config.get("secondary_commands")
@@ -91,19 +114,7 @@ fn build_secondary_plan(config: &AppConfig, session_id: &str, panel_shell: &str)
     if let Value::Array(cmds) = &secondary {
         for (idx, cmd_val) in cmds.iter().enumerate() {
             if let Some(cmd_obj) = cmd_val.as_object() {
-                if cmd_obj.get("enabled").and_then(|v| v.as_bool()) != Some(true) {
-                    continue;
-                }
-                let cmd_str = match cmd_obj.get("command").and_then(|v| v.as_str()) {
-                    Some(s) => s.to_string(),
-                    None => continue,
-                };
-                match cmd_obj.get("mode").and_then(|v| v.as_str()) {
-                    Some("before") => before.push((cmd_str, panel_shell.to_string())),
-                    Some("parallel") => parallel.push((idx, cmd_str)),
-                    Some("hidden") => hidden.push((idx, cmd_str)),
-                    _ => {}
-                }
+                push_secondary_entry(cmd_obj, idx, panel_shell, &mut before, &mut parallel, &mut hidden);
             }
         }
     }
@@ -114,6 +125,42 @@ fn run_before_commands(before: &[(String, String)], cwd: &str) {
     for (cmd_str, shell) in before {
         if let Err(e) = run_before_command(cmd_str, cwd, shell) {
             warn!("Before command failed: {}", e);
+        }
+    }
+}
+
+fn spawn_parallel_entries(
+    parallel: &[(usize, String)],
+    pty: &PtyManager,
+    cwd: &str,
+    panel_shell: &str,
+) {
+    for (idx, cmd_str) in parallel {
+        match run_parallel_command(cmd_str.clone(), cwd.to_string(), panel_shell) {
+            Ok(child) => pty.track_parallel_child(format!("parallel-main-{}", idx), child),
+            Err(e) => warn!("Parallel command failed: {}", e),
+        }
+    }
+}
+
+fn spawn_hidden_entries(
+    hidden: &[(usize, String)],
+    pty: &PtyManager,
+    cwd: &str,
+    cols: u16,
+    rows: u16,
+    panel_shell: &str,
+) {
+    for (idx, cmd_str) in hidden {
+        let hidden_sid = format!("hidden-{}", idx);
+        match resolve_hidden_command(panel_shell, cmd_str) {
+            Ok((exe, args)) => {
+                let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+                if let Err(e) = pty.spawn(&hidden_sid, &exe, &args_ref, cwd, cols, rows) {
+                    warn!("Hidden command failed: {}", e);
+                }
+            }
+            Err(e) => warn!("Hidden command resolve failed: {}", e),
         }
     }
 }
@@ -131,26 +178,8 @@ fn run_post_commands(
     }
     pty.kill_all_parallel();
     pty.terminate_by_prefix("hidden-");
-    for (idx, cmd_str) in &plan.parallel {
-        match run_parallel_command(cmd_str.clone(), cwd.to_string(), panel_shell) {
-            Ok(child) => {
-                pty.track_parallel_child(format!("parallel-main-{}", idx), child);
-            }
-            Err(e) => warn!("Parallel command failed: {}", e),
-        }
-    }
-    for (idx, cmd_str) in &plan.hidden {
-        let hidden_sid = format!("hidden-{}", idx);
-        match resolve_hidden_command(panel_shell, cmd_str) {
-            Ok((exe, args)) => {
-                let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-                if let Err(e) = pty.spawn(&hidden_sid, &exe, &args_ref, cwd, cols, rows) {
-                    warn!("Hidden command failed: {}", e);
-                }
-            }
-            Err(e) => warn!("Hidden command resolve failed: {}", e),
-        }
-    }
+    spawn_parallel_entries(&plan.parallel, pty, cwd, panel_shell);
+    spawn_hidden_entries(&plan.hidden, pty, cwd, cols, rows, panel_shell);
 }
 
 fn history_tool_label(startup_command: &str) -> String {
@@ -484,6 +513,41 @@ fn no_window_command(program: &str) -> std::process::Command {
     cmd
 }
 
+#[cfg(windows)]
+fn probe_windows_npm() -> Option<String> {
+    let npm_paths = [
+        "C:\\Program Files\\nodejs\\opencode.cmd",
+        "C:\\Program Files\\nodejs\\opencode.exe",
+    ];
+    for p in npm_paths {
+        if std::path::PathBuf::from(p).exists() {
+            return Some(p.to_string());
+        }
+    }
+    None
+}
+
+#[cfg(windows)]
+fn probe_npm_prefix() -> Option<String> {
+    let output = no_window_command("cmd")
+        .args(["/C", "npm", "prefix", "-g"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let cmd_path = format!("{}\\opencode.cmd", prefix);
+    if std::path::PathBuf::from(&cmd_path).exists() {
+        return Some(cmd_path);
+    }
+    let exe_path = format!("{}\\opencode.exe", prefix);
+    if std::path::PathBuf::from(&exe_path).exists() {
+        return Some(exe_path);
+    }
+    None
+}
+
 fn find_opencode() -> Result<String, String> {
     if let Ok(p) = std::env::var("OPENCODE_BIN_PATH") {
         let p = p.trim();
@@ -494,8 +558,6 @@ fn find_opencode() -> Result<String, String> {
 
     #[cfg(windows)]
     {
-        use std::path::PathBuf;
-
         if let Ok(output) = no_window_command("where").arg("opencode").output() {
             if output.status.success() {
                 let path = String::from_utf8_lossy(&output.stdout);
@@ -505,38 +567,19 @@ fn find_opencode() -> Result<String, String> {
             }
         }
 
-        let npm_paths = [
-            "C:\\Program Files\\nodejs\\opencode.cmd",
-            "C:\\Program Files\\nodejs\\opencode.exe",
-        ];
-        for p in &npm_paths {
-            if PathBuf::from(p).exists() {
-                return Ok(p.to_string());
-            }
+        if let Some(p) = probe_windows_npm() {
+            return Ok(p);
         }
 
-        if let Ok(output) = no_window_command("cmd")
-            .args(["/C", "npm", "prefix", "-g"])
-            .output()
-        {
-            if output.status.success() {
-                let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                let cmd_path = format!("{}\\opencode.cmd", prefix);
-                if PathBuf::from(&cmd_path).exists() {
-                    return Ok(cmd_path);
-                }
-                let exe_path = format!("{}\\opencode.exe", prefix);
-                if PathBuf::from(&exe_path).exists() {
-                    return Ok(exe_path);
-                }
-            }
+        if let Some(p) = probe_npm_prefix() {
+            return Ok(p);
         }
 
         if let Ok(output) = no_window_command("cmd").args(["/C", "yarn", "global", "bin"]).output() {
             if output.status.success() {
                 let bin_dir = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 let cmd_path = format!("{}\\opencode.cmd", bin_dir);
-                if PathBuf::from(&cmd_path).exists() {
+                if std::path::PathBuf::from(&cmd_path).exists() {
                     return Ok(cmd_path);
                 }
             }
@@ -586,6 +629,27 @@ fn first_existing_line(output: &str) -> Option<String> {
         .map(|line| line.to_string())
 }
 
+#[cfg(not(windows))]
+fn wait_with_timeout(
+    child: &mut std::process::Child,
+    timeout: std::time::Duration,
+) -> Option<std::process::ExitStatus> {
+    use std::time::{Duration, Instant};
+    let started = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return Some(status),
+            Ok(None) if started.elapsed() >= timeout => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(25)),
+            Err(_) => return None,
+        }
+    }
+}
+
 /// Ask the user's login shell to resolve a binary using its full profile PATH.
 /// GUI-launched apps on Linux/macOS don't inherit shell-profile PATH additions,
 /// so `which` against the process PATH often misses user installs.
@@ -596,13 +660,11 @@ fn first_existing_line(output: &str) -> Option<String> {
 #[cfg(not(windows))]
 fn resolve_via_login_shell(bin: &str) -> Option<String> {
     use std::process::Stdio;
-    use std::time::{Duration, Instant};
-
+    use std::time::Duration;
     let shell = std::env::var("SHELL")
         .ok()
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| "/bin/sh".to_string());
-    // `-l -c` loads the login profile without going interactive.
     let script = format!("command -v {} 2>/dev/null", bin);
     let mut child = std::process::Command::new(&shell)
         .args(["-l", "-c", &script])
@@ -611,30 +673,16 @@ fn resolve_via_login_shell(bin: &str) -> Option<String> {
         .stderr(Stdio::null())
         .spawn()
         .ok()?;
-
-    let started = Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                if !status.success() {
-                    return None;
-                }
-                let mut buf = String::new();
-                if let Some(mut out) = child.stdout.take() {
-                    use std::io::Read;
-                    let _ = out.read_to_string(&mut buf);
-                }
-                return first_existing_line(&buf);
-            }
-            Ok(None) if started.elapsed() >= Duration::from_secs(5) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return None;
-            }
-            Ok(None) => std::thread::sleep(Duration::from_millis(25)),
-            Err(_) => return None,
-        }
+    let status = wait_with_timeout(&mut child, Duration::from_secs(5))?;
+    if !status.success() {
+        return None;
     }
+    let mut buf = String::new();
+    if let Some(mut out) = child.stdout.take() {
+        use std::io::Read;
+        let _ = out.read_to_string(&mut buf);
+    }
+    first_existing_line(&buf)
 }
 
 /// Probe common absolute install locations for a binary on Linux/macOS.

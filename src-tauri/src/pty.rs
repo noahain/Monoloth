@@ -146,31 +146,8 @@ impl PtyManager {
                     let mut data = Vec::with_capacity(leftover.len() + n);
                     data.append(&mut leftover);
                     data.extend_from_slice(&buf[..n]);
-
                     let mut emit_buf = Vec::new();
-                    let mut current = data.as_slice();
-                    loop {
-                        match std::str::from_utf8(current) {
-                            Ok(s) => {
-                                emit_buf.extend_from_slice(s.as_bytes());
-                                break;
-                            }
-                            Err(e) => {
-                                let valid_up_to = e.valid_up_to();
-                                if valid_up_to > 0 {
-                                    emit_buf.extend_from_slice(&current[..valid_up_to]);
-                                }
-                                if let Some(error_len) = e.error_len() {
-                                    emit_buf.extend_from_slice("�".as_bytes());
-                                    current = &current[valid_up_to + error_len..];
-                                } else {
-                                    leftover = current[valid_up_to..].to_vec();
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
+                    Self::decode_chunk(&data, &mut leftover, &mut emit_buf);
                     if !emit_buf.is_empty() {
                         let output = String::from_utf8_lossy(&emit_buf).to_string();
                         Self::emit_output(&app_handle, output, false, &session_id, generation);
@@ -180,6 +157,31 @@ impl PtyManager {
                     Self::flush_leftover(&app_handle, &mut leftover, &session_id, generation);
                     Self::emit_output(&app_handle, String::new(), true, &session_id, generation);
                     break;
+                }
+            }
+        }
+    }
+
+    fn decode_chunk(data: &[u8], leftover: &mut Vec<u8>, emit_buf: &mut Vec<u8>) {
+        let mut current = data;
+        loop {
+            match std::str::from_utf8(current) {
+                Ok(s) => {
+                    emit_buf.extend_from_slice(s.as_bytes());
+                    break;
+                }
+                Err(e) => {
+                    let valid_up_to = e.valid_up_to();
+                    if valid_up_to > 0 {
+                        emit_buf.extend_from_slice(&current[..valid_up_to]);
+                    }
+                    if let Some(error_len) = e.error_len() {
+                        emit_buf.extend_from_slice("�".as_bytes());
+                        current = &current[valid_up_to + error_len..];
+                    } else {
+                        *leftover = current[valid_up_to..].to_vec();
+                        break;
+                    }
                 }
             }
         }

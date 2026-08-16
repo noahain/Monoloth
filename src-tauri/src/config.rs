@@ -107,27 +107,19 @@ fn defaults() -> Map<String, Value> {
     m
 }
 
+fn drop_if_out_of_range(map: &mut Map<String, Value>, key: &str, min: i64, max: i64) {
+    if let Some(v) = map.get(key).and_then(|v| v.as_i64()) {
+        if v < min || v > max {
+            map.remove(key);
+        }
+    }
+}
+
 fn sanitize_window_state(map: &mut Map<String, Value>) {
-    if let Some(w) = map.get("window_width").and_then(|v| v.as_i64()) {
-        if w < MIN_WINDOW_WIDTH || w > MAX_WINDOW_DIMENSION {
-            map.remove("window_width");
-        }
-    }
-    if let Some(h) = map.get("window_height").and_then(|v| v.as_i64()) {
-        if h < MIN_WINDOW_HEIGHT || h > MAX_WINDOW_DIMENSION {
-            map.remove("window_height");
-        }
-    }
-    if let Some(x) = map.get("window_x").and_then(|v| v.as_i64()) {
-        if x < MIN_WINDOW_POSITION || x > MAX_WINDOW_POSITION {
-            map.remove("window_x");
-        }
-    }
-    if let Some(y) = map.get("window_y").and_then(|v| v.as_i64()) {
-        if y < MIN_WINDOW_POSITION || y > MAX_WINDOW_POSITION {
-            map.remove("window_y");
-        }
-    }
+    drop_if_out_of_range(map, "window_width", MIN_WINDOW_WIDTH, MAX_WINDOW_DIMENSION);
+    drop_if_out_of_range(map, "window_height", MIN_WINDOW_HEIGHT, MAX_WINDOW_DIMENSION);
+    drop_if_out_of_range(map, "window_x", MIN_WINDOW_POSITION, MAX_WINDOW_POSITION);
+    drop_if_out_of_range(map, "window_y", MIN_WINDOW_POSITION, MAX_WINDOW_POSITION);
 }
 
 const GLOBAL_KEYS: &[&str] = &[
@@ -141,6 +133,36 @@ const GLOBAL_KEYS: &[&str] = &[
 
 fn is_global_key(key: &str) -> bool {
     GLOBAL_KEYS.contains(&key)
+}
+
+fn default_profile() -> HashMap<String, Value> {
+    HashMap::from([
+        ("name".to_string(), Value::String("Default".into())),
+        ("isDefault".to_string(), Value::Bool(true)),
+    ])
+}
+
+fn profile_entry(name: String) -> HashMap<String, Value> {
+    HashMap::from([
+        ("name".to_string(), Value::String(name)),
+        ("isDefault".to_string(), Value::Bool(false)),
+    ])
+}
+
+fn is_default_profile(name: &str) -> bool {
+    name.eq_ignore_ascii_case("Default")
+}
+
+fn profile_name_from_path(path: PathBuf) -> Option<String> {
+    if !path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.eq_ignore_ascii_case("json"))
+        .unwrap_or(false)
+    {
+        return None;
+    }
+    path.file_stem().and_then(|s| s.to_str()).map(|s| s.to_string())
 }
 
 fn load_json(path: &Path) -> Map<String, Value> {
@@ -351,23 +373,12 @@ impl AppConfig {
     }
 
     pub fn list_profiles(&self) -> Vec<HashMap<String, Value>> {
-        let mut profiles = vec![HashMap::from([
-            ("name".to_string(), Value::String("Default".into())),
-            ("isDefault".to_string(), Value::Bool(true)),
-        ])];
-
+        let mut profiles = vec![default_profile()];
         if let Ok(entries) = fs::read_dir(profiles_dir()) {
             for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("json")).unwrap_or(false) {
-                    if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
-                        if name.eq_ignore_ascii_case("Default") {
-                            continue;
-                        }
-                        profiles.push(HashMap::from([
-                            ("name".to_string(), Value::String(name.into())),
-                            ("isDefault".to_string(), Value::Bool(false)),
-                        ]));
+                if let Some(name) = profile_name_from_path(entry.path()) {
+                    if !is_default_profile(&name) {
+                        profiles.push(profile_entry(name));
                     }
                 }
             }
