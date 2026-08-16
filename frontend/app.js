@@ -2012,6 +2012,27 @@
         });
     }
 
+    function restartPanelTab(tabId, sessionId) {
+        var tab = window.SidebarManager.getTab(tabId);
+        if (!tab) return;
+        window.MonolithTerminal.incrementSessionGeneration(sessionId);
+        window.MonolithTerminal.setSkipNextEof(sessionId, true);
+        var restartPromise = window.monolithApi ? window.monolithApi.terminate_terminal(sessionId).catch(function(){}) : Promise.resolve();
+        return restartPromise.finally(function(){
+            window.MonolithTerminal.setSkipNextEof(sessionId, false);
+            tab = window.SidebarManager.getTab(tabId);
+            if (!tab) return;
+            if (tab.term) { try{ tab.term.dispose(); }catch(e){} tab.term=null; }
+            if (tab.fitAddon){ try{ tab.fitAddon.dispose();}catch(e){} tab.fitAddon=null; }
+            tab.running=false; tab.busy=false; tab.generation=null; tab.closing=false;
+            if (window.MonolithTerminal.hasSkipNextEof(sessionId)) window.MonolithTerminal.deleteSkipNextEof(sessionId);
+            var terminalDiv = tab.container.querySelector('.cmd-panel-tab-terminal');
+            if (terminalDiv) terminalDiv.innerHTML='';
+            window.SidebarManager.hideTabExitBanner(tab);
+            if (window.SidebarManager.getActiveTabId()===tabId) window.SidebarManager.initTabXterm(tab);
+        });
+    }
+
     // --- MonolothApp Facade (exposed to sidebar.js) ---
     window.MonolothApp = {
         // --- Background / Appearance ---
@@ -2059,73 +2080,13 @@
                 } else if (sessionId.startsWith('panel-tab-')) {
                     if (typeof window.SidebarManager === 'undefined' || typeof window.SidebarManager.getTab !== 'function') return;
                     var tabId = sessionId.replace('panel-', '');
-                    var tab = window.SidebarManager.getTab(tabId);
-                    if (!tab) return;
-                    window.MonolithTerminal.incrementSessionGeneration(sessionId);
-                    window.MonolithTerminal.setSkipNextEof(sessionId, true);
-                    var restartPromise = window.monolithApi
-                        ? window.monolithApi.terminate_terminal(sessionId).catch(function () {})
-                        : Promise.resolve();
-                    restartPromise.finally(function () {
-                        window.MonolithTerminal.setSkipNextEof(sessionId, false);
-                        tab = window.SidebarManager.getTab(tabId);
-                        if (!tab) return;
-                        if (tab.term) {
-                            try { tab.term.dispose(); } catch (e) {}
-                            try { tab.fitAddon.dispose(); } catch (e) {}
-                            tab.term = null;
-                            tab.fitAddon = null;
-                        }
-                        tab.running = false;
-                        tab.busy = false;
-                        tab.generation = null;
-                        tab.closing = false;
-                        if (window.MonolithTerminal.hasSkipNextEof(sessionId)) {
-                            window.MonolithTerminal.deleteSkipNextEof(sessionId);
-                        }
-                        var terminalDiv = tab.container.querySelector('.cmd-panel-tab-terminal');
-                        if (terminalDiv) terminalDiv.innerHTML = '';
-                        window.SidebarManager.hideTabExitBanner(tab);
-                        if (window.SidebarManager.getActiveTabId() === tabId) {
-                            window.SidebarManager.initTabXterm(tab);
-                        }
-                    });
+                    restartPanelTab(tabId, sessionId);
                 } else if (sessionId.startsWith('panel-') && sessionId !== 'panel') {
                     if (typeof window.SidebarManager === 'undefined' || typeof window.SidebarManager.getTab !== 'function') return;
                     var match = sessionId.match(/^panel-(mtab-\d+)-tab-(\d+)$/);
                     if (!match) return;
                     var tabId = 'ptab-' + match[1] + '-' + match[2];
-                    var tab = window.SidebarManager.getTab(tabId);
-                    if (!tab) return;
-                    window.MonolithTerminal.incrementSessionGeneration(sessionId);
-                    window.MonolithTerminal.setSkipNextEof(sessionId, true);
-                    var restartPromise = window.monolithApi
-                        ? window.monolithApi.terminate_terminal(sessionId).catch(function () {})
-                        : Promise.resolve();
-                    restartPromise.finally(function () {
-                        window.MonolithTerminal.setSkipNextEof(sessionId, false);
-                        tab = window.SidebarManager.getTab(tabId);
-                        if (!tab) return;
-                        if (tab.term) {
-                            try { tab.term.dispose(); } catch (e) {}
-                            try { tab.fitAddon.dispose(); } catch (e) {}
-                            tab.term = null;
-                            tab.fitAddon = null;
-                        }
-                        tab.running = false;
-                        tab.busy = false;
-                        tab.generation = null;
-                        tab.closing = false;
-                        if (window.MonolithTerminal.hasSkipNextEof(sessionId)) {
-                            window.MonolithTerminal.deleteSkipNextEof(sessionId);
-                        }
-                        var terminalDiv = tab.container.querySelector('.cmd-panel-tab-terminal');
-                        if (terminalDiv) terminalDiv.innerHTML = '';
-                        window.SidebarManager.hideTabExitBanner(tab);
-                        if (window.SidebarManager.getActiveTabId() === tabId) {
-                            window.SidebarManager.initTabXterm(tab);
-                        }
-                    });
+                    restartPanelTab(tabId, sessionId);
                 } else if (sessionId === 'panel') {
                     if (_panelRunning) {
                         window.MonolithTerminal.incrementSessionGeneration('panel');
