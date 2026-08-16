@@ -1209,7 +1209,7 @@
             var def = findDefaultButton(b.id);
             var name = def ? def.name : b.id;
             html += '<div class="sidebar-setting-row" data-id="' + b.id + '" data-type="default">';
-            html += '<span class="sidebar-drag-handle" data-tooltip="Drag to reorder"></span>';
+            html += '<span class="sidebar-drag-handle" data-tooltip="Drag to reorder"><svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.4"/><circle cx="6" cy="2" r="1.4"/><circle cx="2" cy="7" r="1.4"/><circle cx="6" cy="7" r="1.4"/><circle cx="2" cy="12" r="1.4"/><circle cx="6" cy="12" r="1.4"/></svg></span>';
             html += '<span class="sidebar-setting-icon">' + (ICONS[def ? def.icon : 'terminal'] || ICONS.terminal) + '</span>';
             html += '<span class="sidebar-setting-name">' + name + '</span>';
             html += '<label class="sidebar-toggle-label">';
@@ -1225,7 +1225,7 @@
         html += '<div class="sidebar-custom-buttons" id="sidebar-custom-buttons">';
         (cfg.customButtons || []).slice().sort(function (a, b) { return a.order - b.order; }).forEach(function (b) {
             html += '<div class="sidebar-setting-row" data-id="' + b.id + '" data-type="custom">';
-            html += '<span class="sidebar-drag-handle" data-tooltip="Drag to reorder"></span>';
+            html += '<span class="sidebar-drag-handle" data-tooltip="Drag to reorder"><svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.4"/><circle cx="6" cy="2" r="1.4"/><circle cx="2" cy="7" r="1.4"/><circle cx="6" cy="7" r="1.4"/><circle cx="2" cy="12" r="1.4"/><circle cx="6" cy="12" r="1.4"/></svg></span>';
             html += '<span class="sidebar-setting-icon">' + (ICONS[b.icon] || ICONS.terminal) + '</span>';
             html += '<span class="sidebar-setting-name">' + escapeHtml(b.name) + '</span>';
             html += '<span class="sidebar-setting-mode">' + escapeHtml(b.mode || 'background') + '</span>';

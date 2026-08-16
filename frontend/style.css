@@ -6823,21 +6823,35 @@ body.adaptive-light .sidebar-setting-row {
 
 .sidebar-drag-handle {
     cursor: grab;
-    color: rgba(255, 255, 255, 0.2);
-    font-size: 1rem;
-    line-height: 1;
-    padding: 0 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.32);
+    padding: 6px 4px;
     user-select: none;
     flex-shrink: 0;
+    border-radius: 4px;
+}
+
+.sidebar-drag-handle:hover {
+    color: rgba(255, 255, 255, 0.65);
+    background: rgba(255, 255, 255, 0.06);
 }
 
 .sidebar-drag-handle:active {
     cursor: grabbing;
+    color: rgba(255, 255, 255, 0.85);
 }
 
 body.light-mode .sidebar-drag-handle,
 body.adaptive-light .sidebar-drag-handle {
-    color: var(--modal-text-disabled);
+    color: rgba(0, 0, 0, 0.28);
+}
+
+body.light-mode .sidebar-drag-handle:hover,
+body.adaptive-light .sidebar-drag-handle:hover {
+    color: rgba(0, 0, 0, 0.55);
+    background: rgba(0, 0, 0, 0.06);
 }
 
 .sidebar-setting-icon {
