@@ -206,8 +206,12 @@
         if (window.MonolothApp && window.MonolothApp.reloadStartupConfig) {
             window.MonolothApp.reloadStartupConfig();
         }
-        if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.switchToMainTab === 'function') {
-            window.SidebarManager.switchToMainTab(tabId);
+        if (typeof window.SidebarManager !== 'undefined') {
+            if (typeof window.SidebarManager.onMainTabFocusChanged === 'function') {
+                window.SidebarManager.onMainTabFocusChanged(tabId);
+            } else if (typeof window.SidebarManager.switchToMainTab === 'function') {
+                window.SidebarManager.switchToMainTab(tabId);
+            }
         }
 
         if (window.monolithApi && window.monolithApi.get_profile_appearance) {

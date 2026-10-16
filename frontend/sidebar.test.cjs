@@ -451,3 +451,18 @@ test('setCmdPanelDock ignores invalid values', async () => {
     assert.equal(win.SidebarManager.getCmdPanelDock(), 'bottom');
     assert.equal(harness.context.document.documentElement.style['--cmd-panel-width'], undefined);
 });
+
+test('follow=first pins the panel group to the first visible pane', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const win = harness.context.window;
+    win.MonolithTerminal.getVisibleTabIds = function () { return ['mtab-1', 'mtab-2']; };
+    win.MonolithTerminal.getActiveTabId = function () { return 'mtab-2'; };
+
+    win.SidebarManager.setCmdPanelFollow('first');
+    win.SidebarManager.onMainTabFocusChanged('mtab-2');
+    await win.SidebarManager.createTab(null, true, 'C:\\repo');
+
+    const tab = win.SidebarManager.getActiveTab();
+    assert.ok(tab.sessionId.startsWith('panel-mtab-1'),
+        'panel must follow the first visible pane, got ' + tab.sessionId);
+});

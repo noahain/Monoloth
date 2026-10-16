@@ -36,6 +36,7 @@
     var _panelHeight = 200;
     var _cmdPanelDock = 'bottom';
     var _cmdPanelOpen = false;
+    var _cmdPanelFollow = 'focused';
 
     var _mainTabPanels = new Map();
     var _activeMainTabId = null;
@@ -58,6 +59,11 @@
     }
 
     function _getActiveMainTabId() {
+        if (_cmdPanelFollow === 'first' && typeof window.MonolithTerminal !== 'undefined' &&
+            typeof window.MonolithTerminal.getVisibleTabIds === 'function') {
+            var visible = window.MonolithTerminal.getVisibleTabIds();
+            if (visible && visible.length) return visible[0];
+        }
         if (typeof window.MonolithTerminal !== 'undefined' && typeof window.MonolithTerminal.getActiveTabId === 'function') {
             var id = window.MonolithTerminal.getActiveTabId();
             if (id) return id;
@@ -415,6 +421,11 @@
         window.monolithApi.get_config('panelShell').then(function (val) {
             _panelShell = (typeof val === 'string') ? val : 'cmd';
         }).catch(function () {});
+        window.monolithApi.get_config('cmdPanelFollow').then(function (val) {
+            if (val === 'focused' || val === 'first' || val === 'per-pane') {
+                _cmdPanelFollow = val;
+            }
+        }).catch(function () {});
         window.monolithApi.get_config('cmdPanelOpen').then(function (val) {
             if (val === true) {
                 _panelRestoreNeeded = true;
@@ -653,6 +664,26 @@
         _mainTabPanels.clear();
         hideCmdPanel(false);
     }
+
+    function onMainTabFocusChanged(mainTabId) {
+        // 'per-pane' renders per-pane shells in Stage 2; with a single pane it behaves as 'focused'.
+        if (_cmdPanelFollow === 'first') {
+            var visible = (typeof window.MonolithTerminal !== 'undefined' &&
+                typeof window.MonolithTerminal.getVisibleTabIds === 'function')
+                ? window.MonolithTerminal.getVisibleTabIds()
+                : null;
+            if (visible && visible.length) mainTabId = visible[0];
+        }
+        switchToMainTab(mainTabId);
+    }
+
+    function setCmdPanelFollow(mode) {
+        if (mode !== 'focused' && mode !== 'first' && mode !== 'per-pane') return;
+        _cmdPanelFollow = mode;
+        onMainTabFocusChanged(_getActiveMainTabId());
+    }
+
+    function getCmdPanelFollow() { return _cmdPanelFollow; }
 
     function switchToMainTab(mainTabId) {
         if (_activeMainTabId === mainTabId) return;
@@ -1819,6 +1850,9 @@
     SM.applyCmdPanelDock = applyCmdPanelDock;
     SM.setCmdPanelDock = setCmdPanelDock;
     SM.getCmdPanelDock = getCmdPanelDock;
+    SM.onMainTabFocusChanged = onMainTabFocusChanged;
+    SM.setCmdPanelFollow = setCmdPanelFollow;
+    SM.getCmdPanelFollow = getCmdPanelFollow;
     SM.restorePanelState = function () {
         if (typeof Terminal === 'undefined' || !window.monolithApi) return;
         var restore = function () {
