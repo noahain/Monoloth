@@ -141,6 +141,7 @@
         tabItem.classList.add('entering');
 
         tabItem.addEventListener('click', function (e) {
+            if (_suppressTabClick) { _suppressTabClick = false; return; }
             if (e.target.classList.contains('main-tab-close')) {
                 e.stopPropagation();
                 closeTab(tabId);
@@ -156,6 +157,7 @@
             e.preventDefault();
             showMainTabContextMenu(tabId, e.clientX, e.clientY);
         });
+        tabItem.addEventListener('mousedown', function (e) { _onTabMouseDown(e, tabId); });
 
         var tab = {
             id: tabId,
@@ -748,7 +750,7 @@
         return _paneSlotEls[tabId] || null;
     }
 
-    function splitPane(tabId, direction, otherTabId) {
+    function splitPane(tabId, direction, otherTabId, placeFirst) {
         if (!_tabs.has(tabId) || !_tabs.has(otherTabId) || tabId === otherTabId) return;
         if (!_paneTree) _paneTree = { type: 'leaf', tabId: tabId };
         var leaf = _leafForTab(_paneTree, tabId);
@@ -758,7 +760,9 @@
             id: 'pnode-' + (_paneNodeSeq++),
             direction: direction === 'column' ? 'column' : 'row',
             ratio: 0.5,
-            children: [leaf, { type: 'leaf', tabId: otherTabId }]
+            children: placeFirst
+                ? [{ type: 'leaf', tabId: otherTabId }, leaf]
+                : [leaf, { type: 'leaf', tabId: otherTabId }]
         };
         var parent = _findParent(_paneTree, leaf);
         if (parent) {
@@ -811,6 +815,26 @@
         }
         renderPaneTree();
         scheduleResize();
+    }
+
+    function moveTabToPaneEdge(tabId, anchorTabId, edge) {
+        if (!tabId || !anchorTabId || tabId === anchorTabId) return Promise.resolve(null);
+        if (!_tabs.has(tabId) || !_tabs.has(anchorTabId)) return Promise.resolve(null);
+        var direction = (edge === 'left' || edge === 'right') ? 'row' : 'column';
+        var placeFirst = (edge === 'left' || edge === 'top');
+        if (_paneTree && _leafForTab(_paneTree, tabId)) removeLeaf(tabId);
+        if (!_paneTree) _paneTree = { type: 'leaf', tabId: anchorTabId };
+        if (!_leafForTab(_paneTree, anchorTabId)) return Promise.resolve(null);
+        splitPane(anchorTabId, direction, tabId, placeFirst);
+        return activateTab(tabId);
+    }
+
+    function ungroupTab(tabId) {
+        if (!_paneTree || _paneTree.type !== 'split') return;
+        if (!_leafForTab(_paneTree, tabId)) return;
+        removeLeaf(tabId);
+        var vis = getVisibleTabIds();
+        if (vis.indexOf(_focusedTabId) === -1 && vis.length) activateTab(vis[0]);
     }
 
     function setRatio(nodeId, ratio) {
@@ -873,6 +897,133 @@
     }
 
     function _onDividerUp() { _endDividerDrag(true); }
+
+    function hitPaneEdge(rect, x, y) {
+        if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+        if (x < rect.left || x > rect.left + rect.width || y < rect.top || y > rect.top + rect.height) return null;
+        var bx = rect.width * 0.25, by = rect.height * 0.25;
+        var dL = x - rect.left, dR = rect.left + rect.width - x;
+        var dT = y - rect.top, dB = rect.top + rect.height - y;
+        var cands = [];
+        if (dL <= bx) cands.push(['left', dL]);
+        if (dR <= bx) cands.push(['right', dR]);
+        if (dT <= by) cands.push(['top', dT]);
+        if (dB <= by) cands.push(['bottom', dB]);
+        if (!cands.length) return null;
+        cands.sort(function (a, b) { return a[1] - b[1]; });
+        if (cands.length > 1 && cands[0][1] === cands[1][1]) {
+            for (var i = 0; i < cands.length; i++) {
+                if (cands[i][0] === 'left' || cands[i][0] === 'right') return cands[i][0];
+            }
+        }
+        return cands[0][0];
+    }
+
+    var _snapOverlay = null;
+    function _getSnapOverlay() {
+        if (_snapOverlay) return _snapOverlay;
+        var el = document.createElement('div');
+        el.className = 'snap-overlay';
+        el.style.display = 'none';
+        document.body.appendChild(el);
+        _snapOverlay = el;
+        return el;
+    }
+
+    function showSnapOverlay(rect, mode) {
+        var el = _getSnapOverlay();
+        el.style.display = 'block';
+        el.style.left = rect.left + 'px';
+        el.style.top = rect.top + 'px';
+        el.style.width = rect.width + 'px';
+        el.style.height = rect.height + 'px';
+        el.setAttribute('data-mode', mode || 'pane');
+    }
+
+    function hideSnapOverlay() {
+        if (_snapOverlay) _snapOverlay.style.display = 'none';
+    }
+
+    function _edgePreviewRect(rect, edge) {
+        if (edge === 'left') return { left: rect.left, top: rect.top, width: rect.width / 2, height: rect.height };
+        if (edge === 'right') return { left: rect.left + rect.width / 2, top: rect.top, width: rect.width / 2, height: rect.height };
+        if (edge === 'top') return { left: rect.left, top: rect.top, width: rect.width, height: rect.height / 2 };
+        return { left: rect.left, top: rect.top + rect.height / 2, width: rect.width, height: rect.height / 2 };
+    }
+
+    var _tabDrag = null;
+    var _suppressTabClick = false;
+
+    function _slotRects() {
+        var out = [];
+        var visible = getVisibleTabIds();
+        for (var i = 0; i < visible.length; i++) {
+            var slot = getPaneSlotEl(visible[i]);
+            if (!slot || typeof slot.getBoundingClientRect !== 'function') continue;
+            out.push({ tabId: visible[i], rect: slot.getBoundingClientRect() });
+        }
+        return out;
+    }
+
+    function _hitTabDropTarget(x, y) {
+        var slots = _slotRects();
+        for (var i = 0; i < slots.length; i++) {
+            var edge = hitPaneEdge(slots[i].rect, x, y);
+            if (edge) return { type: 'pane', tabId: slots[i].tabId, edge: edge, rect: slots[i].rect };
+        }
+        var bar = document.getElementById('main-tab-bar');
+        if (bar && typeof bar.getBoundingClientRect === 'function') {
+            var r = bar.getBoundingClientRect();
+            if (x >= r.left && x <= r.left + r.width && y >= r.top && y <= r.top + r.height) {
+                return { type: 'ungroup', rect: { left: r.left, top: r.top, width: r.width, height: r.height } };
+            }
+        }
+        return null;
+    }
+
+    function _onTabMouseDown(e, tabId) {
+        if (e.button !== 0) return;
+        if (e.target && (e.target.tagName === 'INPUT' ||
+            (e.target.classList && e.target.classList.contains('main-tab-close')))) return;
+        _tabDrag = { tabId: tabId, startX: e.clientX, startY: e.clientY, active: false, target: null };
+        document.addEventListener('mousemove', _onTabMouseMove);
+        document.addEventListener('mouseup', _onTabMouseUp);
+    }
+
+    function _onTabMouseMove(e) {
+        if (!_tabDrag) return;
+        if (!_tabDrag.active) {
+            if (Math.abs(e.clientX - _tabDrag.startX) < 5 && Math.abs(e.clientY - _tabDrag.startY) < 5) return;
+            _tabDrag.active = true;
+            _suppressTabClick = true;
+            document.body.classList.add('tab-dragging');
+            var item = _findTabItem(_tabDrag.tabId);
+            if (item) item.classList.add('dragging');
+        }
+        var target = _hitTabDropTarget(e.clientX, e.clientY);
+        _tabDrag.target = target;
+        if (!target) { hideSnapOverlay(); return; }
+        if (target.type === 'pane') showSnapOverlay(_edgePreviewRect(target.rect, target.edge), 'pane');
+        else showSnapOverlay(target.rect, 'ungroup');
+    }
+
+    function _endTabDrag(commit) {
+        if (!_tabDrag) return;
+        var drag = _tabDrag;
+        _tabDrag = null;
+        document.removeEventListener('mousemove', _onTabMouseMove);
+        document.removeEventListener('mouseup', _onTabMouseUp);
+        document.body.classList.remove('tab-dragging');
+        var item = _findTabItem(drag.tabId);
+        if (item) item.classList.remove('dragging');
+        hideSnapOverlay();
+        if (!commit || !drag.active) { _suppressTabClick = false; return; }
+        if (!drag.target) return;
+        if (drag.target.type === 'pane') moveTabToPaneEdge(drag.tabId, drag.target.tabId, drag.target.edge);
+        else if (drag.target.type === 'ungroup') ungroupTab(drag.tabId);
+    }
+
+    function _onTabMouseUp() { _endTabDrag(true); }
 
     function _applySplitStyles(node) {
         if (!node._elA || !node._elB) return;
@@ -1005,6 +1156,7 @@
     }
 
     document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && _tabDrag) { _endTabDrag(false); return; }
         if (e.key === 'Escape' && _dividerDrag) { _endDividerDrag(false); return; }
         if (e.key === 'Escape' && _newTabCardOverlay) {
             var activeEl = document.activeElement;
@@ -1423,6 +1575,9 @@
             setRatio: setRatio,
             splitFocusedPane: splitFocusedPane,
             splitTab: splitTab,
+            hitPaneEdge: hitPaneEdge,
+            moveTabToPaneEdge: moveTabToPaneEdge,
+            ungroupTab: ungroupTab,
         },
         pty: {
             writeToTerm: window.writeToTerm,
@@ -1463,6 +1618,8 @@
             refitActiveTab: refitActiveTab,
             initTabXterm: initTabXterm,
             getPaneSlotEl: getPaneSlotEl,
+            showSnapOverlay: showSnapOverlay,
+            hideSnapOverlay: hideSnapOverlay,
         },
         lifecycle: {
             initTerminal: function (dir) {
@@ -1554,4 +1711,9 @@
     window.MonolithTerminal.setRatio = window.MonolithTerminal.tabs.setRatio;
     window.MonolithTerminal.splitFocusedPane = window.MonolithTerminal.tabs.splitFocusedPane;
     window.MonolithTerminal.splitTab = window.MonolithTerminal.tabs.splitTab;
+    window.MonolithTerminal.hitPaneEdge = window.MonolithTerminal.tabs.hitPaneEdge;
+    window.MonolithTerminal.moveTabToPaneEdge = window.MonolithTerminal.tabs.moveTabToPaneEdge;
+    window.MonolithTerminal.ungroupTab = window.MonolithTerminal.tabs.ungroupTab;
+    window.MonolithTerminal.showSnapOverlay = window.MonolithTerminal.view.showSnapOverlay;
+    window.MonolithTerminal.hideSnapOverlay = window.MonolithTerminal.view.hideSnapOverlay;
 })();

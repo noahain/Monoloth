@@ -605,3 +605,50 @@ test('removeLeaf dissolves the capsule back to a flat row', async () => {
     assert.equal(bar.children.some((c) => c.classList.contains('main-tab-capsule')), false);
     assert.deepEqual(tabItemIds(bar.children), ['mtab-1', 'mtab-2']);
 });
+
+test('hitPaneEdge detects 25% edge bands with horizontal tie-break', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    const rect = { left: 0, top: 0, width: 400, height: 300 };
+    assert.equal(MT.hitPaneEdge(rect, 10, 150), 'left');
+    assert.equal(MT.hitPaneEdge(rect, 390, 150), 'right');
+    assert.equal(MT.hitPaneEdge(rect, 200, 10), 'top');
+    assert.equal(MT.hitPaneEdge(rect, 200, 290), 'bottom');
+    assert.equal(MT.hitPaneEdge(rect, 200, 150), null);
+    assert.equal(MT.hitPaneEdge(rect, 500, 150), null);
+    assert.equal(MT.hitPaneEdge(rect, 5, 5), 'left');
+});
+
+test('splitPane placeFirst puts the new leaf first', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    await MT.createTab('C:\\dir2', false);
+    MT.splitPane('mtab-1', 'row', 'mtab-2', true);
+    assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-2', 'mtab-1']);
+});
+
+test('moveTabToPaneEdge moves a parked tab onto the anchor edge', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    await MT.createTab('C:\\dir2', false);
+    await MT.moveTabToPaneEdge('mtab-2', 'mtab-1', 'right');
+    assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-1', 'mtab-2']);
+    assert.equal(MT.getFocusedTabId(), 'mtab-2');
+    await MT.moveTabToPaneEdge('mtab-2', 'mtab-1', 'left');
+    assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-2', 'mtab-1']);
+});
+
+test('ungroupTab collapses the pane but keeps the session alive', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    await MT.createTab('C:\\dir2', false);
+    MT.splitPane('mtab-1', 'row', 'mtab-2');
+    MT.ungroupTab('mtab-2');
+    assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-1']);
+    assert.ok(MT.getTab('mtab-2'), 'ungrouped tab session must survive');
+    const host = harness.context.document.getElementById('main-tab-host');
+    assert.equal(MT.getTab('mtab-2').container.parentNode, host);
+});

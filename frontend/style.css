@@ -8427,6 +8427,19 @@ body.adaptive-light .main-tab-bar.in-titlebar .main-tab {
 .pane-split.split-col > .pane-divider { left: 0; right: 0; height: 6px; margin-top: -3px; cursor: row-resize; }
 .pane-divider:hover { background: var(--modal-hover-bg); }
 body.divider-dragging { cursor: col-resize; user-select: none; }
+.snap-overlay {
+    position: fixed;
+    z-index: 9000;
+    pointer-events: none;
+    display: none;
+    background: rgba(120, 160, 255, 0.22);
+    border: 1px solid var(--modal-text-dim);
+    border-radius: 8px;
+}
+.snap-overlay[data-mode="ungroup"] { border-style: dashed; }
+.snap-overlay[data-mode="dock"] { border-radius: 0; }
+body.tab-dragging, body.tab-dragging .main-tab { cursor: grabbing; }
+.main-tab.dragging { opacity: 0.45; }
 .pane-root { position: absolute; inset: 0; display: flex; }
 .pane-slot.has-shell .main-tab-container { bottom: var(--cmd-panel-height, 200px); }
 
