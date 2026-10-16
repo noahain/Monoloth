@@ -184,6 +184,7 @@
         }
 
         updateTabBarVisibility();
+        _renderTabCapsule();
 
         if (activate) {
             return activateTab(tabId);
@@ -637,6 +638,91 @@
         return out;
     }
 
+    function _tabItemId(item) {
+        if (!item) return null;
+        if (item.dataset && item.dataset.tabId) return item.dataset.tabId;
+        if (typeof item.getAttribute === 'function') {
+            try { return item.getAttribute('data-tab-id'); } catch (e) {}
+        }
+        return item['data-tab-id'] || null;
+    }
+
+    function _findTabItem(tabId) {
+        if (!tabList) return null;
+        var stack = [tabList];
+        while (stack.length) {
+            var el = stack.pop();
+            if (el !== tabList && el.classList && el.classList.contains('main-tab') && _tabItemId(el) === tabId) return el;
+            if (el.children) for (var i = 0; i < el.children.length; i++) stack.push(el.children[i]);
+        }
+        return null;
+    }
+
+    function _moveItem(item, parent, before) {
+        if (!item || !parent) return;
+        if (item.parentNode && typeof item.parentNode.removeChild === 'function') {
+            try { item.parentNode.removeChild(item); } catch (e) {}
+        }
+        if (before && typeof parent.insertBefore === 'function') parent.insertBefore(item, before);
+        else parent.appendChild(item);
+    }
+
+    function _pinNewTabBtnLast() {
+        if (!tabNewBtn || tabNewBtn.parentNode !== tabList) return;
+        var kids = tabList.children;
+        if (kids[kids.length - 1] !== tabNewBtn) tabList.appendChild(tabNewBtn);
+    }
+
+    function _renderTabCapsule() {
+        if (!tabList) return;
+        var leaves = _paneTree ? _collectLeaves(_paneTree, []) : [];
+        var capsule = null;
+        for (var i = 0; i < tabList.children.length; i++) {
+            var child = tabList.children[i];
+            if (child.classList && child.classList.contains('main-tab-capsule')) { capsule = child; break; }
+        }
+        if (leaves.length < 2) {
+            if (capsule) {
+                var items = capsule.children.slice();
+                capsule.remove();
+                items.forEach(function (item) { _moveItem(item, tabList, tabNewBtn); });
+            }
+            _pinNewTabBtnLast();
+            return;
+        }
+        if (!capsule) {
+            capsule = document.createElement('div');
+            capsule.className = 'main-tab-capsule';
+        }
+        // Capture where the first leaf sits BEFORE moving items, so the
+        // capsule lands where the first leaf's tab item was.
+        var order = tabList.children.slice();
+        var firstIdx = order.length;
+        leaves.forEach(function (id) {
+            var probe = _findTabItem(id);
+            if (probe && probe.parentNode === tabList) {
+                var at = order.indexOf(probe);
+                if (at !== -1 && at < firstIdx) firstIdx = at;
+            }
+        });
+        leaves.forEach(function (id) {
+            var item = _findTabItem(id);
+            if (item) _moveItem(item, capsule, null);
+        });
+        capsule.classList.toggle('has-active', leaves.indexOf(_activeTabId) !== -1);
+        var ref = (tabList.children[firstIdx] && tabList.children[firstIdx] !== capsule)
+            ? tabList.children[firstIdx]
+            : (tabNewBtn && tabNewBtn.parentNode === tabList ? tabNewBtn : null);
+        _moveItem(capsule, tabList, ref);
+        // Parked tabs keep creation order ahead of the capsule.
+        _tabs.forEach(function (tab) {
+            if (leaves.indexOf(tab.id) !== -1) return;
+            var parked = _findTabItem(tab.id);
+            if (parked && parked.parentNode !== tabList) _moveItem(parked, tabList, capsule);
+        });
+        _pinNewTabBtnLast();
+    }
+
     function _findParent(node, child) {
         if (!node || node.type === 'leaf') return null;
         if (node.children[0] === child || node.children[1] === child) return node;
@@ -848,6 +934,7 @@
         if (window.SidebarManager && typeof window.SidebarManager.onPaneTreeChanged === 'function') {
             window.SidebarManager.onPaneTreeChanged();
         }
+        _renderTabCapsule();
     }
 
     function _fitTab(tab) {

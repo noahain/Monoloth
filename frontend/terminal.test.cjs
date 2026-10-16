@@ -51,6 +51,15 @@ class FakeElement {
         child.parentNode = null;
         return child;
     }
+    insertBefore(child, ref) {
+        var existing = this.children.indexOf(child);
+        if (existing !== -1) this.children.splice(existing, 1);
+        child.parentNode = this;
+        var idx = ref ? this.children.indexOf(ref) : -1;
+        if (idx === -1) this.children.push(child);
+        else this.children.splice(idx, 0, child);
+        return child;
+    }
     remove() { if (this.parentNode) this.parentNode.removeChild(this); }
     querySelector() { return new FakeElement('nested'); }
     querySelectorAll(selector) {
@@ -559,4 +568,40 @@ test('Ctrl+Alt+Right matches the split_pane_right default', async () => {
     assert.equal(S.shortcutMatches(ev, 'Ctrl+Alt+Right'), true);
     const evBad = { key: 'ArrowRight', ctrlKey: true, altKey: false, shiftKey: false, metaKey: false };
     assert.equal(S.shortcutMatches(evBad, 'Ctrl+Alt+Right'), false);
+});
+
+function tabItemIds(children) {
+    return children
+        .filter((c) => c.classList.contains('main-tab'))
+        .map((c) => c['data-tab-id']);
+}
+
+test('split leaves render as one capsule in tree order', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    await MT.createTab('C:\\dir2', false);
+    await MT.createTab('C:\\dir3', false);
+    MT.splitPane('mtab-1', 'row', 'mtab-2');
+
+    const bar = harness.context.document.getElementById('main-tab-tabs');
+    const capsule = bar.children.find((c) => c.classList.contains('main-tab-capsule'));
+    assert.ok(capsule, 'a .main-tab-capsule must exist');
+    assert.deepEqual(tabItemIds(capsule.children), ['mtab-1', 'mtab-2']);
+    assert.deepEqual(tabItemIds(bar.children), ['mtab-3']);
+    assert.ok(bar.children.indexOf(capsule) < bar.children.findIndex((c) => c['data-tab-id'] === 'mtab-3'),
+        'capsule must sit where the first leaf was');
+});
+
+test('removeLeaf dissolves the capsule back to a flat row', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    await MT.createTab('C:\\dir2', false);
+    MT.splitPane('mtab-1', 'row', 'mtab-2');
+    MT.removeLeaf('mtab-2');
+
+    const bar = harness.context.document.getElementById('main-tab-tabs');
+    assert.equal(bar.children.some((c) => c.classList.contains('main-tab-capsule')), false);
+    assert.deepEqual(tabItemIds(bar.children), ['mtab-1', 'mtab-2']);
 });
