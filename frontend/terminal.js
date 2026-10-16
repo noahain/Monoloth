@@ -46,6 +46,7 @@
     var _focusedTabId = null;
     var _paneNodeSeq = 0;
     var _paneSlotEls = {};
+    var _pendingSplit = null;
 
     // Windows PTY compat info — fetched once, shared across all tabs.
     var _windowsPtyInfo = null;
@@ -681,6 +682,32 @@
         scheduleResize();
     }
 
+    function _splitWithNewTab(anchorTabId, direction, dir, profile) {
+        return createTab(dir, false, profile).then(function (newTab) {
+            splitPane(anchorTabId, direction, newTab.id);
+            return activateTab(newTab.id).then(function () {
+                scheduleResize();
+                return newTab;
+            });
+        });
+    }
+
+    function splitTab(tabId, direction, dir) {
+        if (!_tabs.has(tabId)) return Promise.resolve(null);
+        if (direction !== 'row' && direction !== 'column') return Promise.resolve(null);
+        if (dir === undefined) {
+            _pendingSplit = { anchor: tabId, direction: direction };
+            showNewTabCard();
+            return Promise.resolve(null);
+        }
+        var profile = _newTabCardProfile || (window.MonolithProfiles && window.MonolithProfiles.getActiveProfileName ? window.MonolithProfiles.getActiveProfileName() : null);
+        return _splitWithNewTab(tabId, direction, dir, profile);
+    }
+
+    function splitFocusedPane(direction, dir) {
+        return splitTab(getFocusedTabId(), direction, dir);
+    }
+
     function removeLeaf(tabId) {
         if (!_paneTree || _paneTree.type === 'leaf') return;
         var leaf = _leafForTab(_paneTree, tabId);
@@ -840,9 +867,15 @@
 
     function createTabFromCard(dir) {
         var profile = _newTabCardProfile || (window.MonolithProfiles && window.MonolithProfiles.getActiveProfileName ? window.MonolithProfiles.getActiveProfileName() : null);
+        var pending = _pendingSplit;
+        _pendingSplit = null;
         hideNewTabCard();
         if (window.MonolothApp && window.MonolothApp.addToRecentDirectories) {
             window.MonolothApp.addToRecentDirectories(dir);
+        }
+        if (pending && _tabs.has(pending.anchor)) {
+            _splitWithNewTab(pending.anchor, pending.direction, dir, profile);
+            return;
         }
         createTab(dir, true, profile);
     }
@@ -945,6 +978,7 @@
     }
 
     function hideNewTabCard() {
+        _pendingSplit = null;
         if (!_newTabCardOverlay) return;
         var overlay = _newTabCardOverlay;
         var card = overlay.querySelector('.new-tab-card-modal');
@@ -1051,13 +1085,19 @@
         var tab = _tabs.get(tabId);
         if (!tab) return;
         var CM = window.MonolithCtxMenu;
-        CM.createContextMenu(x, y, [
+        var items = [
             { action: 'new', label: 'New Tab', icon: 'plus', shortcutHtml: CM.shortcutHtml('new_main_tab'), onSelect: function () { promptNewTab(); } },
-            { action: 'close', label: 'Close Tab', icon: 'x', danger: true, onSelect: function () { closeTab(tabId); } },
-            { divider: true },
-            { action: 'rename', label: 'Rename Tab', icon: 'pencil', onSelect: function () { startRenameTab(tabId); } },
-            { action: 'profile', label: 'Switch Profile', icon: 'profile', shortcutHtml: CM.shortcutHtml('switch_profile'), onSelect: function () { showProfileSwitchForTab(tabId); } }
-        ]);
+            { action: 'close', label: 'Close Tab', icon: 'x', danger: true, onSelect: function () { closeTab(tabId); } }
+        ];
+        if (_paneTree && _leafForTab(_paneTree, tabId)) {
+            items.push({ divider: true });
+            items.push({ action: 'split-right', label: 'Split Right', icon: 'plus', shortcutHtml: CM.shortcutHtml('split_pane_right'), onSelect: function () { splitTab(tabId, 'row'); } });
+            items.push({ action: 'split-down', label: 'Split Down', icon: 'plus', shortcutHtml: CM.shortcutHtml('split_pane_down'), onSelect: function () { splitTab(tabId, 'column'); } });
+        }
+        items.push({ divider: true });
+        items.push({ action: 'rename', label: 'Rename Tab', icon: 'pencil', onSelect: function () { startRenameTab(tabId); } });
+        items.push({ action: 'profile', label: 'Switch Profile', icon: 'profile', shortcutHtml: CM.shortcutHtml('switch_profile'), onSelect: function () { showProfileSwitchForTab(tabId); } });
+        CM.createContextMenu(x, y, items);
     }
 
     function restartTabWithProfile(tab) {
@@ -1233,6 +1273,8 @@
             splitPane: splitPane,
             removeLeaf: removeLeaf,
             setRatio: setRatio,
+            splitFocusedPane: splitFocusedPane,
+            splitTab: splitTab,
         },
         pty: {
             writeToTerm: window.writeToTerm,
@@ -1362,4 +1404,6 @@
     window.MonolithTerminal.splitPane = window.MonolithTerminal.tabs.splitPane;
     window.MonolithTerminal.removeLeaf = window.MonolithTerminal.tabs.removeLeaf;
     window.MonolithTerminal.setRatio = window.MonolithTerminal.tabs.setRatio;
+    window.MonolithTerminal.splitFocusedPane = window.MonolithTerminal.tabs.splitFocusedPane;
+    window.MonolithTerminal.splitTab = window.MonolithTerminal.tabs.splitTab;
 })();

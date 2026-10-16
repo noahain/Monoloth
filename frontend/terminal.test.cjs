@@ -488,3 +488,58 @@ test('getPaneSlotEl returns the rendered slot element for a leaf', async () => {
     assert.equal(slot1.dataset.tabId, 'mtab-1');
     assert.equal(slot2.dataset.tabId, 'mtab-2');
 });
+
+test('splitTab splits the anchor with a new terminal on the chosen axis', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    await MT.splitTab('mtab-1', 'row', 'C:\\dir2');
+
+    assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-1', 'mtab-2']);
+    assert.equal(MT.getFocusedTabId(), 'mtab-2');
+    const host = harness.context.document.getElementById('main-tab-host');
+    const split = host.children.find((c) => c.classList.contains('pane-split'));
+    assert.equal(split.classList.contains('split-row'), true);
+});
+
+test('splitFocusedPane column splits downward from the focused tab', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    const tab2 = await MT.createTab('C:\\dir2', false);
+    MT.splitPane('mtab-1', 'row', tab2.id);
+    await MT.activateTab(tab2.id);
+    await MT.splitFocusedPane('column', 'C:\\dir3');
+
+    assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-1', 'mtab-2', 'mtab-3']);
+    const host = harness.context.document.getElementById('main-tab-host');
+    const splits = host.querySelectorAll('.pane-split');
+    assert.equal(splits.some((s) => s.classList.contains('split-col')), true);
+});
+
+test('splitTab without a directory opens the new-tab card and defers the split', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    // vm-sandbox traps (apply AFTER initTerminal): document.querySelector
+    // returns a stub for any selector (the card would think one already
+    // exists), and FakeElement lacks .closest (used by the card's
+    // recent-dirs renderer).
+    harness.context.document.querySelector = () => null;
+    const fakeProto = Object.getPrototypeOf(harness.context.document.createElement('div'));
+    if (!fakeProto.closest) fakeProto.closest = function () { return null; };
+    await MT.splitTab('mtab-1', 'row');
+
+    const body = harness.context.document.body;
+    assert.equal(body.children.some((c) => c.classList.contains('new-tab-card-overlay')), true);
+    assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-1']);
+});
+
+test('Ctrl+Alt+Right matches the split_pane_right default', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const S = harness.context.window.MonolithShortcuts;
+    const ev = { key: 'ArrowRight', ctrlKey: true, altKey: true, shiftKey: false, metaKey: false };
+    assert.equal(S.shortcutMatches(ev, 'Ctrl+Alt+Right'), true);
+    const evBad = { key: 'ArrowRight', ctrlKey: true, altKey: false, shiftKey: false, metaKey: false };
+    assert.equal(S.shortcutMatches(evBad, 'Ctrl+Alt+Right'), false);
+});

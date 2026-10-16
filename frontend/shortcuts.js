@@ -113,6 +113,10 @@
             else if (p === '.') result.key = 'Period';
             else if (p === ' ') result.key = 'Space';
             else if (p === '+' || p === 'plus') result.key = 'Plus';
+            else if (p === 'right' || p === 'arrowright') result.key = 'ArrowRight';
+            else if (p === 'left' || p === 'arrowleft') result.key = 'ArrowLeft';
+            else if (p === 'up' || p === 'arrowup') result.key = 'ArrowUp';
+            else if (p === 'down' || p === 'arrowdown') result.key = 'ArrowDown';
             else result.key = p.toUpperCase();
         }
         return result;

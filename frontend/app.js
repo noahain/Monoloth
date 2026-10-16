@@ -1556,6 +1556,24 @@
             }
             return;
         }
+        if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('split_pane_right'))) {
+            e.preventDefault();
+            var svSplitR = document.getElementById('terminal-view');
+            if (!svSplitR || !svSplitR.classList.contains('active')) return;
+            if (typeof window.MonolithTerminal !== 'undefined' && typeof window.MonolithTerminal.splitFocusedPane === 'function') {
+                window.MonolithTerminal.splitFocusedPane('row');
+            }
+            return;
+        }
+        if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('split_pane_down'))) {
+            e.preventDefault();
+            var svSplitD = document.getElementById('terminal-view');
+            if (!svSplitD || !svSplitD.classList.contains('active')) return;
+            if (typeof window.MonolithTerminal !== 'undefined' && typeof window.MonolithTerminal.splitFocusedPane === 'function') {
+                window.MonolithTerminal.splitFocusedPane('column');
+            }
+            return;
+        }
         if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key === 'w') {
             if (typeof window.SidebarManager !== 'undefined' && window.SidebarManager.isPanelOpen() && window.SidebarManager.getTabCount() > 0) {
                 if (isTypingInMainTerminalOrInput()) return;
