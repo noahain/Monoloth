@@ -102,6 +102,8 @@ fn defaults() -> Map<String, Value> {
     m.insert("window_y".into(), Value::Null);
     m.insert("cmdPanelHeight".into(), Value::Number(200.into()));
     m.insert("panelShell".into(), Value::String("cmd".into()));
+    m.insert("cmdPanelDock".into(), Value::String("bottom".into()));
+    m.insert("cmdPanelFollow".into(), Value::String("focused".into()));
 
     m.insert("tabBarPosition".into(), Value::String("titlebar".into()));
     m
@@ -127,6 +129,7 @@ const GLOBAL_KEYS: &[&str] = &[
     "window_maximized", "fp_last_dir_bg_image", "fp_last_dir_choose",
     "use_custom_titlebar", "window_x", "window_y",
     "cmdPanelHeight", "panelShell", "cmdPanelOpen", "sidebar_config",
+    "cmdPanelDock", "cmdPanelFollow",
     "recent_directories", "confirm_dialog_prefs",
     "tabBarPosition", "preset_cache",
 ];
@@ -557,6 +560,8 @@ mod tests {
         assert_eq!(config.get("window_width").as_i64().unwrap(), 1200);
         assert_eq!(config.get("window_height").as_i64().unwrap(), 700);
         assert_eq!(config.get("active_profile").as_str().unwrap(), "Default");
+        assert_eq!(config.get("cmdPanelDock").as_str().unwrap(), "bottom");
+        assert_eq!(config.get("cmdPanelFollow").as_str().unwrap(), "focused");
         cleanup_test_env(&test_dir);
     }
 
@@ -581,9 +586,13 @@ mod tests {
         config.switch_profile("ProfileA").unwrap();
         config.set("recent_directories", serde_json::json!(["C:\\test"]));
         config.set("cmdPanelOpen", Value::Bool(true));
+        config.set("cmdPanelDock", Value::String("left".into()));
+        config.set("cmdPanelFollow", Value::String("first".into()));
         config.switch_profile("Default").unwrap();
         assert_eq!(config.get("recent_directories").as_array().unwrap().len(), 1);
         assert_eq!(config.get("cmdPanelOpen").as_bool().unwrap(), true);
+        assert_eq!(config.get("cmdPanelDock").as_str().unwrap(), "left");
+        assert_eq!(config.get("cmdPanelFollow").as_str().unwrap(), "first");
         cleanup_test_env(&test_dir);
     }
 
