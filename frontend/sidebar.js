@@ -106,7 +106,7 @@
 
         var tabBar = document.createElement('div');
         tabBar.className = 'cmd-panel-tab-bar';
-        // NOTE: the panel drag-to-dock mousedown binding is added here in Task 7.
+        tabBar.addEventListener('mousedown', _beginPanelDockDrag);
 
         var tabs = document.createElement('div');
         tabs.className = 'cmd-panel-tabs';
@@ -658,6 +658,78 @@
     }
 
     function getCmdPanelDock() { return _cmdPanelDock; }
+
+    function hitDockZone(x, y, w, h) {
+        if (w <= 0 || h <= 0) return null;
+        if (x < 0 || x > w || y < 0 || y > h) return null;
+        var bx = w * 0.25, by = h * 0.25;
+        var cands = [];
+        if (x <= bx) cands.push(['left', x]);
+        if (w - x <= bx) cands.push(['right', w - x]);
+        if (y <= by) cands.push(['top', y]);
+        if (h - y <= by) cands.push(['bottom', h - y]);
+        if (!cands.length) return null;
+        cands.sort(function (a, b) { return a[1] - b[1]; });
+        if (cands.length > 1 && cands[0][1] === cands[1][1]) {
+            for (var i = 0; i < cands.length; i++) {
+                if (cands[i][0] === 'left' || cands[i][0] === 'right') return cands[i][0];
+            }
+        }
+        return cands[0][0];
+    }
+
+    function _dockPreviewRect(zone, w, h) {
+        if (zone === 'left') return { left: 0, top: 0, width: w * 0.25, height: h };
+        if (zone === 'right') return { left: w * 0.75, top: 0, width: w * 0.25, height: h };
+        if (zone === 'top') return { left: 0, top: 0, width: w, height: h * 0.25 };
+        return { left: 0, top: h * 0.75, width: w, height: h * 0.25 };
+    }
+
+    var _panelDockDrag = null;
+
+    function _beginPanelDockDrag(e) {
+        if (e.button !== 0) return;
+        if (e.target && (e.target.tagName === 'INPUT' ||
+            (e.target.classList && (e.target.classList.contains('cmd-panel-tab-close') ||
+                                    e.target.classList.contains('cmd-panel-new-tab') ||
+                                    e.target.classList.contains('cmd-panel-tab'))))) return;
+        _panelDockDrag = { startX: e.clientX, startY: e.clientY, active: false, zone: null };
+        document.addEventListener('mousemove', _onPanelDockMove);
+        document.addEventListener('mouseup', _onPanelDockUp);
+    }
+
+    function _onPanelDockMove(e) {
+        if (!_panelDockDrag) return;
+        if (!_panelDockDrag.active) {
+            if (Math.abs(e.clientX - _panelDockDrag.startX) < 8 &&
+                Math.abs(e.clientY - _panelDockDrag.startY) < 8) return;
+            _panelDockDrag.active = true;
+        }
+        var w = window.innerWidth || 0, h = window.innerHeight || 0;
+        var zone = hitDockZone(e.clientX, e.clientY, w, h);
+        _panelDockDrag.zone = zone;
+        var MT = window.MonolithTerminal;
+        if (!zone || !MT || typeof MT.showSnapOverlay !== 'function') {
+            if (MT && typeof MT.hideSnapOverlay === 'function') MT.hideSnapOverlay();
+            return;
+        }
+        MT.showSnapOverlay(_dockPreviewRect(zone, w, h), 'dock');
+    }
+
+    function _endPanelDockDrag(commit) {
+        if (!_panelDockDrag) return;
+        var drag = _panelDockDrag;
+        _panelDockDrag = null;
+        document.removeEventListener('mousemove', _onPanelDockMove);
+        document.removeEventListener('mouseup', _onPanelDockUp);
+        var MT = window.MonolithTerminal;
+        if (MT && typeof MT.hideSnapOverlay === 'function') MT.hideSnapOverlay();
+        if (!commit || !drag.active || !drag.zone) return;
+        setCmdPanelDock(drag.zone);
+        if (window.monolithApi) { window.monolithApi.set_config('cmdPanelDock', drag.zone).catch(function () {}); }
+    }
+
+    function _onPanelDockUp() { _endPanelDockDrag(true); }
 
     function createTab(name, activate, dir, mainTabId) {
         name = name || _panelShell || 'cmd';
@@ -1340,6 +1412,13 @@
     if (cmdPanelResizeHandle) {
         cmdPanelResizeHandle.addEventListener('mousedown', _startPanelResize);
     }
+    if (cmdPanelTabBar) {
+        cmdPanelTabBar.addEventListener('mousedown', _beginPanelDockDrag);
+    }
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && _panelDockDrag) _endPanelDockDrag(false);
+    });
 
     function onResizeMouseMove(e) {
         if (!_isDragging) return;
@@ -2022,6 +2101,7 @@
     SM.applyCmdPanelDock = applyCmdPanelDock;
     SM.setCmdPanelDock = setCmdPanelDock;
     SM.getCmdPanelDock = getCmdPanelDock;
+    SM.hitDockZone = hitDockZone;
     SM.onMainTabFocusChanged = onMainTabFocusChanged;
     SM.setCmdPanelFollow = setCmdPanelFollow;
     SM.getCmdPanelFollow = getCmdPanelFollow;

@@ -6661,6 +6661,9 @@ body.adaptive-light.cta-outline .cmd-panel.pane-shell {
     z-index: 10;
 }
 
+.cmd-panel-tab-bar { cursor: grab; }
+.cmd-panel-tab-bar:active { cursor: grabbing; }
+
 /* CMD panel dock positions (body.dock-* set by sidebar.js applyCmdPanelDock) */
 body.dock-top #cmd-panel {
     order: -1;
