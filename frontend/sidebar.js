@@ -34,6 +34,7 @@
     var _panelShell = 'cmd';
     var _tabBarPosition = 'titlebar';
     var _panelHeight = 200;
+    var _cmdPanelDock = 'bottom';
     var _cmdPanelOpen = false;
 
     var _mainTabPanels = new Map();
@@ -73,7 +74,7 @@
     }
 
     var _isDragging = false;
-    var _resizeStartY = 0;
+    var _resizeStartPos = 0;
     var _resizeStartHeight = 0;
     var _resizeDebounceTimer = null;
     var _configSaveTimer = null;
@@ -400,7 +401,13 @@
     // ---- CMD Panel ----
     function loadPanelConfig() {
         if (!window.monolithApi) return;
-        window.monolithApi.get_config('cmdPanelHeight').then(function (val) {
+        window.monolithApi.get_config('cmdPanelDock').then(function (val) {
+            if (val === 'bottom' || val === 'top' || val === 'left' || val === 'right') {
+                _cmdPanelDock = val;
+            }
+            applyCmdPanelDock();
+            return window.monolithApi.get_config('cmdPanelHeight');
+        }).then(function (val) {
             _panelHeight = (typeof val === 'number') ? val : 200;
             applyPanelHeight(_panelHeight);
             refitActiveTab();
@@ -461,10 +468,35 @@
         }
     }
 
-    function applyPanelHeight(height) {
-        _panelHeight = height;
-        document.documentElement.style.setProperty('--cmd-panel-height', height + 'px');
+    function _isSideDock() {
+        return _cmdPanelDock === 'left' || _cmdPanelDock === 'right';
     }
+
+    function applyPanelHeight(size) {
+        _panelHeight = size;
+        var prop = _isSideDock() ? '--cmd-panel-width' : '--cmd-panel-height';
+        document.documentElement.style.setProperty(prop, size + 'px');
+    }
+
+    function applyCmdPanelDock() {
+        document.body.classList.remove('dock-bottom', 'dock-top', 'dock-left', 'dock-right');
+        document.body.classList.add('dock-' + _cmdPanelDock);
+        applyPanelHeight(_panelHeight);
+        setTimeout(function () {
+            if (window.MonolothApp && window.MonolothApp.refitTerminals) {
+                window.MonolothApp.refitTerminals();
+            }
+            refitActiveTab();
+        }, 50);
+    }
+
+    function setCmdPanelDock(dock) {
+        if (dock !== 'bottom' && dock !== 'top' && dock !== 'left' && dock !== 'right') return;
+        _cmdPanelDock = dock;
+        applyCmdPanelDock();
+    }
+
+    function getCmdPanelDock() { return _cmdPanelDock; }
 
     function createTab(name, activate, dir, mainTabId) {
         name = name || _panelShell || 'cmd';
@@ -1098,7 +1130,7 @@
         cmdPanelResizeHandle.addEventListener('mousedown', function (e) {
             e.preventDefault();
             _isDragging = true;
-            _resizeStartY = e.clientY;
+            _resizeStartPos = _isSideDock() ? e.clientX : e.clientY;
             _resizeStartHeight = _panelHeight;
 
             document.addEventListener('mousemove', onResizeMouseMove);
@@ -1108,18 +1140,20 @@
 
     function onResizeMouseMove(e) {
         if (!_isDragging) return;
-        var dy = _resizeStartY - e.clientY;
-        var newHeight = _resizeStartHeight + dy;
-        if (newHeight < 80) newHeight = 80;
-        var maxH = window.innerHeight * 0.6;
-        if (newHeight > maxH) newHeight = maxH;
+        var pos = _isSideDock() ? e.clientX : e.clientY;
+        var delta = pos - _resizeStartPos;
+        var sign = (_cmdPanelDock === 'bottom' || _cmdPanelDock === 'right') ? -1 : 1;
+        var newSize = _resizeStartHeight + sign * delta;
+        if (newSize < 80) newSize = 80;
+        var maxSize = (_isSideDock() ? window.innerWidth : window.innerHeight) * 0.6;
+        if (newSize > maxSize) newSize = maxSize;
 
         // Only the CSS height tracks the pointer in real time. The actual PTY/
         // xterm resizes are debounced so a drag doesn't fire a per-pixel resize
         // storm at ConPTY (which corrupts the buffer while the child app is
         // mid-redraw). Both the panel tab and the main terminal shrink during a
         // drag, so coalesce both.
-        applyPanelHeight(newHeight);
+        applyPanelHeight(newSize);
         scheduleRefitActiveTab();
 
         if (_resizeDebounceTimer) clearTimeout(_resizeDebounceTimer);
@@ -1782,6 +1816,9 @@
     SM.closeAllPanelTabsForMainTab = closeAllPanelTabsForMainTab;
     SM.closeAllPanelGroups = closeAllPanelGroups;
     SM.refitActiveTab = refitActiveTab;
+    SM.applyCmdPanelDock = applyCmdPanelDock;
+    SM.setCmdPanelDock = setCmdPanelDock;
+    SM.getCmdPanelDock = getCmdPanelDock;
     SM.restorePanelState = function () {
         if (typeof Terminal === 'undefined' || !window.monolithApi) return;
         var restore = function () {

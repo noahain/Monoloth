@@ -407,17 +407,47 @@ test('drag reorder via DOM events reorders sidebar config', async () => {
 test('panel groups are isolated per main tab', async () => {
     const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
     const win = harness.context.window;
+
+    let terminalActiveTab = 'mtab-1';
+    win.MonolithTerminal.getActiveTabId = function () { return terminalActiveTab; };
+
     win.SidebarManager.initForMainTab('mtab-1');
     await win.SidebarManager.createTab(null, true, 'C:\\repo');
     await win.SidebarManager.createTab(null, true, 'C:\\repo');
     assert.equal(win.SidebarManager.getAllTabs().length, 2, 'mtab-1 should have 2 tabs initially');
     await win.SidebarManager.createTab(null, true, 'C:\\repo', 'mtab-2');
     assert.equal(win.SidebarManager.getAllTabs().length, 2, 'active group still mtab-1 after creating mtab-2 tab');
+    terminalActiveTab = 'mtab-2';
     win.SidebarManager.switchToMainTab('mtab-2');
     const mtab2Tabs = win.SidebarManager.getAllTabs();
     assert.equal(mtab2Tabs.length, 1, 'mtab-2 should have 1 tab after switch');
     assert.equal(mtab2Tabs[0].mainTabId, 'mtab-2');
+    terminalActiveTab = 'mtab-1';
     win.SidebarManager.switchToMainTab('mtab-1');
     const backTabs = win.SidebarManager.getAllTabs();
     assert.equal(backTabs.length, 2, 'switch back should restore mtab-1 tabs');
+});
+
+test('applyCmdPanelDock sets body class and axis size variable', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const win = harness.context.window;
+    const doc = harness.context.document;
+
+    win.SidebarManager.setCmdPanelDock('left');
+    assert.equal(win.SidebarManager.getCmdPanelDock(), 'left');
+    assert.equal(doc.body.classList.contains('dock-left'), true);
+    assert.equal(doc.body.classList.contains('dock-bottom'), false);
+    assert.equal(doc.documentElement.style['--cmd-panel-width'], '200px');
+
+    win.SidebarManager.setCmdPanelDock('bottom');
+    assert.equal(doc.body.classList.contains('dock-bottom'), true);
+    assert.equal(doc.documentElement.style['--cmd-panel-height'], '200px');
+});
+
+test('setCmdPanelDock ignores invalid values', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const win = harness.context.window;
+    win.SidebarManager.setCmdPanelDock('diagonal');
+    assert.equal(win.SidebarManager.getCmdPanelDock(), 'bottom');
+    assert.equal(harness.context.document.documentElement.style['--cmd-panel-width'], undefined);
 });
