@@ -6649,6 +6649,99 @@ body.adaptive-light.cta-outline #cmd-panel {
     z-index: 10;
 }
 
+/* CMD panel dock positions (body.dock-* set by sidebar.js applyCmdPanelDock) */
+body.dock-top #cmd-panel {
+    order: -1;
+    border-top: none;
+    border-bottom: 1px solid var(--border-dark);
+}
+body.dock-top #cmd-panel .cmd-panel-resize-handle {
+    top: auto;
+    bottom: -3px;
+}
+
+body.dock-left #terminal-view.active,
+body.dock-right #terminal-view.active {
+    flex-direction: row !important;
+}
+body.dock-left #terminal-container,
+body.dock-right #terminal-container {
+    min-width: 0;
+}
+
+body.dock-left #cmd-panel,
+body.dock-right #cmd-panel {
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    width: var(--cmd-panel-width, 200px);
+    max-width: 60vw;
+    min-width: 80px;
+}
+body.dock-left #cmd-panel {
+    order: -1;
+    border-top: none;
+    border-right: 1px solid var(--border-dark);
+}
+body.dock-right #cmd-panel {
+    border-top: none;
+    border-left: 1px solid var(--border-dark);
+}
+body.dock-left #cmd-panel .cmd-panel-resize-handle {
+    top: 0;
+    bottom: 0;
+    left: auto;
+    right: -3px;
+    width: 6px;
+    height: auto;
+    cursor: ew-resize;
+}
+body.dock-right #cmd-panel .cmd-panel-resize-handle {
+    top: 0;
+    bottom: 0;
+    right: auto;
+    left: -3px;
+    width: 6px;
+    height: auto;
+    cursor: ew-resize;
+}
+
+body.cta-blur.dock-top #cmd-panel,
+body.cta-glass.dock-top #cmd-panel {
+    border-bottom-color: var(--modal-border);
+}
+body.cta-blur.dock-left #cmd-panel,
+body.cta-glass.dock-left #cmd-panel {
+    border-right-color: var(--modal-border);
+}
+body.cta-blur.dock-right #cmd-panel,
+body.cta-glass.dock-right #cmd-panel {
+    border-left-color: var(--modal-border);
+}
+body.cta-outline.dock-top #cmd-panel {
+    border-bottom-color: var(--border-muted);
+}
+body.cta-outline.dock-left #cmd-panel {
+    border-right-color: var(--border-muted);
+}
+body.cta-outline.dock-right #cmd-panel {
+    border-left-color: var(--border-muted);
+}
+
+/* Sidebar x side-dock: single rail inset, no cumulative margins */
+body.dock-left #terminal-view.sidebar-visible.has-sidebar-left #terminal-container {
+    margin-left: 0;
+}
+body.dock-right #terminal-view.sidebar-visible.has-sidebar-left #cmd-panel {
+    margin-left: 0;
+}
+body.dock-right #terminal-view.sidebar-visible.has-sidebar-right #terminal-container {
+    margin-right: 0;
+}
+body.dock-left #terminal-view.sidebar-visible.has-sidebar-right #cmd-panel {
+    margin-right: 0;
+}
+
 .cmd-panel-toolbar {
     display: flex;
     align-items: center;
@@ -8283,6 +8376,14 @@ body.adaptive-light .main-tab-bar.in-titlebar .main-tab {
 .main-tab-container.active {
     display: block;
 }
+
+.pane-slot { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; }
+.pane-split { display: flex; flex: 1; min-width: 0; min-height: 0; }
+.pane-split.split-row { flex-direction: row; }
+.pane-split.split-col { flex-direction: column; }
+.pane-split-a,
+.pane-split-b { display: flex; min-width: 0; min-height: 0; flex-basis: 50%; }
+.pane-root { position: absolute; inset: 0; display: flex; }
 
 /* Main tab item enter/exit motion.
    Enter: pop-style scale + opacity from center, no side slide.
