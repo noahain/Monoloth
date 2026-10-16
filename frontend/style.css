@@ -6687,6 +6687,12 @@ body.dock-right #cmd-panel {
     border-top: none;
     border-left: 1px solid var(--border-dark);
 }
+
+body.custom-titlebar-active.dock-top #cmd-panel,
+body.custom-titlebar-active.dock-left #cmd-panel,
+body.custom-titlebar-active.dock-right #cmd-panel {
+    padding-top: 30px;
+}
 body.dock-left #cmd-panel .cmd-panel-resize-handle {
     top: 0;
     bottom: 0;
