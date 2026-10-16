@@ -213,7 +213,7 @@
         if (_activeTabId && _activeTabId !== tabId) {
             var oldTab = _tabs.get(_activeTabId);
             if (oldTab) {
-                oldTab.container.classList.remove('active');
+                if (!_leafForTab(_paneTree, _activeTabId)) oldTab.container.classList.remove('active');
                 var oldItem = tabList && tabList.querySelector('.main-tab[data-tab-id="' + _activeTabId + '"]');
                 if (oldItem) oldItem.classList.remove('active');
                 updateBusyDot(oldTab);
@@ -685,7 +685,7 @@
         }
         if (leaves.length < 2) {
             if (capsule) {
-                var items = capsule.children.slice();
+                var items = Array.from(capsule.children);
                 capsule.remove();
                 items.forEach(function (item) { _moveItem(item, tabList, tabNewBtn); });
             }
@@ -698,7 +698,7 @@
         }
         // Capture where the first leaf sits BEFORE moving items, so the
         // capsule lands where the first leaf's tab item was.
-        var order = tabList.children.slice();
+        var order = Array.from(tabList.children);
         var firstIdx = order.length;
         leaves.forEach(function (id) {
             var probe = _findTabItem(id);
@@ -1076,7 +1076,7 @@
             var slot = slotMap[tab.id];
             if (slot) {
                 slot.appendChild(tab.container);
-                tab.container.classList.toggle('active', tab.id === _activeTabId);
+                tab.container.classList.add('active');
             } else if (tab.container) {
                 if (tab.container.parentNode !== tabHost) tabHost.appendChild(tab.container);
                 tab.container.classList.remove('active');

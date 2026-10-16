@@ -606,6 +606,50 @@ test('removeLeaf dissolves the capsule back to a flat row', async () => {
     assert.deepEqual(tabItemIds(bar.children), ['mtab-1', 'mtab-2']);
 });
 
+function findContainer(root, tabId) {
+    var want = 'main-tab-container-' + tabId;
+    if (root && root.id === want) return root;
+    var kids = (root && root.children) || [];
+    for (var i = 0; i < kids.length; i++) {
+        var hit = findContainer(kids[i], tabId);
+        if (hit) return hit;
+    }
+    return null;
+}
+
+test('split flow keeps every pane container visible', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    await MT.splitTab('mtab-1', 'row', 'C:\\dir2');
+
+    const host = harness.context.document.getElementById('main-tab-host');
+    const c1 = findContainer(host, 'mtab-1');
+    const c2 = findContainer(host, 'mtab-2');
+    assert.ok(c1 && c2, 'both pane containers must exist');
+    assert.equal(c1.classList.contains('active'), true, 'anchor pane must stay visible');
+    assert.equal(c2.classList.contains('active'), true, 'new pane must be visible');
+});
+
+test('capsule grouping survives HTMLCollection children (no Array methods)', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    await MT.createTab('C:\\dir2', false);
+    const bar = harness.context.document.getElementById('main-tab-tabs');
+    // Real DOM: .children is an HTMLCollection with no Array methods.
+    bar.children.slice = undefined;
+
+    MT.splitPane('mtab-1', 'row', 'mtab-2');
+    const capsule = bar.children.find((c) => c.classList.contains('main-tab-capsule'));
+    assert.ok(capsule, 'capsule must form without Array methods on children');
+    assert.deepEqual(tabItemIds(capsule.children), ['mtab-1', 'mtab-2']);
+
+    capsule.children.slice = undefined;
+    MT.removeLeaf('mtab-2');
+    assert.equal(bar.children.some((c) => c.classList.contains('main-tab-capsule')), false);
+});
+
 test('hitPaneEdge detects 25% edge bands with horizontal tie-break', async () => {
     const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
     const MT = harness.context.window.MonolithTerminal;
