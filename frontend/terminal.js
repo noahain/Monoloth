@@ -47,6 +47,8 @@
     var _paneNodeSeq = 0;
     var _paneSlotEls = {};
     var _pendingSplit = null;
+    var _dividerDrag = null;
+    var _dividerRefitTimer = null;
 
     // Windows PTY compat info — fetched once, shared across all tabs.
     var _windowsPtyInfo = null;
@@ -738,10 +740,62 @@
         _applySplitStyles(node);
     }
 
+    function _startDividerDrag(e, node) {
+        e.preventDefault();
+        var rect = node._el.getBoundingClientRect();
+        _dividerDrag = {
+            node: node,
+            startRatio: node.ratio,
+            rectStart: node.direction === 'row' ? rect.left : rect.top,
+            rectSize: (node.direction === 'row' ? rect.width : rect.height) || 1,
+            before: _collectLeaves(node.children[0], []),
+            after: _collectLeaves(node.children[1], [])
+        };
+        document.body.classList.add('divider-dragging');
+        document.addEventListener('mousemove', _onDividerMove);
+        document.addEventListener('mouseup', _onDividerUp);
+    }
+
+    function _onDividerMove(e) {
+        if (!_dividerDrag) return;
+        var pos = _dividerDrag.node.direction === 'row' ? e.clientX : e.clientY;
+        setRatio(_dividerDrag.node.id, (pos - _dividerDrag.rectStart) / _dividerDrag.rectSize);
+        clearTimeout(_dividerRefitTimer);
+        _dividerRefitTimer = setTimeout(_refitDividerPanes, 120);
+    }
+
+    function _refitDividerPanes() {
+        if (!_dividerDrag) return;
+        _dividerDrag.before.concat(_dividerDrag.after).forEach(function (id) {
+            var tab = _tabs.get(id);
+            if (tab && tab.term && tab.fitAddon) _fitTab(tab);
+        });
+    }
+
+    function _endDividerDrag(commit) {
+        if (!_dividerDrag) return;
+        if (!commit) {
+            _dividerDrag.node.ratio = _dividerDrag.startRatio;
+            _applySplitStyles(_dividerDrag.node);
+        }
+        document.body.classList.remove('divider-dragging');
+        document.removeEventListener('mousemove', _onDividerMove);
+        document.removeEventListener('mouseup', _onDividerUp);
+        clearTimeout(_dividerRefitTimer);
+        _dividerDrag = null;
+        applyResize();
+    }
+
+    function _onDividerUp() { _endDividerDrag(true); }
+
     function _applySplitStyles(node) {
         if (!node._elA || !node._elB) return;
         node._elA.style.flexBasis = (node.ratio * 100).toFixed(4) + '%';
         node._elB.style.flexBasis = ((1 - node.ratio) * 100).toFixed(4) + '%';
+        if (node._elDivider) {
+            if (node.direction === 'row') node._elDivider.style.left = (node.ratio * 100).toFixed(4) + '%';
+            else node._elDivider.style.top = (node.ratio * 100).toFixed(4) + '%';
+        }
     }
 
     function _renderNode(node, parentEl, slotMap, isRoot) {
@@ -759,8 +813,13 @@
         a.className = 'pane-split-a';
         var b = document.createElement('div');
         b.className = 'pane-split-b';
+        var divider = document.createElement('div');
+        divider.className = 'pane-divider';
+        divider.addEventListener('mousedown', function (e) { _startDividerDrag(e, node); });
+        node._elDivider = divider;
         splitEl.appendChild(a);
         splitEl.appendChild(b);
+        splitEl.appendChild(divider);
         node._el = splitEl;
         node._elA = a;
         node._elB = b;
@@ -825,6 +884,7 @@
     }
 
     function scheduleResize() {
+        if (_dividerDrag) return;
         clearTimeout(_resizeTimer);
         // ponytail: maximize/restore animations need time to settle; 250ms
         // coalesces rapid ResizeObserver/window events into one final measurement.
@@ -858,6 +918,7 @@
     }
 
     document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && _dividerDrag) { _endDividerDrag(false); return; }
         if (e.key === 'Escape' && _newTabCardOverlay) {
             var activeEl = document.activeElement;
             if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) return;

@@ -8396,11 +8396,16 @@ body.adaptive-light .main-tab-bar.in-titlebar .main-tab {
 }
 
 .pane-slot { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; }
-.pane-split { display: flex; flex: 1; min-width: 0; min-height: 0; }
+.pane-split { display: flex; flex: 1; min-width: 0; min-height: 0; position: relative; }
 .pane-split.split-row { flex-direction: row; }
 .pane-split.split-col { flex-direction: column; }
 .pane-split-a,
 .pane-split-b { display: flex; min-width: 0; min-height: 0; flex-basis: 50%; }
+.pane-divider { position: absolute; z-index: 6; }
+.pane-split.split-row > .pane-divider { top: 0; bottom: 0; width: 6px; margin-left: -3px; cursor: col-resize; }
+.pane-split.split-col > .pane-divider { left: 0; right: 0; height: 6px; margin-top: -3px; cursor: row-resize; }
+.pane-divider:hover { background: var(--modal-hover-bg); }
+body.divider-dragging { cursor: col-resize; user-select: none; }
 .pane-root { position: absolute; inset: 0; display: flex; }
 .pane-slot.has-shell .main-tab-container { bottom: var(--cmd-panel-height, 200px); }
 

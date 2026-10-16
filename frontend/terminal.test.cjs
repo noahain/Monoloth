@@ -462,6 +462,23 @@ test('setRatio clamps panes to a minimum of 80px', async () => {
     assert.equal(split.children[0].style.flexBasis, '10.0000%');
 });
 
+test('splits render a divider whose position tracks setRatio', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    const tab2 = await MT.createTab('C:\\dir2', false);
+    MT.splitPane('mtab-1', 'row', tab2.id);
+
+    const host = harness.context.document.getElementById('main-tab-host');
+    const split = host.children.find((c) => c.classList.contains('pane-split'));
+    const divider = split.children.find((c) => c.classList.contains('pane-divider'));
+    assert.ok(divider, 'a .pane-divider must exist inside the split');
+    assert.equal(divider.style.left, '50.0000%');
+
+    MT.setRatio('pnode-0', 0.75);
+    assert.equal(divider.style.left, '75.0000%');
+});
+
 test('removeLeaf collapses the split and activateTab swaps parked tabs into the focused leaf', async () => {
     const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
     const MT = harness.context.window.MonolithTerminal;
