@@ -13,7 +13,23 @@ pub const MIN_WINDOW_POSITION: i64 = -10000;
 pub const MAX_WINDOW_POSITION: i64 = 100000;
 pub const WINDOW_MINIMIZED_SENTINEL: i64 = -32000;
 
+#[cfg(test)]
+thread_local! {
+    static TEST_APPDATA: std::cell::RefCell<Option<PathBuf>> = std::cell::RefCell::new(None);
+}
+
+#[cfg(test)]
+pub(crate) fn set_test_appdata(dir: &Path) {
+    TEST_APPDATA.with(|cell| *cell.borrow_mut() = Some(dir.to_path_buf()));
+}
+
 fn appdata_dir() -> PathBuf {
+    #[cfg(test)]
+    {
+        if let Some(dir) = TEST_APPDATA.with(|cell| cell.borrow().clone()) {
+            return dir.join("Monoloth");
+        }
+    }
     std::env::var("APPDATA")
         .map(|s| PathBuf::from(s).join("Monoloth"))
         .unwrap_or_else(|_| dirs::config_dir().unwrap_or_default().join("Monoloth"))
@@ -542,7 +558,7 @@ mod tests {
                 .as_nanos()
         ));
         fs::create_dir_all(&test_dir).unwrap();
-        std::env::set_var("APPDATA", test_dir.to_str().unwrap());
+        set_test_appdata(&test_dir);
         (test_dir, lock)
     }
 

@@ -1081,7 +1081,7 @@ mod tests {
         let test_dir = std::env::temp_dir().join("monoloth_test_preset_cache_hit");
         let _ = std::fs::remove_dir_all(&test_dir);
         std::fs::create_dir_all(&test_dir).unwrap();
-        std::env::set_var("APPDATA", test_dir.to_str().unwrap());
+        crate::config::set_test_appdata(&test_dir);
 
         let config = AppConfig::new();
         config.save_cached_preset(
@@ -1107,7 +1107,7 @@ mod tests {
         let test_dir = std::env::temp_dir().join("monoloth_test_preset_cache_custom");
         let _ = std::fs::remove_dir_all(&test_dir);
         std::fs::create_dir_all(&test_dir).unwrap();
-        std::env::set_var("APPDATA", test_dir.to_str().unwrap());
+        crate::config::set_test_appdata(&test_dir);
 
         let config = AppConfig::new();
         config.save_cached_preset("claude", "should-not-use", &[]);
@@ -1137,7 +1137,7 @@ mod tests {
         let test_dir = std::env::temp_dir().join("monoloth_test_preset_cache_miss");
         let _ = std::fs::remove_dir_all(&test_dir);
         std::fs::create_dir_all(&test_dir).unwrap();
-        std::env::set_var("APPDATA", test_dir.to_str().unwrap());
+        crate::config::set_test_appdata(&test_dir);
         std::env::set_var("OPENCODE_BIN_PATH", r"C:\monoloth_cache_test\opencode.exe");
 
         let config = AppConfig::new();
@@ -1162,7 +1162,7 @@ mod tests {
         let test_dir = std::env::temp_dir().join("monoloth_test_opencode_bin_override");
         let _ = std::fs::remove_dir_all(&test_dir);
         std::fs::create_dir_all(&test_dir).unwrap();
-        std::env::set_var("APPDATA", test_dir.to_str().unwrap());
+        crate::config::set_test_appdata(&test_dir);
 
         let config = AppConfig::new();
         config.save_cached_preset(
@@ -1193,7 +1193,7 @@ mod tests {
         let test_dir = std::env::temp_dir().join("monoloth_test_ws_bin_path");
         let _ = std::fs::remove_dir_all(&test_dir);
         std::fs::create_dir_all(&test_dir).unwrap();
-        std::env::set_var("APPDATA", test_dir.to_str().unwrap());
+        crate::config::set_test_appdata(&test_dir);
 
         let config = AppConfig::new();
         config.save_cached_preset(
