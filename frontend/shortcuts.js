@@ -20,7 +20,9 @@
         switch_profile: 'Ctrl+Shift+P',
         back_to_launcher: 'Ctrl+Shift+W',
         new_main_tab: 'Ctrl+T',
-        new_panel_tab: 'Ctrl+Shift+T'
+        new_panel_tab: 'Ctrl+Shift+T',
+        split_pane_right: 'Ctrl+Alt+Right',
+        split_pane_down: 'Ctrl+Alt+Down'
     };
 
     function fillDefaults(target) {
