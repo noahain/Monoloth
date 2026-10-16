@@ -42,6 +42,10 @@
     var _activeTabId = null;
     var _nextTabId = 1;          // numeric counter; first tab gets id "1", session "main"
 
+    var _paneTree = null;
+    var _focusedTabId = null;
+    var _paneNodeSeq = 0;
+
     // Windows PTY compat info — fetched once, shared across all tabs.
     var _windowsPtyInfo = null;
 
@@ -170,6 +174,11 @@
         };
         _tabs.set(tabId, tab);
 
+        if (!_paneTree) {
+            _paneTree = { type: 'leaf', tabId: tabId };
+            renderPaneTree();
+        }
+
         updateTabBarVisibility();
 
         if (activate) {
@@ -181,6 +190,18 @@
     function activateTab(tabId) {
         var tab = _tabs.get(tabId);
         if (!tab) return Promise.resolve();
+
+        if (!_paneTree) {
+            _paneTree = { type: 'leaf', tabId: tabId };
+        } else if (!_leafForTab(_paneTree, tabId)) {
+            var targetLeaf = _leafForTab(_paneTree, _focusedTabId || _activeTabId) || _firstLeaf(_paneTree);
+            var displaced = targetLeaf.tabId;
+            targetLeaf.tabId = tabId;
+            var displacedTab = _tabs.get(displaced);
+            if (displacedTab && displacedTab.container) displacedTab.container.classList.remove('active');
+        }
+        _focusedTabId = tabId;
+        renderPaneTree();
 
         if (_activeTabId && _activeTabId !== tabId) {
             var oldTab = _tabs.get(_activeTabId);
@@ -534,6 +555,13 @@
         }
         _tabs.delete(tabId);
 
+        if (_paneTree && _paneTree.type === 'leaf' && _paneTree.tabId === tabId) {
+            _paneTree = null;
+            _focusedTabId = null;
+        } else if (_paneTree && _tabs.size > 0) {
+            removeLeaf(tabId);
+        }
+
         if (_tabs.size === 0) {
             _activeTabId = null;
             if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.closeAllPanelTabsForMainTab === 'function') {
@@ -588,9 +616,146 @@
         });
     }
 
-    function applyResize() {
-        var tab = getActiveTab();
-        if (!tab || !tab.term || !tab.fitAddon) return;
+    function _leafForTab(node, tabId) {
+        if (!node) return null;
+        if (node.type === 'leaf') return node.tabId === tabId ? node : null;
+        return _leafForTab(node.children[0], tabId) || _leafForTab(node.children[1], tabId);
+    }
+
+    function _firstLeaf(node) {
+        return node.type === 'leaf' ? node : _firstLeaf(node.children[0]);
+    }
+
+    function _collectLeaves(node, out) {
+        if (node.type === 'leaf') { out.push(node.tabId); return out; }
+        _collectLeaves(node.children[0], out);
+        _collectLeaves(node.children[1], out);
+        return out;
+    }
+
+    function _findParent(node, child) {
+        if (!node || node.type === 'leaf') return null;
+        if (node.children[0] === child || node.children[1] === child) return node;
+        return _findParent(node.children[0], child) || _findParent(node.children[1], child);
+    }
+
+    function _findNode(node, id) {
+        if (!node || node.type === 'leaf') return null;
+        if (node.id === id) return node;
+        return _findNode(node.children[0], id) || _findNode(node.children[1], id);
+    }
+
+    function getVisibleTabIds() {
+        if (!_paneTree) return _activeTabId ? [_activeTabId] : [];
+        return _collectLeaves(_paneTree, []);
+    }
+
+    function getFocusedTabId() {
+        return _focusedTabId || _activeTabId;
+    }
+
+    function splitPane(tabId, direction, otherTabId) {
+        if (!_tabs.has(tabId) || !_tabs.has(otherTabId) || tabId === otherTabId) return;
+        if (!_paneTree) _paneTree = { type: 'leaf', tabId: tabId };
+        var leaf = _leafForTab(_paneTree, tabId);
+        if (!leaf) return;
+        var node = {
+            type: 'split',
+            id: 'pnode-' + (_paneNodeSeq++),
+            direction: direction === 'column' ? 'column' : 'row',
+            ratio: 0.5,
+            children: [leaf, { type: 'leaf', tabId: otherTabId }]
+        };
+        var parent = _findParent(_paneTree, leaf);
+        if (parent) {
+            parent.children[parent.children[0] === leaf ? 0 : 1] = node;
+        } else {
+            _paneTree = node;
+        }
+        renderPaneTree();
+        scheduleResize();
+    }
+
+    function removeLeaf(tabId) {
+        if (!_paneTree || _paneTree.type === 'leaf') return;
+        var leaf = _leafForTab(_paneTree, tabId);
+        if (!leaf) return;
+        var parent = _findParent(_paneTree, leaf);
+        if (!parent) return;
+        var sibling = parent.children[0] === leaf ? parent.children[1] : parent.children[0];
+        var grandparent = _findParent(_paneTree, parent);
+        if (grandparent) {
+            grandparent.children[grandparent.children[0] === parent ? 0 : 1] = sibling;
+        } else {
+            _paneTree = sibling;
+        }
+        renderPaneTree();
+        scheduleResize();
+    }
+
+    function setRatio(nodeId, ratio) {
+        var node = _findNode(_paneTree, nodeId);
+        if (!node) return;
+        var axisSize = node.direction === 'row'
+            ? (tabHost ? tabHost.clientWidth : 0)
+            : (tabHost ? tabHost.clientHeight : 0);
+        var minRatio = axisSize > 0 ? Math.min(0.5, 80 / axisSize) : 0.05;
+        if (ratio < minRatio) ratio = minRatio;
+        if (ratio > 1 - minRatio) ratio = 1 - minRatio;
+        node.ratio = ratio;
+        _applySplitStyles(node);
+    }
+
+    function _applySplitStyles(node) {
+        if (!node._elA || !node._elB) return;
+        node._elA.style.flexBasis = (node.ratio * 100).toFixed(4) + '%';
+        node._elB.style.flexBasis = ((1 - node.ratio) * 100).toFixed(4) + '%';
+    }
+
+    function _renderNode(node, parentEl, slotMap, isRoot) {
+        if (node.type === 'leaf') {
+            var slot = document.createElement('div');
+            slot.className = 'pane-slot' + (isRoot ? ' pane-root' : '');
+            slot.dataset.tabId = node.tabId;
+            parentEl.appendChild(slot);
+            slotMap[node.tabId] = slot;
+            return;
+        }
+        var splitEl = document.createElement('div');
+        splitEl.className = 'pane-split ' + (node.direction === 'row' ? 'split-row' : 'split-col') + (isRoot ? ' pane-root' : '');
+        var a = document.createElement('div');
+        a.className = 'pane-split-a';
+        var b = document.createElement('div');
+        b.className = 'pane-split-b';
+        splitEl.appendChild(a);
+        splitEl.appendChild(b);
+        node._el = splitEl;
+        node._elA = a;
+        node._elB = b;
+        parentEl.appendChild(splitEl);
+        _renderNode(node.children[0], a, slotMap, false);
+        _renderNode(node.children[1], b, slotMap, false);
+        _applySplitStyles(node);
+    }
+
+    function renderPaneTree() {
+        if (!tabHost || !_paneTree) return;
+        Array.from(tabHost.querySelectorAll('.pane-split, .pane-slot')).forEach(function (el) { el.remove(); });
+        var slotMap = {};
+        _renderNode(_paneTree, tabHost, slotMap, true);
+        _tabs.forEach(function (tab) {
+            var slot = slotMap[tab.id];
+            if (slot) {
+                slot.appendChild(tab.container);
+                tab.container.classList.toggle('active', tab.id === _activeTabId);
+            } else if (tab.container) {
+                if (tab.container.parentNode !== tabHost) tabHost.appendChild(tab.container);
+                tab.container.classList.remove('active');
+            }
+        });
+    }
+
+    function _fitTab(tab) {
         var el = tab.term.element || tab.termDiv;
         if (!el || el.offsetParent === null) return;
         var dims;
@@ -612,6 +777,15 @@
 
         tab._lastPixelSize = pixelSize;
         try { tab.term.resize(dims.cols, dims.rows); } catch (e) {}
+    }
+
+    function applyResize() {
+        var visible = getVisibleTabIds();
+        for (var i = 0; i < visible.length; i++) {
+            var tab = _tabs.get(visible[i]);
+            if (!tab || !tab.term || !tab.fitAddon) continue;
+            _fitTab(tab);
+        }
     }
 
     function scheduleResize() {
@@ -1045,6 +1219,11 @@
             getTab: function (id) { return _tabs.get(id) || null; },
             hideTabExitBanner: hideTabExitBanner,
             updateTabBarVisibility: updateTabBarVisibility,
+            getVisibleTabIds: getVisibleTabIds,
+            getFocusedTabId: getFocusedTabId,
+            splitPane: splitPane,
+            removeLeaf: removeLeaf,
+            setRatio: setRatio,
         },
         pty: {
             writeToTerm: window.writeToTerm,
@@ -1127,6 +1306,9 @@
                     try { window.monolithApi.terminate_hidden().catch(function () {}); } catch (e) {}
                 }
                 _tabs.clear();
+                _paneTree = null;
+                _focusedTabId = null;
+                _paneNodeSeq = 0;
                 _activeTabId = null;
                 _appProfile = null;
                 _nextTabId = 1;
@@ -1164,4 +1346,9 @@
     window.MonolithTerminal.hideTabExitBanner = window.MonolithTerminal.tabs.hideTabExitBanner;
     window.MonolithTerminal.initTabXterm = window.MonolithTerminal.view.initTabXterm;
     window.MonolithTerminal.updateTabBarVisibility = window.MonolithTerminal.tabs.updateTabBarVisibility;
+    window.MonolithTerminal.getVisibleTabIds = window.MonolithTerminal.tabs.getVisibleTabIds;
+    window.MonolithTerminal.getFocusedTabId = window.MonolithTerminal.tabs.getFocusedTabId;
+    window.MonolithTerminal.splitPane = window.MonolithTerminal.tabs.splitPane;
+    window.MonolithTerminal.removeLeaf = window.MonolithTerminal.tabs.removeLeaf;
+    window.MonolithTerminal.setRatio = window.MonolithTerminal.tabs.setRatio;
 })();

@@ -33,6 +33,10 @@ class FakeElement {
         this.textContent = '';
         this.value = '';
     }
+    get className() { return Array.from(this.classList.classes).join(' '); }
+    set className(value) {
+        this.classList.classes = new Set(String(value).split(/\s+/).filter(Boolean));
+    }
     addEventListener(type, handler) {
         if (!this.eventListeners[type]) this.eventListeners[type] = [];
         this.eventListeners[type].push(handler);
@@ -49,7 +53,20 @@ class FakeElement {
     }
     remove() { if (this.parentNode) this.parentNode.removeChild(this); }
     querySelector() { return new FakeElement('nested'); }
-    querySelectorAll() { return []; }
+    querySelectorAll(selector) {
+        const selectors = String(selector).split(',').map((s) => s.trim()).filter(Boolean);
+        const classes = selectors.filter((s) => s.startsWith('.')).map((s) => s.slice(1));
+        if (classes.length === 0 || classes.length !== selectors.length) return [];
+        const out = [];
+        const walk = (el) => {
+            el.children.forEach((child) => {
+                if (classes.some((cls) => child.classList.contains(cls))) out.push(child);
+                walk(child);
+            });
+        };
+        walk(this);
+        return out;
+    }
     setAttribute(name, value) { this[name] = value; }
     removeAttribute(name) { delete this[name]; }
     scrollIntoView() {}
@@ -406,4 +423,55 @@ test('terminal tab lifecycle create → activate → close', async () => {
     T.tabs.closeTab(t2.id);
     assert.equal(T.tabs.getAllTabs().length, 1, 'should have 1 tab after closing one');
     assert.equal(T.tabs.getAllTabs()[0].id, t1.id, 'remaining tab should be the first one');
+});
+
+test('visible tab ids start as the single active tab', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-1']);
+    assert.equal(MT.getFocusedTabId(), 'mtab-1');
+});
+
+test('splitPane wraps the leaf and renders nested pane DOM', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    const tab2 = await MT.createTab('C:\\dir2', false);
+    MT.splitPane('mtab-1', 'row', tab2.id);
+
+    assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-1', 'mtab-2']);
+    const host = harness.context.document.getElementById('main-tab-host');
+    const split = host.children.find((c) => c.classList.contains('pane-split'));
+    assert.ok(split, 'a .pane-split element must exist inside #main-tab-host');
+    assert.equal(split.classList.contains('split-row'), true);
+    const slots = [split.children[0].children[0], split.children[1].children[0]];
+    assert.equal(slots[0].dataset.tabId, 'mtab-1');
+    assert.equal(slots[1].dataset.tabId, 'mtab-2');
+});
+
+test('setRatio clamps panes to a minimum of 80px', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    const tab2 = await MT.createTab('C:\\dir2', false);
+    MT.splitPane('mtab-1', 'row', tab2.id);
+    MT.setRatio('pnode-0', 0.01);
+    const host = harness.context.document.getElementById('main-tab-host');
+    const split = host.children.find((c) => c.classList.contains('pane-split'));
+    assert.equal(split.children[0].style.flexBasis, '10.0000%');
+});
+
+test('removeLeaf collapses the split and activateTab swaps parked tabs into the focused leaf', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    const tab2 = await MT.createTab('C:\\dir2', false);
+    MT.splitPane('mtab-1', 'row', tab2.id);
+    MT.removeLeaf('mtab-1');
+    assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-2']);
+
+    await MT.activateTab('mtab-1');
+    assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-1']);
+    assert.equal(MT.getFocusedTabId(), 'mtab-1');
 });
