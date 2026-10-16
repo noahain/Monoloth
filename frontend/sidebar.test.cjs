@@ -50,6 +50,8 @@ class FakeElement {
         return child;
     }
     insertBefore(child, reference) {
+        var existing = this.children.indexOf(child);
+        if (existing !== -1) this.children.splice(existing, 1);
         child.parentNode = this;
         child.parentElement = this;
         var index = this.children.indexOf(reference);
@@ -71,7 +73,21 @@ class FakeElement {
         }
         return new FakeElement('nested:' + selector);
     }
-    querySelectorAll() { return []; }
+    querySelectorAll(selector) {
+        const selectors = String(selector).split(',').map((s) => s.trim()).filter(Boolean);
+        const classes = selectors.filter((s) => s.startsWith('.')).map((s) => s.slice(1));
+        if (classes.length === 0 || classes.length !== selectors.length) return [];
+        const out = [];
+        const matches = (el) => classes.some((cls) => el.classList.contains(cls) || String(el.className || '').split(/\s+/).includes(cls));
+        const walk = (el) => {
+            el.children.forEach((child) => {
+                if (matches(child)) out.push(child);
+                walk(child);
+            });
+        };
+        walk(this);
+        return out;
+    }
     setAttribute(name, value) { this[name] = value; }
     removeAttribute(name) { delete this[name]; }
     scrollIntoView() {}
@@ -426,6 +442,112 @@ test('panel groups are isolated per main tab', async () => {
     win.SidebarManager.switchToMainTab('mtab-1');
     const backTabs = win.SidebarManager.getAllTabs();
     assert.equal(backTabs.length, 2, 'switch back should restore mtab-1 tabs');
+});
+
+test('per-pane mode mounts one shell per visible pane', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const win = harness.context.window;
+    const doc = harness.context.document;
+    const host = doc.getElementById('main-tab-host');
+    const slots = {};
+    ['mtab-1', 'mtab-2'].forEach((id) => {
+        const slot = doc.createElement('div');
+        slot.className = 'pane-slot';
+        slot.dataset.tabId = id;
+        host.appendChild(slot);
+        slots[id] = slot;
+    });
+    win.MonolithTerminal.getVisibleTabIds = () => ['mtab-1', 'mtab-2'];
+    win.MonolithTerminal.getPaneSlotEl = (id) => slots[id] || null;
+    win.MonolithTerminal.getActiveTabId = () => 'mtab-1';
+
+    win.SidebarManager.setCmdPanelFollow('per-pane');
+    win.SidebarManager.showCmdPanel();
+
+    Object.keys(slots).forEach((id) => {
+        const shell = win.SidebarManager.getPaneShell(id);
+        assert.ok(shell, `shell for ${id} must exist`);
+        assert.equal(shell.parentNode, slots[id], `shell for ${id} must mount in its slot`);
+        assert.equal(slots[id].classList.contains('has-shell'), true);
+    });
+});
+
+test('per-pane shells host their own groups tab items and containers', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const win = harness.context.window;
+    const doc = harness.context.document;
+    const host = doc.getElementById('main-tab-host');
+    const slots = {};
+    ['mtab-1', 'mtab-2'].forEach((id) => {
+        const slot = doc.createElement('div');
+        slot.className = 'pane-slot';
+        host.appendChild(slot);
+        slots[id] = slot;
+    });
+    win.MonolithTerminal.getVisibleTabIds = () => ['mtab-1', 'mtab-2'];
+    win.MonolithTerminal.getPaneSlotEl = (id) => slots[id] || null;
+    win.MonolithTerminal.getActiveTabId = () => 'mtab-1';
+
+    win.SidebarManager.setCmdPanelFollow('per-pane');
+    win.SidebarManager.showCmdPanel();
+    await win.SidebarManager.createTab(null, true, 'C:\\repo', 'mtab-1');
+    await win.SidebarManager.createTab(null, true, 'C:\\repo', 'mtab-2');
+
+    const shell1 = win.SidebarManager.getPaneShell('mtab-1');
+    const shell2 = win.SidebarManager.getPaneShell('mtab-2');
+    assert.equal(shell1.querySelectorAll('.cmd-panel-tab').length, 1);
+    assert.equal(shell2.querySelectorAll('.cmd-panel-tab').length, 1);
+});
+
+test('closing one pane shell hides only that pane', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const win = harness.context.window;
+    const doc = harness.context.document;
+    const host = doc.getElementById('main-tab-host');
+    const slots = {};
+    ['mtab-1', 'mtab-2'].forEach((id) => {
+        const slot = doc.createElement('div');
+        slot.className = 'pane-slot';
+        host.appendChild(slot);
+        slots[id] = slot;
+    });
+    win.MonolithTerminal.getVisibleTabIds = () => ['mtab-1', 'mtab-2'];
+    win.MonolithTerminal.getPaneSlotEl = (id) => slots[id] || null;
+    win.MonolithTerminal.getActiveTabId = () => 'mtab-1';
+
+    win.SidebarManager.setCmdPanelFollow('per-pane');
+    win.SidebarManager.showCmdPanel();
+    win.SidebarManager.closePaneShell('mtab-2');
+    assert.equal(win.SidebarManager.getPaneShell('mtab-2').style.display, 'none');
+    assert.notEqual(win.SidebarManager.getPaneShell('mtab-1').style.display, 'none');
+    assert.equal(win.SidebarManager.isPanelOpen(), true);
+});
+
+test('leaving per-pane mode unmounts shells and restores the shared panel', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const win = harness.context.window;
+    const doc = harness.context.document;
+    const host = doc.getElementById('main-tab-host');
+    const slots = {};
+    ['mtab-1', 'mtab-2'].forEach((id) => {
+        const slot = doc.createElement('div');
+        slot.className = 'pane-slot';
+        host.appendChild(slot);
+        slots[id] = slot;
+    });
+    win.MonolithTerminal.getVisibleTabIds = () => ['mtab-1', 'mtab-2'];
+    win.MonolithTerminal.getPaneSlotEl = (id) => slots[id] || null;
+    win.MonolithTerminal.getActiveTabId = () => 'mtab-1';
+
+    win.SidebarManager.setCmdPanelFollow('per-pane');
+    win.SidebarManager.showCmdPanel();
+    await win.SidebarManager.createTab(null, true, 'C:\\repo', 'mtab-1');
+    win.SidebarManager.setCmdPanelFollow('focused');
+
+    assert.equal(win.SidebarManager.getPaneShell('mtab-1'), null);
+    assert.equal(slots['mtab-1'].classList.contains('has-shell'), false);
+    const shared = doc.getElementById('cmd-panel-tabs');
+    assert.equal(shared.querySelectorAll('.cmd-panel-tab').length, 1);
 });
 
 test('applyCmdPanelDock sets body class and axis size variable', async () => {

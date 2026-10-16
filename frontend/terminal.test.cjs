@@ -475,3 +475,16 @@ test('removeLeaf collapses the split and activateTab swaps parked tabs into the 
     assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-1']);
     assert.equal(MT.getFocusedTabId(), 'mtab-1');
 });
+
+test('getPaneSlotEl returns the rendered slot element for a leaf', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    const tab2 = await MT.createTab('C:\\dir2', false);
+    MT.splitPane('mtab-1', 'row', tab2.id);
+    const slot1 = MT.getPaneSlotEl('mtab-1');
+    const slot2 = MT.getPaneSlotEl('mtab-2');
+    assert.ok(slot1 && slot2, 'both leaves must expose a slot');
+    assert.equal(slot1.dataset.tabId, 'mtab-1');
+    assert.equal(slot2.dataset.tabId, 'mtab-2');
+});

@@ -45,6 +45,7 @@
     var _paneTree = null;
     var _focusedTabId = null;
     var _paneNodeSeq = 0;
+    var _paneSlotEls = {};
 
     // Windows PTY compat info — fetched once, shared across all tabs.
     var _windowsPtyInfo = null;
@@ -654,6 +655,10 @@
         return _focusedTabId || _activeTabId;
     }
 
+    function getPaneSlotEl(tabId) {
+        return _paneSlotEls[tabId] || null;
+    }
+
     function splitPane(tabId, direction, otherTabId) {
         if (!_tabs.has(tabId) || !_tabs.has(otherTabId) || tabId === otherTabId) return;
         if (!_paneTree) _paneTree = { type: 'leaf', tabId: tabId };
@@ -743,6 +748,7 @@
         Array.from(tabHost.querySelectorAll('.pane-split, .pane-slot')).forEach(function (el) { el.remove(); });
         var slotMap = {};
         _renderNode(_paneTree, tabHost, slotMap, true);
+        _paneSlotEls = slotMap;
         _tabs.forEach(function (tab) {
             var slot = slotMap[tab.id];
             if (slot) {
@@ -753,6 +759,9 @@
                 tab.container.classList.remove('active');
             }
         });
+        if (window.SidebarManager && typeof window.SidebarManager.onPaneTreeChanged === 'function') {
+            window.SidebarManager.onPaneTreeChanged();
+        }
     }
 
     function _fitTab(tab) {
@@ -1263,6 +1272,7 @@
             refit: refit,
             refitActiveTab: refitActiveTab,
             initTabXterm: initTabXterm,
+            getPaneSlotEl: getPaneSlotEl,
         },
         lifecycle: {
             initTerminal: function (dir) {
@@ -1348,6 +1358,7 @@
     window.MonolithTerminal.updateTabBarVisibility = window.MonolithTerminal.tabs.updateTabBarVisibility;
     window.MonolithTerminal.getVisibleTabIds = window.MonolithTerminal.tabs.getVisibleTabIds;
     window.MonolithTerminal.getFocusedTabId = window.MonolithTerminal.tabs.getFocusedTabId;
+    window.MonolithTerminal.getPaneSlotEl = window.MonolithTerminal.view.getPaneSlotEl;
     window.MonolithTerminal.splitPane = window.MonolithTerminal.tabs.splitPane;
     window.MonolithTerminal.removeLeaf = window.MonolithTerminal.tabs.removeLeaf;
     window.MonolithTerminal.setRatio = window.MonolithTerminal.tabs.setRatio;
