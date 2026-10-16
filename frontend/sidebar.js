@@ -417,6 +417,9 @@
             _panelHeight = (typeof val === 'number') ? val : 200;
             applyPanelHeight(_panelHeight);
             refitActiveTab();
+            if (window.MonolothApp && window.MonolothApp.syncCmdPanelToggles) {
+                window.MonolothApp.syncCmdPanelToggles();
+            }
         }).catch(function () {});
         window.monolithApi.get_config('panelShell').then(function (val) {
             _panelShell = (typeof val === 'string') ? val : 'cmd';
