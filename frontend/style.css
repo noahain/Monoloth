@@ -7168,6 +7168,9 @@ body.adaptive-light .sidebar-setting-name {
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
     }
+    .snap-overlay {
+        background: var(--modal-hover-bg) !important;
+    }
 }
 
 @media (prefers-contrast: more) {
