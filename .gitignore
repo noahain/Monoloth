@@ -50,3 +50,8 @@ CLAUDE.md
 
 # Git worktrees (isolated implementation workspaces)
 .worktrees/
+
+# Local tooling / editor artifacts (not source-controlled)
+.mcp.json
+.vscode/
+.repowise/
