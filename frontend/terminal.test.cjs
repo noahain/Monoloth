@@ -128,7 +128,7 @@ function createHarness(bgState) {
             if (addon && typeof addon.activate === 'function') addon.activate(this);
         }
         focus() {}
-        attachCustomKeyEventHandler() {}
+        attachCustomKeyEventHandler(fn) { this.customKeyHandler = fn; }
         getSelection() { return ''; }
         hasSelection() { return false; }
         clearSelection() {}
@@ -561,13 +561,51 @@ test('splitTab without a directory opens the new-tab card and defers the split',
     assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-1']);
 });
 
-test('Ctrl+Alt+Right matches the split_pane_right default', async () => {
+test('split defaults use ArrowRight/ArrowDown spelling (legacy spelling still matches)', async () => {
     const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
     const S = harness.context.window.MonolithShortcuts;
+    assert.equal(S.DEFAULT_SHORTCUTS.split_pane_right, 'Ctrl+Alt+ArrowRight');
+    assert.equal(S.DEFAULT_SHORTCUTS.split_pane_down, 'Ctrl+Alt+ArrowDown');
     const ev = { key: 'ArrowRight', ctrlKey: true, altKey: true, shiftKey: false, metaKey: false };
+    assert.equal(S.shortcutMatches(ev, 'Ctrl+Alt+ArrowRight'), true);
     assert.equal(S.shortcutMatches(ev, 'Ctrl+Alt+Right'), true);
     const evBad = { key: 'ArrowRight', ctrlKey: true, altKey: false, shiftKey: false, metaKey: false };
-    assert.equal(S.shortcutMatches(evBad, 'Ctrl+Alt+Right'), false);
+    assert.equal(S.shortcutMatches(evBad, 'Ctrl+Alt+ArrowRight'), false);
+});
+
+test('split shortcuts pass through xterm when the terminal has focus', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    const handler = MT.getTerm().customKeyHandler;
+    assert.equal(typeof handler, 'function');
+    const right = { key: 'ArrowRight', code: 'ArrowRight', ctrlKey: true, altKey: true, shiftKey: false, metaKey: false };
+    assert.equal(handler(right), false);
+    const down = { key: 'ArrowDown', code: 'ArrowDown', ctrlKey: true, altKey: true, shiftKey: false, metaKey: false };
+    assert.equal(handler(down), false);
+    const plain = { key: 'ArrowRight', code: 'ArrowRight', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false };
+    assert.equal(handler(plain), true);
+});
+
+test('activating an ungrouped tab returns to a normal single view', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    await MT.createTab('C:\\dir2', false);
+    MT.splitPane('mtab-1', 'row', 'mtab-2');
+    await MT.createTab('C:\\dir3', false);
+
+    const bar = harness.context.document.getElementById('main-tab-tabs');
+    assert.equal(bar.children.some((c) => c.classList.contains('main-tab-capsule')), true);
+
+    await MT.activateTab('mtab-3');
+
+    assert.equal(bar.children.some((c) => c.classList.contains('main-tab-capsule')), false);
+    assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-3']);
+    const host = harness.context.document.getElementById('main-tab-host');
+    assert.equal(findContainer(host, 'mtab-3').classList.contains('active'), true);
+    assert.equal(findContainer(host, 'mtab-1').classList.contains('active'), false);
+    assert.equal(findContainer(host, 'mtab-2').classList.contains('active'), false);
 });
 
 function tabItemIds(children) {

@@ -198,14 +198,8 @@
         var tab = _tabs.get(tabId);
         if (!tab) return Promise.resolve();
 
-        if (!_paneTree) {
+        if (!_leafForTab(_paneTree, tabId)) {
             _paneTree = { type: 'leaf', tabId: tabId };
-        } else if (!_leafForTab(_paneTree, tabId)) {
-            var targetLeaf = _leafForTab(_paneTree, _focusedTabId || _activeTabId) || _firstLeaf(_paneTree);
-            var displaced = targetLeaf.tabId;
-            targetLeaf.tabId = tabId;
-            var displacedTab = _tabs.get(displaced);
-            if (displacedTab && displacedTab.container) displacedTab.container.classList.remove('active');
         }
         _focusedTabId = tabId;
         renderPaneTree();
@@ -363,6 +357,8 @@
                 if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('switch_profile'))) return false;
                 if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('back_to_launcher'))) return false;
                 if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('new_main_tab'))) return false;
+                if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('split_pane_right'))) return false;
+                if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('split_pane_down'))) return false;
                 return true;
             },
             pasteHandler: function (e) {
@@ -627,10 +623,6 @@
         if (!node) return null;
         if (node.type === 'leaf') return node.tabId === tabId ? node : null;
         return _leafForTab(node.children[0], tabId) || _leafForTab(node.children[1], tabId);
-    }
-
-    function _firstLeaf(node) {
-        return node.type === 'leaf' ? node : _firstLeaf(node.children[0]);
     }
 
     function _collectLeaves(node, out) {
