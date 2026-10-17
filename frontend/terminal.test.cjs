@@ -587,7 +587,7 @@ test('split shortcuts pass through xterm when the terminal has focus', async () 
     assert.equal(handler(plain), true);
 });
 
-test('activating an ungrouped tab returns to a normal single view', async () => {
+test('switching to an ungrouped tab parks the group; a group tab restores the split', async () => {
     const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
     const MT = harness.context.window.MonolithTerminal;
     await MT.initTerminal('C:\\dir');
@@ -596,16 +596,69 @@ test('activating an ungrouped tab returns to a normal single view', async () => 
     await MT.createTab('C:\\dir3', false);
 
     const bar = harness.context.document.getElementById('main-tab-tabs');
+    const host = harness.context.document.getElementById('main-tab-host');
     assert.equal(bar.children.some((c) => c.classList.contains('main-tab-capsule')), true);
 
     await MT.activateTab('mtab-3');
 
-    assert.equal(bar.children.some((c) => c.classList.contains('main-tab-capsule')), false);
     assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-3']);
-    const host = harness.context.document.getElementById('main-tab-host');
     assert.equal(findContainer(host, 'mtab-3').classList.contains('active'), true);
     assert.equal(findContainer(host, 'mtab-1').classList.contains('active'), false);
     assert.equal(findContainer(host, 'mtab-2').classList.contains('active'), false);
+    const parked = bar.children.find((c) => c.classList.contains('main-tab-capsule'));
+    assert.ok(parked, 'the group stays grouped in the tab bar while parked');
+    assert.deepEqual(tabItemIds(parked.children), ['mtab-1', 'mtab-2']);
+
+    await MT.activateTab('mtab-2');
+
+    assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-1', 'mtab-2']);
+    assert.equal(findContainer(host, 'mtab-1').classList.contains('active'), true);
+    assert.equal(findContainer(host, 'mtab-2').classList.contains('active'), true);
+    assert.equal(findContainer(host, 'mtab-3').classList.contains('active'), false);
+    const restored = bar.children.find((c) => c.classList.contains('main-tab-capsule'));
+    assert.ok(restored, 'capsule returns after restoring the split');
+    assert.deepEqual(tabItemIds(restored.children), ['mtab-1', 'mtab-2']);
+});
+
+test('closing a parked group member prunes the parked layout', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    await MT.createTab('C:\\dir2', false);
+    MT.splitPane('mtab-1', 'row', 'mtab-2');
+    await MT.createTab('C:\\dir3', false);
+    await MT.activateTab('mtab-3');
+
+    await MT.closeTab('mtab-2');
+
+    const bar = harness.context.document.getElementById('main-tab-tabs');
+    assert.equal(bar.children.some((c) => c.classList.contains('main-tab-capsule')), false);
+    await MT.activateTab('mtab-1');
+    assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-1']);
+});
+
+test('splitting while a group is parked replaces it with the new split', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    await MT.createTab('C:\\dir2', false);
+    MT.splitPane('mtab-1', 'row', 'mtab-2');
+    await MT.createTab('C:\\dir3', false);
+    await MT.activateTab('mtab-3');
+    await MT.createTab('C:\\dir4', false);
+
+    MT.splitPane('mtab-3', 'row', 'mtab-4');
+
+    const bar = harness.context.document.getElementById('main-tab-tabs');
+    const capsule = bar.children.find((c) => c.classList.contains('main-tab-capsule'));
+    assert.ok(capsule);
+    assert.deepEqual(tabItemIds(capsule.children), ['mtab-3', 'mtab-4']);
+
+    await MT.activateTab('mtab-1');
+    assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-1']);
+    const parked = bar.children.find((c) => c.classList.contains('main-tab-capsule'));
+    assert.ok(parked);
+    assert.deepEqual(tabItemIds(parked.children), ['mtab-3', 'mtab-4']);
 });
 
 function tabItemIds(children) {

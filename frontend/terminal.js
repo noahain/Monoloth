@@ -43,6 +43,7 @@
     var _nextTabId = 1;          // numeric counter; first tab gets id "1", session "main"
 
     var _paneTree = null;
+    var _parkedTree = null;
     var _focusedTabId = null;
     var _paneNodeSeq = 0;
     var _paneSlotEls = {};
@@ -199,7 +200,13 @@
         if (!tab) return Promise.resolve();
 
         if (!_leafForTab(_paneTree, tabId)) {
-            _paneTree = { type: 'leaf', tabId: tabId };
+            if (_parkedTree && _leafForTab(_parkedTree, tabId)) {
+                _paneTree = _parkedTree;
+                _parkedTree = null;
+            } else {
+                if (_paneTree && _paneTree.type === 'split') _parkedTree = _paneTree;
+                _paneTree = { type: 'leaf', tabId: tabId };
+            }
         }
         _focusedTabId = tabId;
         renderPaneTree();
@@ -565,6 +572,12 @@
             removeLeaf(tabId);
         }
 
+        if (_parkedTree) {
+            _parkedTree = _pruneLeafNode(_parkedTree, tabId);
+            if (_parkedTree && _parkedTree.type === 'leaf') _parkedTree = null;
+            _renderTabCapsule();
+        }
+
         if (_tabs.size === 0) {
             _activeTabId = null;
             if (typeof window.SidebarManager !== 'undefined' && typeof window.SidebarManager.closeAllPanelTabsForMainTab === 'function') {
@@ -667,9 +680,15 @@
         if (kids[kids.length - 1] !== tabNewBtn) tabList.appendChild(tabNewBtn);
     }
 
+    function _capsuleLeafIds() {
+        if (_paneTree && _paneTree.type === 'split') return _collectLeaves(_paneTree, []);
+        if (_parkedTree) return _collectLeaves(_parkedTree, []);
+        return [];
+    }
+
     function _renderTabCapsule() {
         if (!tabList) return;
-        var leaves = _paneTree ? _collectLeaves(_paneTree, []) : [];
+        var leaves = _capsuleLeafIds();
         var capsule = null;
         for (var i = 0; i < tabList.children.length; i++) {
             var child = tabList.children[i];
@@ -694,20 +713,21 @@
         var firstIdx = order.length;
         leaves.forEach(function (id) {
             var probe = _findTabItem(id);
-            if (probe && probe.parentNode === tabList) {
-                var at = order.indexOf(probe);
-                if (at !== -1 && at < firstIdx) firstIdx = at;
-            }
+            if (!probe) return;
+            var anchor = probe.parentNode === tabList ? probe : (probe.parentNode === capsule ? capsule : null);
+            if (!anchor) return;
+            var at = order.indexOf(anchor);
+            if (at !== -1 && at < firstIdx) firstIdx = at;
         });
         leaves.forEach(function (id) {
             var item = _findTabItem(id);
             if (item) _moveItem(item, capsule, null);
         });
         capsule.classList.toggle('has-active', leaves.indexOf(_activeTabId) !== -1);
-        var ref = (tabList.children[firstIdx] && tabList.children[firstIdx] !== capsule)
-            ? tabList.children[firstIdx]
-            : (tabNewBtn && tabNewBtn.parentNode === tabList ? tabNewBtn : null);
-        _moveItem(capsule, tabList, ref);
+        var refEl = tabList.children[firstIdx];
+        if (refEl !== capsule) {
+            _moveItem(capsule, tabList, refEl || (tabNewBtn && tabNewBtn.parentNode === tabList ? tabNewBtn : null));
+        }
         // Parked tabs keep creation order ahead of the capsule.
         _tabs.forEach(function (tab) {
             if (leaves.indexOf(tab.id) !== -1) return;
@@ -744,6 +764,7 @@
 
     function splitPane(tabId, direction, otherTabId, placeFirst) {
         if (!_tabs.has(tabId) || !_tabs.has(otherTabId) || tabId === otherTabId) return;
+        _parkedTree = null;
         if (!_paneTree) _paneTree = { type: 'leaf', tabId: tabId };
         var leaf = _leafForTab(_paneTree, tabId);
         if (!leaf) return;
@@ -807,6 +828,23 @@
         }
         renderPaneTree();
         scheduleResize();
+    }
+
+    function _pruneLeafNode(node, tabId) {
+        if (!node) return null;
+        if (node.type === 'leaf') return node.tabId === tabId ? null : node;
+        var left = _pruneLeafNode(node.children[0], tabId);
+        var right = _pruneLeafNode(node.children[1], tabId);
+        if (left === node.children[0] && right === node.children[1]) return node;
+        if (!left) return right;
+        if (!right) return left;
+        return {
+            type: 'split',
+            id: node.id,
+            direction: node.direction,
+            ratio: node.ratio,
+            children: [left, right]
+        };
     }
 
     function moveTabToPaneEdge(tabId, anchorTabId, edge) {
@@ -1656,6 +1694,7 @@
                 }
                 _tabs.clear();
                 _paneTree = null;
+                _parkedTree = null;
                 _focusedTabId = null;
                 _paneNodeSeq = 0;
                 _activeTabId = null;
