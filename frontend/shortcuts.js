@@ -21,8 +21,8 @@
         back_to_launcher: 'Ctrl+Shift+W',
         new_main_tab: 'Ctrl+T',
         new_panel_tab: 'Ctrl+Shift+T',
-        split_pane_right: 'Ctrl+Alt+Right',
-        split_pane_down: 'Ctrl+Alt+Down'
+        split_pane_right: 'Ctrl+Alt+ArrowRight',
+        split_pane_down: 'Ctrl+Alt+ArrowDown'
     };
 
     function fillDefaults(target) {

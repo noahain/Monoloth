@@ -103,8 +103,8 @@ fn defaults() -> Map<String, Value> {
         "back_to_launcher": "Ctrl+Shift+W",
         "new_main_tab": "Ctrl+T",
         "new_panel_tab": "Ctrl+Shift+T",
-        "split_pane_right": "Ctrl+Alt+Right",
-        "split_pane_down": "Ctrl+Alt+Down"
+        "split_pane_right": "Ctrl+Alt+ArrowRight",
+        "split_pane_down": "Ctrl+Alt+ArrowDown"
     })).unwrap());
     m.insert("theme_mode".into(), Value::String("dark".into()));
     m.insert("cta_button_style".into(), Value::String("blur".into()));
@@ -764,8 +764,8 @@ mod tests {
         // The two new keys must be present with their defaults.
         assert_eq!(obj.get("new_main_tab").and_then(|v| v.as_str()), Some("Ctrl+T"));
         assert_eq!(obj.get("new_panel_tab").and_then(|v| v.as_str()), Some("Ctrl+Shift+T"));
-        assert_eq!(obj.get("split_pane_right").and_then(|v| v.as_str()), Some("Ctrl+Alt+Right"));
-        assert_eq!(obj.get("split_pane_down").and_then(|v| v.as_str()), Some("Ctrl+Alt+Down"));
+        assert_eq!(obj.get("split_pane_right").and_then(|v| v.as_str()), Some("Ctrl+Alt+ArrowRight"));
+        assert_eq!(obj.get("split_pane_down").and_then(|v| v.as_str()), Some("Ctrl+Alt+ArrowDown"));
         // Pre-existing keys must be untouched.
         assert_eq!(obj.get("settings").and_then(|v| v.as_str()), Some("Ctrl+,"));
         assert_eq!(obj.get("back_to_launcher").and_then(|v| v.as_str()), Some("Ctrl+Shift+W"));
