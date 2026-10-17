@@ -129,6 +129,7 @@
         var termDiv = document.createElement('div');
         termDiv.className = 'main-tab-terminal';
         container.appendChild(termDiv);
+        container.addEventListener('mousedown', function () { _focusPaneFromTerminal(tabId); }, true);
 
         if (tabHost) tabHost.appendChild(container);
 
@@ -193,6 +194,13 @@
             return activateTab(tabId);
         }
         return Promise.resolve(tab);
+    }
+
+    function _focusPaneFromTerminal(tabId) {
+        if (!_paneTree || _paneTree.type !== 'split') return;
+        if (_focusedTabId === tabId && _activeTabId === tabId) return;
+        if (!_leafForTab(_paneTree, tabId)) return;
+        activateTab(tabId);
     }
 
     function activateTab(tabId) {

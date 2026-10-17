@@ -661,6 +661,26 @@ test('splitting while a group is parked replaces it with the new split', async (
     assert.deepEqual(tabItemIds(parked.children), ['mtab-3', 'mtab-4']);
 });
 
+test('clicking a pane terminal focuses that pane', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    await MT.initTerminal('C:\\dir');
+    await MT.createTab('C:\\dir2', false);
+    MT.splitPane('mtab-1', 'row', 'mtab-2');
+
+    const host = harness.context.document.getElementById('main-tab-host');
+    assert.equal(MT.getFocusedTabId(), 'mtab-1');
+
+    const container = findContainer(host, 'mtab-2');
+    assert.ok(container, 'mtab-2 container must exist');
+    (container.eventListeners.mousedown || []).forEach((fn) => fn({ type: 'mousedown' }));
+
+    assert.equal(MT.getFocusedTabId(), 'mtab-2');
+    assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-1', 'mtab-2']);
+    assert.equal(findContainer(host, 'mtab-1').classList.contains('active'), true);
+    assert.equal(container.classList.contains('active'), true);
+});
+
 function tabItemIds(children) {
     return children
         .filter((c) => c.classList.contains('main-tab'))
