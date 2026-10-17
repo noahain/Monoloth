@@ -679,6 +679,10 @@ test('clicking a pane terminal focuses that pane', async () => {
     assert.deepEqual(Array.from(MT.getVisibleTabIds()), ['mtab-1', 'mtab-2']);
     assert.equal(findContainer(host, 'mtab-1').classList.contains('active'), true);
     assert.equal(container.classList.contains('active'), true);
+    const bar = harness.context.document.getElementById('main-tab-tabs');
+    const capsule = bar.children.find((c) => c.classList.contains('main-tab-capsule'));
+    assert.equal(capsule.children.find((c) => c['data-tab-id'] === 'mtab-2').classList.contains('active'), true);
+    assert.equal(capsule.children.find((c) => c['data-tab-id'] === 'mtab-1').classList.contains('active'), false);
 });
 
 function tabItemIds(children) {

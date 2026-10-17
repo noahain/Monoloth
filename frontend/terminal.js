@@ -223,17 +223,20 @@
             var oldTab = _tabs.get(_activeTabId);
             if (oldTab) {
                 if (!_leafForTab(_paneTree, _activeTabId)) oldTab.container.classList.remove('active');
-                var oldItem = tabList && tabList.querySelector('.main-tab[data-tab-id="' + _activeTabId + '"]');
+                var oldItem = _findTabItem(_activeTabId);
                 if (oldItem) oldItem.classList.remove('active');
                 updateBusyDot(oldTab);
             }
         }
 
         tab.container.classList.add('active');
-        var newItem = tabList && tabList.querySelector('.main-tab[data-tab-id="' + tabId + '"]');
+        var newItem = _findTabItem(tabId);
         if (newItem) {
             newItem.classList.add('active');
             newItem.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+            newItem.classList.remove('entering');
+            void newItem.offsetWidth;
+            newItem.classList.add('entering');
         }
         _activeTabId = tabId;
         updateBusyDot(tab);
@@ -727,10 +730,19 @@
             var at = order.indexOf(anchor);
             if (at !== -1 && at < firstIdx) firstIdx = at;
         });
-        leaves.forEach(function (id) {
-            var item = _findTabItem(id);
-            if (item) _moveItem(item, capsule, null);
-        });
+        var current = capsule.children;
+        var inOrder = current.length === leaves.length;
+        if (inOrder) {
+            for (var ci = 0; ci < leaves.length; ci++) {
+                if (_tabItemId(current[ci]) !== leaves[ci]) { inOrder = false; break; }
+            }
+        }
+        if (!inOrder) {
+            leaves.forEach(function (id) {
+                var item = _findTabItem(id);
+                if (item) _moveItem(item, capsule, null);
+            });
+        }
         capsule.classList.toggle('has-active', leaves.indexOf(_activeTabId) !== -1);
         var refEl = tabList.children[firstIdx];
         if (refEl !== capsule) {
