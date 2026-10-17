@@ -184,6 +184,22 @@
         return null;
     }
 
+    // Publish the current terminal background so hosts can paint the sub-cell
+    // slack left by fit snapping (up to one unrendered cell column/row).
+    // Transparent/alpha backgrounds layer things themselves and keep no var.
+    function publishTerminalSolidBg(bg) {
+        var root = document.documentElement;
+        if (!root || !root.style) return;
+        if (bg === 'transparent') {
+            if (root.style.removeProperty) root.style.removeProperty('--terminal-solid-bg');
+            else delete root.style['--terminal-solid-bg'];
+        } else if (root.style.setProperty) {
+            root.style.setProperty('--terminal-solid-bg', bg);
+        } else {
+            root.style['--terminal-solid-bg'] = bg;
+        }
+    }
+
     function computeTermBgColors(bgType, bgLayer) {
         var isLight = document.body.classList.contains('light-mode') || document.body.classList.contains('adaptive-light');
         var bg, black;
@@ -197,6 +213,7 @@
             bg = isLight ? '#f5f5f5' : '#0a0a0a';
             black = isLight ? '#f5f5f5' : '#0a0a0a';
         }
+        publishTerminalSolidBg(bg);
         return { background: bg, black: black, isLight: isLight };
     }
 

@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Split shortcuts no longer swallow keystrokes outside the terminal view and no longer fire while typing in a UI input; keys reach the app with terminal focus.
 - Drag gestures (tab drag, pane divider, panel dock) no longer latch when the mouse button is released outside the window, and a lost release no longer swallows the next tab click.
 - Per-pane panel shells follow dock orientation and resize from the right edge when docked left/right.
+- Main terminal content now uses the full terminal area: the fit proposal no longer subtracts a phantom 14 px scrollbar gutter (xterm renders ~2 columns wider), and the transparency-override rules fall back through the solid terminal background var so the sub-cell slack left by grid snapping paints in the terminal color instead of the window backdrop.
+- Terminal grids refit themselves once web fonts finish loading, so a late `font-display: swap` no longer leaves columns/rows sized against stale cell metrics.
 
 ### Changed
 - Split shortcut defaults use the `ArrowRight`/`ArrowDown` spelling (legacy `Right`/`Down` still matches).

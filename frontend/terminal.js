@@ -1196,6 +1196,12 @@
         ro.observe(tabHost);
     }
 
+    // Fonts load with font-display: swap; a late Cascadia Mono swap changes
+    // cell metrics after terminals already fitted. Refit once fonts settle.
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () { scheduleResize(); });
+    }
+
     var _newTabCardOverlay = null;
     var _newTabCardProfile = null;
 

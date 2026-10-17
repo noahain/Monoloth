@@ -9,6 +9,28 @@
         return {};
     }
 
+    // The vendored fit addon reserves 14px of scrollbar/overview-ruler
+    // gutter on every width proposal, but Monolith hides every xterm
+    // scrollbar, so the gutter renders as dead space along the right edge.
+    // Re-propose cols against the real usable width (both terminal hosts
+    // carry zero padding); rows keep the addon's own math.
+    function fitProposeWithoutScrollbarReserve(fitAddon, term) {
+        if (!fitAddon || typeof fitAddon.proposeDimensions !== 'function') return;
+        var orig = fitAddon.proposeDimensions.bind(fitAddon);
+        fitAddon.proposeDimensions = function () {
+            var dims = orig();
+            try {
+                if (!dims || typeof dims.cols !== 'number' || !term.element) return dims;
+                var cellW = term._core._renderService.dimensions.css.cell.width;
+                var host = term.element.parentNode;
+                if (!cellW || !host) return dims;
+                var cols = Math.max(2, Math.floor(host.clientWidth / cellW));
+                if (cols > dims.cols) dims.cols = cols;
+            } catch (e) {}
+            return dims;
+        };
+    }
+
     window.MonolithTerminalView = {
         create: function (opts) {
             var termDiv = opts.terminalDiv;
@@ -37,6 +59,7 @@
             var fitAddon = (typeof FitAddon !== 'undefined') ? new FitAddon.FitAddon() : null;
             if (fitAddon) term.loadAddon(fitAddon);
             term.open(termDiv);
+            fitProposeWithoutScrollbarReserve(fitAddon, term);
 
             if (opts.startLabel) {
                 term.writeln('');

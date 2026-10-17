@@ -2539,6 +2539,17 @@ body.adaptive-light .gradient-btn.active {
     margin: 0 !important;
 }
 
+/* Fit snapping leaves up to one unrendered cell column/row of slack; the
+   hosts and the xterm element paint the solid terminal background var so
+   that slack never reads as a seam. Transparent modes keep no var and
+   continue layering as before. */
+.main-tab-terminal,
+.cmd-panel-terminal,
+.main-tab-terminal .xterm,
+.cmd-panel-terminal .xterm {
+    background-color: var(--terminal-solid-bg, transparent);
+}
+
 /* --- Background Overlay --- */
 #bg-overlay {
     display: none;
@@ -2584,7 +2595,7 @@ body.adaptive-light .gradient-btn.active {
 
 /* --- Xterm Transparency Overrides --- */
 .xterm {
-    background: transparent !important;
+    background: var(--terminal-solid-bg, transparent) !important;
 }
 
 .xterm canvas {
@@ -2629,7 +2640,7 @@ body.adaptive-light .gradient-btn.active {
 
 .main-tab-terminal {
     overflow: hidden !important;
-    background: transparent;
+    background: var(--terminal-solid-bg, transparent);
 }
 
 #terminal-container {
@@ -2637,7 +2648,7 @@ body.adaptive-light .gradient-btn.active {
 }
 
 .xterm {
-    background: transparent !important;
+    background: var(--terminal-solid-bg, transparent) !important;
 }
 
 /* ================================================================

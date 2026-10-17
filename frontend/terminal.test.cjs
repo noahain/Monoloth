@@ -114,8 +114,10 @@ function createDocument() {
     return document;
 }
 
-function createHarness(bgState) {
+function createHarness(bgState, opts) {
+    opts = opts || {};
     const document = createDocument();
+    if (opts.fonts) document.fonts = { ready: Promise.resolve() };
     let webglLoadCount = 0;
 
     class FakeTerminal {
@@ -199,14 +201,17 @@ function createHarness(bgState) {
         },
         Terminal: FakeTerminal,
         FitAddon: { FitAddon: class FakeFitAddon {
+            constructor() { this.__reservePx = opts.fitReservePx || 0; }
             activate(terminal) { this._terminal = terminal; }
             proposeDimensions() {
                 if (!this._terminal) return undefined;
                 var el = this._terminal.element;
                 var parent = el && el.parentNode;
                 if (!parent) return undefined;
+                // Mirrors the vendored addon's cell snap; __reservePx models
+                // its phantom scrollbar/overview-ruler gutter (14px real).
                 return {
-                    cols: Math.max(2, Math.floor(parent.clientWidth / 9)),
+                    cols: Math.max(2, Math.floor((parent.clientWidth - (this.__reservePx || 0)) / 9)),
                     rows: Math.max(1, Math.floor(parent.clientHeight / 17))
                 };
             }
@@ -835,4 +840,50 @@ test('stale drag flag does not swallow the next tab click', async () => {
     // The click that follows the lost release must still focus the tab.
     (item.eventListeners.click || []).forEach((fn) => fn({ type: 'click', target: item }));
     assert.equal(MT.getFocusedTabId(), 'mtab-1');
+});
+
+test('fit proposal compensates for the vendored 14px scrollbar reserve', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 0 }, { fitReservePx: 14 });
+    const T = harness.context.window.MonolithTerminal;
+    T.initTerminal('C:\\dir');
+    await flushAsync();
+    const term = T.getTerm();
+    // Real xterm exposes cell metrics through the render service.
+    term._core = { _renderService: { dimensions: { css: { cell: { width: 9 } } } } };
+    const host = term.element.parentNode;
+    // With the reserve the addon proposes (1050-14)/9 => 115 cols;
+    // the full usable width floor(1050/9) => 116.
+    host.clientWidth = 1050;
+    term.resizeCount = 0;
+    T.refit();
+
+    assert.equal(term.cols, 116, 'cols must use the full host width, not width minus the phantom 14px gutter');
+    assert.equal(term.resizeCount, 1);
+});
+
+test('refits terminals once document fonts settle', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 0 }, { fonts: true });
+    const T = harness.context.window.MonolithTerminal;
+    await T.initTerminal('C:\\dir');
+    const term = T.getTerm();
+    term._core = { _renderService: { dimensions: { css: { cell: { width: 9 } } } } };
+    // Simulate a late font swap: cell metrics changed and the container
+    // now proposes a different grid (116x10) than the one it fitted at.
+    const host = term.element.parentNode;
+    host.clientWidth = 1050;
+    host.clientHeight = 170;
+    const resizeCountBefore = term.resizeCount || 0;
+    await new Promise((resolve) => setTimeout(resolve, 350));
+
+    assert.equal(term.cols, 116, 'fonts settling must trigger the debounced refit');
+    assert.equal(term.rows, 10, 'fonts settling must also apply the new row count');
+    assert.equal(term.resizeCount, resizeCountBefore + 1);
+});
+
+test('style.css keeps the solid-bg mask on the transparency overrides', () => {
+    const css = fs.readFileSync('frontend/style.css', 'utf8');
+    assert.equal((css.match(/background: var\(--terminal-solid-bg, transparent\) !important;\r?/g) || []).length, 2,
+        'both .xterm transparency overrides must fall back through --terminal-solid-bg so opaque modes can mask the snap slack');
+    assert.equal((css.match(/^ {4}background: var\(--terminal-solid-bg, transparent\);\r?$/gm) || []).length, 1,
+        '.main-tab-terminal transparency override must fall back through --terminal-solid-bg');
 });
