@@ -28,6 +28,8 @@ tauri build                                        # release build
 `cargo test --manifest-path src-tauri/Cargo.toml` works from repo root. `node --test` must run from repo root — suites hardcode repo-root-relative reads. `cargo tauri` is not installed; use `tauri` (npm's `tauri.cmd`) from `src-tauri/`. Neither `tauri dev` nor `tauri build` accepts `--manifest-path`.
 No formatter, linter, or pre-commit. Don't introduce one without asking.
 
+**The user runs all Rust builds/tests themselves.** Do not run `cargo build`, `cargo test`, `cargo check`, `tauri dev`, or `tauri build` unless explicitly asked — they build the app anyway and these runs just burn time. Frontend `node --test` runs are fine.
+
 ## Frontend load order (load-bearing)
 
 `xterm*` → `tauri-bridge.js` (`window.monolithApi`) → `dom-utils.js` (`window.MonolothUI`) → `ctx-menu.js` (`window.MonolithCtxMenu`) → `plugin-updater.js` → `plugin-process.js` → `updater-toast.js` → `tooltip.js` → `shortcuts.js` → `theme.js` → `dialog.js` → `file-picker.js` → `command-palette.js` → `profiles.js` → `lib/terminal-view.js` → `terminal.js` → `app.js` → `sidebar.js`
@@ -116,6 +118,8 @@ Secondary PTY at bottom (`#cmd-panel`), toggled via `Ctrl+J`. Supports multiple 
 ## Test sandbox gotcha
 
 `app.renderer-policy.test.cjs` uses Node `vm`. It MUST load modules in order: `dom-utils.js` → `ctx-menu.js` → `updater-toast.js` → `shortcuts.js` → `theme.js` → `dialog.js` → `file-picker.js` → `command-palette.js` → `profiles.js` → `terminal.js` → `app.js`. `updater-toast.js` checks for `window.__TAURI_PLUGIN_UPDATER__` / `__TAURI_PLUGIN_PROCESS__` at runtime and returns early when missing — no stub needed. Adding new frontend modules? Add them to the sandbox load order.
+
+**Fake DOM must match real-DOM strictness.** vm fakes use plain arrays for `.children`, but the real DOM returns an `HTMLCollection` — no `.slice`/`.forEach`/`.filter`/`.indexOf`. Never call Array methods on `.children` in production frontend code; use indexing or `Array.from(...)`. When testing DOM-manipulation code, simulate strictness by neutering the methods the real DOM lacks (`el.children.slice = undefined`) so this class of divergence fails in tests instead of in the app.
 
 ## Working tree is dirty by design
 
