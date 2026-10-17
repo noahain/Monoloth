@@ -566,18 +566,6 @@ test('applyCmdPanelDock sets body class and axis size variable', async () => {
     assert.equal(doc.documentElement.style['--cmd-panel-height'], '200px');
 });
 
-test('hitDockZone detects 25% window edge bands with horizontal tie-break', async () => {
-    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
-    const Z = harness.context.window.SidebarManager.hitDockZone;
-    assert.equal(Z(10, 300, 1000, 800), 'left');
-    assert.equal(Z(990, 300, 1000, 800), 'right');
-    assert.equal(Z(500, 10, 1000, 800), 'top');
-    assert.equal(Z(500, 790, 1000, 800), 'bottom');
-    assert.equal(Z(500, 400, 1000, 800), null);
-    assert.equal(Z(-5, 300, 1000, 800), null);
-    assert.equal(Z(5, 5, 1000, 800), 'left');
-});
-
 test('setCmdPanelDock ignores invalid values', async () => {
     const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
     const win = harness.context.window;

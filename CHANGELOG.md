@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Terminal tab split panes: split right/down from the tab context menu or keyboard, draggable dividers, drag a tab onto a pane edge (or back to the tab bar to ungroup), split groups render as capsules and park in the tab bar when unfocused, Escape cancels any drag.
+- CMD panel dock positions: dock bottom (default), top, left, or right from Settings or by dragging its tab bar against a window edge, with per-axis resize handles.
+- CMD panel Follow modes: focus the active pane, pin the first pane, or give each pane its own panel (`per-pane`).
+- `Ctrl+Alt+ArrowRight` / `Ctrl+ArrowDown` split shortcuts with Settings rows and reset.
+
+### Fixed
+- Split shortcuts no longer swallow keystrokes outside the terminal view and no longer fire while typing in a UI input; keys reach the app with terminal focus.
+- Drag gestures (tab drag, pane divider, panel dock) no longer latch when the mouse button is released outside the window, and a lost release no longer swallows the next tab click.
+- Per-pane panel shells follow dock orientation and resize from the right edge when docked left/right.
+
+### Changed
+- Split shortcut defaults use the `ArrowRight`/`ArrowDown` spelling (legacy `Right`/`Down` still matches).
+- Reduced-transparency fallback for the split snap overlay.
+- Rust test APPDATA moved to a thread-local so suites can run in parallel; Windows build delay-loads comctl32 so MSVC test binaries load.
+
 ## [2.2.7] - 2026-08-16
 
 ### Fixed

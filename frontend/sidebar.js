@@ -87,8 +87,8 @@
     }
 
     function _insertBeforeNewTab(container, item) {
-        var newBtn = (typeof container.querySelector === 'function') ? container.querySelector('.cmd-panel-new-tab') : null;
-        if (newBtn && newBtn.parentNode === container && typeof container.insertBefore === 'function') {
+        var newBtn = container.querySelector('.cmd-panel-new-tab');
+        if (newBtn && newBtn.parentNode === container) {
             container.insertBefore(item, newBtn);
         } else if (item.parentNode !== container) {
             container.appendChild(item);
@@ -660,22 +660,9 @@
     function getCmdPanelDock() { return _cmdPanelDock; }
 
     function hitDockZone(x, y, w, h) {
-        if (w <= 0 || h <= 0) return null;
-        if (x < 0 || x > w || y < 0 || y > h) return null;
-        var bx = w * 0.25, by = h * 0.25;
-        var cands = [];
-        if (x <= bx) cands.push(['left', x]);
-        if (w - x <= bx) cands.push(['right', w - x]);
-        if (y <= by) cands.push(['top', y]);
-        if (h - y <= by) cands.push(['bottom', h - y]);
-        if (!cands.length) return null;
-        cands.sort(function (a, b) { return a[1] - b[1]; });
-        if (cands.length > 1 && cands[0][1] === cands[1][1]) {
-            for (var i = 0; i < cands.length; i++) {
-                if (cands[i][0] === 'left' || cands[i][0] === 'right') return cands[i][0];
-            }
-        }
-        return cands[0][0];
+        var MT = window.MonolithTerminal;
+        if (!MT || typeof MT.hitPaneEdge !== 'function') return null;
+        return MT.hitPaneEdge({ left: 0, top: 0, width: w, height: h }, x, y);
     }
 
     function _dockPreviewRect(zone, w, h) {
@@ -700,6 +687,7 @@
 
     function _onPanelDockMove(e) {
         if (!_panelDockDrag) return;
+        if (_panelDockDrag.active && e.buttons === 0) { _endPanelDockDrag(false); return; }
         if (!_panelDockDrag.active) {
             if (Math.abs(e.clientX - _panelDockDrag.startX) < 8 &&
                 Math.abs(e.clientY - _panelDockDrag.startY) < 8) return;
@@ -893,15 +881,7 @@
             _syncPaneShells();
             return;
         }
-        // 'per-pane' renders per-pane shells in Stage 2; with a single pane it behaves as 'focused'.
-        if (_cmdPanelFollow === 'first') {
-            var visible = (typeof window.MonolithTerminal !== 'undefined' &&
-                typeof window.MonolithTerminal.getVisibleTabIds === 'function')
-                ? window.MonolithTerminal.getVisibleTabIds()
-                : null;
-            if (visible && visible.length) mainTabId = visible[0];
-        }
-        switchToMainTab(mainTabId);
+        switchToMainTab(_getActiveMainTabId());
     }
 
     function setCmdPanelFollow(mode) {
@@ -2101,7 +2081,6 @@
     SM.applyCmdPanelDock = applyCmdPanelDock;
     SM.setCmdPanelDock = setCmdPanelDock;
     SM.getCmdPanelDock = getCmdPanelDock;
-    SM.hitDockZone = hitDockZone;
     SM.onMainTabFocusChanged = onMainTabFocusChanged;
     SM.setCmdPanelFollow = setCmdPanelFollow;
     SM.getCmdPanelFollow = getCmdPanelFollow;

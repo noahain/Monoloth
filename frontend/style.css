@@ -6670,13 +6670,10 @@ body.dock-top #cmd-panel {
     border-top: none;
     border-bottom: 1px solid var(--border-dark);
 }
-body.dock-top #cmd-panel .cmd-panel-resize-handle {
-    top: auto;
-    bottom: -3px;
-}
+body.dock-top #cmd-panel .cmd-panel-resize-handle,
+body.dock-top .cmd-panel.pane-shell .cmd-panel-resize-handle { top: auto; bottom: -3px; }
 
-body.dock-left #terminal-view.active,
-body.dock-right #terminal-view.active {
+:is(body.dock-left, body.dock-right) #terminal-view.active {
     flex-direction: row !important;
 }
 body.dock-left #terminal-container,
@@ -6708,24 +6705,10 @@ body.custom-titlebar-active.dock-left #cmd-panel,
 body.custom-titlebar-active.dock-right #cmd-panel {
     padding-top: 30px;
 }
-body.dock-left #cmd-panel .cmd-panel-resize-handle {
-    top: 0;
-    bottom: 0;
-    left: auto;
-    right: -3px;
-    width: 6px;
-    height: auto;
-    cursor: ew-resize;
-}
-body.dock-right #cmd-panel .cmd-panel-resize-handle {
-    top: 0;
-    bottom: 0;
-    right: auto;
-    left: -3px;
-    width: 6px;
-    height: auto;
-    cursor: ew-resize;
-}
+body.dock-left #cmd-panel .cmd-panel-resize-handle,
+body.dock-left .cmd-panel.pane-shell .cmd-panel-resize-handle { top: 0; bottom: 0; left: auto; right: -3px; width: 6px; height: auto; cursor: ew-resize; }
+body.dock-right #cmd-panel .cmd-panel-resize-handle,
+body.dock-right .cmd-panel.pane-shell .cmd-panel-resize-handle { top: 0; bottom: 0; right: auto; left: -3px; width: 6px; height: auto; cursor: ew-resize; }
 
 body.cta-blur.dock-top #cmd-panel,
 body.cta-glass.dock-top #cmd-panel {
@@ -8462,21 +8445,18 @@ body.tab-dragging, body.tab-dragging .main-tab { cursor: grabbing; }
 .cmd-panel.pane-shell .cmd-panel-resize-handle { top: -3px; bottom: auto; }
 body.dock-top .pane-slot.has-shell .main-tab-container { top: var(--cmd-panel-height, 200px); bottom: 0; }
 body.dock-top .cmd-panel.pane-shell { top: 0; bottom: auto; border-top: none; border-bottom: 1px solid var(--border-dark); }
-body.dock-top .cmd-panel.pane-shell .cmd-panel-resize-handle { top: auto; bottom: -3px; }
 body.dock-left .pane-slot.has-shell .main-tab-container { bottom: 0; left: var(--cmd-panel-width, 200px); }
 body.dock-left .cmd-panel.pane-shell {
     top: 0; bottom: 0; left: 0; right: auto;
     width: var(--cmd-panel-width, 200px); height: auto;
     border-top: none; border-right: 1px solid var(--border-dark);
 }
-body.dock-left .cmd-panel.pane-shell .cmd-panel-resize-handle { top: 0; bottom: 0; left: auto; right: -3px; width: 6px; height: auto; }
 body.dock-right .pane-slot.has-shell .main-tab-container { bottom: 0; right: var(--cmd-panel-width, 200px); }
 body.dock-right .cmd-panel.pane-shell {
     top: 0; bottom: 0; right: 0; left: auto;
     width: var(--cmd-panel-width, 200px); height: auto;
     border-top: none; border-left: 1px solid var(--border-dark);
 }
-body.dock-right .cmd-panel.pane-shell .cmd-panel-resize-handle { top: 0; bottom: 0; right: auto; left: -3px; width: 6px; height: auto; }
 
 /* Main tab item enter/exit motion.
    Enter: pop-style scale + opacity from center, no side slide.

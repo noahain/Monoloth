@@ -90,8 +90,13 @@ function createDocument() {
         body: new FakeElement('body'),
         documentElement: new FakeElement('html'),
         activeElement: null,
-        addEventListener() {},
-        removeEventListener() {},
+        eventListeners: {},
+        addEventListener(type, handler) { (this.eventListeners[type] = this.eventListeners[type] || []).push(handler); },
+        removeEventListener(type, handler) {
+            var l = this.eventListeners[type];
+            if (!l) return;
+            this.eventListeners[type] = l.filter((fn) => fn !== handler);
+        },
         createElement(tag) { return new FakeElement(tag); },
         createTextNode(text) {
             const el = new FakeElement('text');
@@ -810,4 +815,24 @@ test('ungroupTab collapses the pane but keeps the session alive', async () => {
     assert.ok(MT.getTab('mtab-2'), 'ungrouped tab session must survive');
     const host = harness.context.document.getElementById('main-tab-host');
     assert.equal(MT.getTab('mtab-2').container.parentNode, host);
+});
+
+test('stale drag flag does not swallow the next tab click', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const MT = harness.context.window.MonolithTerminal;
+    const doc = harness.context.document;
+    await MT.initTerminal('C:\\dir');
+    await MT.createTab('C:\\dir2', true);
+
+    // Drag mtab-1: press, move past the threshold to arm the drag, release over no drop target.
+    const bar = doc.getElementById('main-tab-tabs');
+    const item = bar.children.find((c) => c['data-tab-id'] === 'mtab-1');
+    assert.ok(item, 'mtab-1 tab item must exist');
+    (item.eventListeners.mousedown || []).forEach((fn) => fn({ type: 'mousedown', button: 0, clientX: 0, clientY: 0, target: item }));
+    (doc.eventListeners.mousemove || []).forEach((fn) => fn({ type: 'mousemove', clientX: 40, clientY: 40 }));
+    (doc.eventListeners.mouseup || []).forEach((fn) => fn({ type: 'mouseup', clientX: 40, clientY: 40 }));
+
+    // The click that follows the lost release must still focus the tab.
+    (item.eventListeners.click || []).forEach((fn) => fn({ type: 'click', target: item }));
+    assert.equal(MT.getFocusedTabId(), 'mtab-1');
 });

@@ -659,9 +659,6 @@
     function _tabItemId(item) {
         if (!item) return null;
         if (item.dataset && item.dataset.tabId) return item.dataset.tabId;
-        if (typeof item.getAttribute === 'function') {
-            try { return item.getAttribute('data-tab-id'); } catch (e) {}
-        }
         return item['data-tab-id'] || null;
     }
 
@@ -918,6 +915,7 @@
 
     function _onDividerMove(e) {
         if (!_dividerDrag) return;
+        if (e.buttons === 0) { _endDividerDrag(false); return; }
         var pos = _dividerDrag.node.direction === 'row' ? e.clientX : e.clientY;
         setRatio(_dividerDrag.node.id, (pos - _dividerDrag.rectStart) / _dividerDrag.rectSize);
         clearTimeout(_dividerRefitTimer);
@@ -1042,6 +1040,7 @@
 
     function _onTabMouseMove(e) {
         if (!_tabDrag) return;
+        if (_tabDrag.active && e.buttons === 0) { _endTabDrag(false); return; }
         if (!_tabDrag.active) {
             if (Math.abs(e.clientX - _tabDrag.startX) < 5 && Math.abs(e.clientY - _tabDrag.startY) < 5) return;
             _tabDrag.active = true;
@@ -1067,7 +1066,8 @@
         var item = _findTabItem(drag.tabId);
         if (item) item.classList.remove('dragging');
         hideSnapOverlay();
-        if (!commit || !drag.active) { _suppressTabClick = false; return; }
+        _suppressTabClick = false;
+        if (!commit || !drag.active) return;
         if (!drag.target) return;
         if (drag.target.type === 'pane') moveTabToPaneEdge(drag.tabId, drag.target.tabId, drag.target.edge);
         else if (drag.target.type === 'ungroup') ungroupTab(drag.tabId);

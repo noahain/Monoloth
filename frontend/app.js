@@ -1519,6 +1519,13 @@
         return inMainTerm || inTextField;
     }
 
+    function isTypingInInput() {
+        var el = document.activeElement;
+        if (!el || !el.classList) return false;
+        var isXtermHelper = el.classList.contains('xterm-helper-textarea');
+        return (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && !isXtermHelper;
+    }
+
     document.addEventListener('keydown', function (e) {
         if (_editingShortcutKey && shortcutEditMode && shortcutEditMode.style.display !== 'none') return;
         if (window.MonolithFilePicker && window.MonolithFilePicker.isActive()) return;
@@ -1556,21 +1563,18 @@
             }
             return;
         }
-        if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('split_pane_right'))) {
+        var splitActions = [
+            { shortcut: 'split_pane_right', direction: 'row' },
+            { shortcut: 'split_pane_down', direction: 'column' }
+        ];
+        for (var sp = 0; sp < splitActions.length; sp++) {
+            if (!window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut(splitActions[sp].shortcut))) continue;
+            if (isTypingInInput()) continue;
+            var splitView = document.getElementById('terminal-view');
+            if (!splitView || !splitView.classList.contains('active')) continue;
             e.preventDefault();
-            var svSplitR = document.getElementById('terminal-view');
-            if (!svSplitR || !svSplitR.classList.contains('active')) return;
             if (typeof window.MonolithTerminal !== 'undefined' && typeof window.MonolithTerminal.splitFocusedPane === 'function') {
-                window.MonolithTerminal.splitFocusedPane('row');
-            }
-            return;
-        }
-        if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('split_pane_down'))) {
-            e.preventDefault();
-            var svSplitD = document.getElementById('terminal-view');
-            if (!svSplitD || !svSplitD.classList.contains('active')) return;
-            if (typeof window.MonolithTerminal !== 'undefined' && typeof window.MonolithTerminal.splitFocusedPane === 'function') {
-                window.MonolithTerminal.splitFocusedPane('column');
+                window.MonolithTerminal.splitFocusedPane(splitActions[sp].direction);
             }
             return;
         }
