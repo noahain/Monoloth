@@ -403,7 +403,6 @@
             loadBackgroundConfig();
             syncTitlebarToggleState();
             syncTabBarToggleState();
-            syncCmdPanelToggles();
         } else if (tabName === 'keybinds') {
             window.MonolithShortcuts.loadShortcuts(function () {
                 window.MonolithShortcuts.renderShortcutUI();
@@ -1855,7 +1854,6 @@
             window.SidebarManager.applyTabBarPosition();
         }
         syncTabBarToggleState();
-        syncCmdPanelToggles();
     }
 
     function syncTitlebarToggleState() {
@@ -1883,23 +1881,6 @@
             b.classList.toggle('active', b.dataset.tabbar === pos);
             b.classList.toggle('disabled', isTitlebar && !customTitlebarActive);
         });
-    }
-
-    function syncCmdPanelToggles() {
-        var dockToggle = document.getElementById('cmdpanel-dock-toggle');
-        if (dockToggle && window.SidebarManager && window.SidebarManager.getCmdPanelDock) {
-            var dock = window.SidebarManager.getCmdPanelDock();
-            dockToggle.querySelectorAll('.sidebar-tabbar-btn').forEach(function (b) {
-                b.classList.toggle('active', b.dataset.dock === dock);
-            });
-        }
-        var followToggle = document.getElementById('cmdpanel-follow-toggle');
-        if (followToggle && window.SidebarManager && window.SidebarManager.getCmdPanelFollow) {
-            var follow = window.SidebarManager.getCmdPanelFollow();
-            followToggle.querySelectorAll('.sidebar-tabbar-btn').forEach(function (b) {
-                b.classList.toggle('active', b.dataset.follow === follow);
-            });
-        }
     }
 
     function setCurrentView(view) {
@@ -2035,41 +2016,6 @@
             });
         }
 
-        var dockToggle = document.getElementById('cmdpanel-dock-toggle');
-        if (dockToggle) {
-            dockToggle.addEventListener('click', function(e) {
-                var btn = e.target.closest('.sidebar-tabbar-btn');
-                if (!btn) return;
-                var dock = btn.dataset.dock;
-                dockToggle.querySelectorAll('.sidebar-tabbar-btn').forEach(function(b) {
-                    b.classList.toggle('active', b === btn);
-                });
-                if (window.monolithApi) {
-                    window.monolithApi.set_config('cmdPanelDock', dock).catch(function () {});
-                }
-                if (window.SidebarManager && window.SidebarManager.setCmdPanelDock) {
-                    window.SidebarManager.setCmdPanelDock(dock);
-                }
-            });
-        }
-
-        var followToggle = document.getElementById('cmdpanel-follow-toggle');
-        if (followToggle) {
-            followToggle.addEventListener('click', function(e) {
-                var btn = e.target.closest('.sidebar-tabbar-btn');
-                if (!btn) return;
-                var follow = btn.dataset.follow;
-                followToggle.querySelectorAll('.sidebar-tabbar-btn').forEach(function(b) {
-                    b.classList.toggle('active', b === btn);
-                });
-                if (window.monolithApi) {
-                    window.monolithApi.set_config('cmdPanelFollow', follow).catch(function () {});
-                }
-                if (window.SidebarManager && window.SidebarManager.setCmdPanelFollow) {
-                    window.SidebarManager.setCmdPanelFollow(follow);
-                }
-            });
-        }
     }
 
     // Add profile button â€” moved to profiles.js (window.MonolithProfiles)
@@ -2240,7 +2186,6 @@
             showSettings: function () { showSettings(); },
             switchTab: switchTab,
             syncTabBarToggleState: syncTabBarToggleState,
-            syncCmdPanelToggles: syncCmdPanelToggles,
             openProfileSwitcher: function () { window.MonolithProfiles.openProfileSwitcher(); },
             copyToClipboard: function (t) { copyToClipboard(t); },
             showStatus: function (id, msg, isError) { showStatus(id, msg, isError); },
