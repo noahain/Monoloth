@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Terminal tab split panes: split right/down from the tab context menu or keyboard, draggable dividers, drag a tab onto a pane edge (or back to the tab bar to ungroup), split groups render as capsules and park in the tab bar when unfocused, Escape cancels any drag.
-- CMD panel dock positions: dock bottom (default), top, left, or right from Settings or by dragging its tab bar against a window edge, with per-axis resize handles.
-- CMD panel Follow modes: focus the active pane, pin the first pane, or give each pane its own panel (`per-pane`).
+- Command panel dock positions: dock bottom (default) or top/left/right by dragging its tab bar against a window edge; the position is saved to the global config and restored on launch. Resize handles per axis, and sizes remembered separately for top/bottom (height) and left/right (width) docks.
+- Command panel Follow modes: focus the active pane, pin the first pane, or give each pane its own panel (`per-pane`) — set `cmdPanelFollow` in the config file.
 - `Ctrl+Alt+ArrowRight` / `Ctrl+ArrowDown` split shortcuts with Settings rows and reset.
 
 ### Fixed

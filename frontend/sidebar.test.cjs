@@ -566,6 +566,39 @@ test('applyCmdPanelDock sets body class and axis size variable', async () => {
     assert.equal(doc.documentElement.style['--cmd-panel-height'], '200px');
 });
 
+test('panel size persists per orientation (width for side docks, height for flat docks)', async () => {
+    const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
+    const doc = harness.context.document;
+    const win = harness.context.window;
+    const SM = win.SidebarManager;
+
+    const savedSizes = {};
+    win.monolithApi.set_config = (key, val) => {
+        if (key === 'cmdPanelWidth' || key === 'cmdPanelHeight') savedSizes[key] = val;
+        return Promise.resolve();
+    };
+
+    function dragResize(startX, startY, moveX, moveY) {
+        const handle = doc.getElementById('cmd-panel-resize-handle');
+        (handle.eventListeners.mousedown || []).forEach((fn) => fn({
+            type: 'mousedown', clientX: startX, clientY: startY, button: 0,
+            preventDefault() {}, stopPropagation() {}
+        }));
+        (doc.eventListeners.mousemove || []).forEach((fn) => fn({ type: 'mousemove', clientX: moveX, clientY: moveY }));
+        (doc.eventListeners.mouseup || []).forEach((fn) => fn({ type: 'mouseup', clientX: moveX, clientY: moveY }));
+    }
+
+    SM.setCmdPanelDock('left');
+    dragResize(300, 300, 340, 300);
+    assert.equal(savedSizes.cmdPanelWidth, 240);
+    assert.equal(savedSizes.cmdPanelHeight, undefined);
+
+    SM.setCmdPanelDock('bottom');
+    dragResize(300, 300, 300, 340);
+    assert.equal(savedSizes.cmdPanelHeight, 160);
+    assert.equal(savedSizes.cmdPanelWidth, 240);
+});
+
 test('setCmdPanelDock ignores invalid values', async () => {
     const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
     const win = harness.context.window;

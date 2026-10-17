@@ -119,6 +119,7 @@ fn defaults() -> Map<String, Value> {
     m.insert("window_x".into(), Value::Null);
     m.insert("window_y".into(), Value::Null);
     m.insert("cmdPanelHeight".into(), Value::Number(200.into()));
+    m.insert("cmdPanelWidth".into(), Value::Number(200.into()));
     m.insert("panelShell".into(), Value::String("cmd".into()));
     m.insert("cmdPanelDock".into(), Value::String("bottom".into()));
     m.insert("cmdPanelFollow".into(), Value::String("focused".into()));
@@ -146,7 +147,7 @@ const GLOBAL_KEYS: &[&str] = &[
     "active_profile", "last_directory", "window_width", "window_height",
     "window_maximized", "fp_last_dir_bg_image", "fp_last_dir_choose",
     "use_custom_titlebar", "window_x", "window_y",
-    "cmdPanelHeight", "panelShell", "cmdPanelOpen", "sidebar_config",
+    "cmdPanelHeight", "cmdPanelWidth", "panelShell", "cmdPanelOpen", "sidebar_config",
     "cmdPanelDock", "cmdPanelFollow",
     "recent_directories", "confirm_dialog_prefs",
     "tabBarPosition", "preset_cache",
