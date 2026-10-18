@@ -243,6 +243,18 @@ async fn cancel_update_download(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Upstream WebKitGTK DMABUF renderer bug aborts Wayland explicit-sync
+    // sessions at startup (WebKit #280210, tauri#10702). Set only when unset,
+    // so a user-provided value -- "0" re-enables the fast path -- wins.
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::var("WAYLAND_DISPLAY").is_ok()
+            && std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none()
+        {
+            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        }
+    }
+
     let app_config = AppConfig::new();
     let history_manager = HistoryManager::new();
     let pty_manager = PtyManager::new();

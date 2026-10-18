@@ -220,6 +220,20 @@ Global keys (shared across all profiles) include window state, recent directorie
 
 Rust 1.77.2 • Tauri 2.11.1 • portable-pty • xterm.js • WebGL • Vanilla JavaScript • HTML5 • CSS3 • rfd • image • serde_json
 
+### Troubleshooting
+
+**Linux (Wayland): the app exits at launch with `Gdk-Message: Error 71 (Protocol error) dispatching to Wayland display`.**
+
+The cause is an upstream WebKitGTK bug in its DMABUF renderer: it enables the Wayland explicit-sync protocol but commits without an acquire point, so compositors (KWin, Mutter, Hyprland) abort the connection ([WebKit #280210](https://bugs.webkit.org/show_bug.cgi?id=280210), [tauri-apps/tauri#10702](https://github.com/tauri-apps/tauri/issues/10702)). Monoloth sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` for its own process on Wayland sessions to avoid it, unless you have already set that variable yourself.
+
+To undo the workaround and keep WebKit's accelerated rendering path, launch with the variable set to `0`:
+
+```bash
+WEBKIT_DISABLE_DMABUF_RENDERER=0 monoloth
+```
+
+Only the exact value `0` keeps the accelerated path; any other value (including an empty one) disables it. Windows, macOS, and X11 sessions are unaffected by the workaround. Older builds that crash at launch can use the manual form: `WEBKIT_DISABLE_DMABUF_RENDERER=1 monoloth`.
+
 ### Contributing
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for build

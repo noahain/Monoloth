@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Linux/Wayland: launching no longer crashes with `Gdk-Message: Error 71 (Protocol error) dispatching to Wayland display` on compositors that enforce the Wayland explicit-sync protocol (WebKit #280210, tauri#10702). Monoloth sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` for its own process on Wayland sessions, unless the variable is already set; setting it to `0` keeps the accelerated DMABUF rendering path.
+
 ## [2.3.0] - 2026-10-18
 
 ### Added
