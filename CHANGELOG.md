@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-10-18
+
 ### Added
 - Terminal tab split panes: split right/down from the tab context menu or keyboard, draggable dividers, drag a tab onto a pane edge (or back to the tab bar to ungroup), split groups render as capsules and park in the tab bar when unfocused, Escape cancels any drag.
 - Command panel dock positions: dock bottom (default) or top/left/right by dragging its tab bar against a window edge; the position is saved to the global config and restored on launch. Resize handles per axis, and sizes remembered separately for top/bottom (height) and left/right (width) docks.
@@ -474,7 +476,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release.
 
-[Unreleased]: https://github.com/noahain/Monoloth/compare/v2.2.7...beta
+[Unreleased]: https://github.com/noahain/Monoloth/compare/v2.3.0...beta
+[2.3.0]: https://github.com/noahain/Monoloth/compare/v2.2.7...v2.3.0
 [2.2.7]: https://github.com/noahain/Monoloth/compare/v2.2.6...v2.2.7
 [2.2.6]: https://github.com/noahain/Monoloth/compare/v2.2.5...v2.2.6
 [2.2.5]: https://github.com/noahain/Monoloth/compare/v2.2.4...v2.2.5
