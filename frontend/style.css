@@ -2540,13 +2540,9 @@ body.adaptive-light .gradient-btn.active {
 }
 
 /* Fit snapping leaves up to one unrendered cell column/row of slack; the
-   hosts and the xterm element paint the solid terminal background var so
-   that slack never reads as a seam. Transparent modes keep no var and
-   continue layering as before. */
-.main-tab-terminal,
-.cmd-panel-terminal,
-.main-tab-terminal .xterm,
-.cmd-panel-terminal .xterm {
+   hosts paint the solid terminal background var so that slack never reads
+   as a seam. Transparent modes keep no var and continue layering. */
+.cmd-panel-terminal {
     background-color: var(--terminal-solid-bg, transparent);
 }
 
@@ -2645,10 +2641,6 @@ body.adaptive-light .gradient-btn.active {
 
 #terminal-container {
     overflow: hidden !important;
-}
-
-.xterm {
-    background: var(--terminal-solid-bg, transparent) !important;
 }
 
 /* ================================================================
@@ -6602,62 +6594,50 @@ body.adaptive-light.cta-outline .monoloth-tooltip {
 #cmd-panel.open { display: flex; }
 
 /* CTA Theme Variants for CMD Panel */
-body.cta-blur #cmd-panel,
-body.cta-blur .cmd-panel.pane-shell {
+body.cta-blur #cmd-panel {
     background: rgba(10, 10, 10, 0.5);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-top-color: var(--modal-border);
 }
 body.light-mode.cta-blur #cmd-panel,
-body.adaptive-light.cta-blur #cmd-panel,
-body.light-mode.cta-blur .cmd-panel.pane-shell,
-body.adaptive-light.cta-blur .cmd-panel.pane-shell {
+body.adaptive-light.cta-blur #cmd-panel {
     background: rgba(245, 245, 245, 0.55);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-top-color: var(--modal-border);
 }
 
-body.cta-glass #cmd-panel,
-body.cta-glass .cmd-panel.pane-shell {
+body.cta-glass #cmd-panel {
     background: var(--modal-hover-bg);
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
     border-top-color: var(--modal-border);
 }
 body.light-mode.cta-glass #cmd-panel,
-body.adaptive-light.cta-glass #cmd-panel,
-body.light-mode.cta-glass .cmd-panel.pane-shell,
-body.adaptive-light.cta-glass .cmd-panel.pane-shell {
+body.adaptive-light.cta-glass #cmd-panel {
     background: rgba(255, 255, 255, 0.5);
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
     border-top-color: var(--modal-border);
 }
 
-body.cta-solid #cmd-panel,
-body.cta-solid .cmd-panel.pane-shell {
+body.cta-solid #cmd-panel {
     background: var(--bg-tertiary);
     border-top-color: var(--border-dark);
 }
 body.light-mode.cta-solid #cmd-panel,
-body.adaptive-light.cta-solid #cmd-panel,
-body.light-mode.cta-solid .cmd-panel.pane-shell,
-body.adaptive-light.cta-solid .cmd-panel.pane-shell {
+body.adaptive-light.cta-solid #cmd-panel {
     background: var(--bg-tertiary);
     border-top-color: var(--border-dark);
 }
 
-body.cta-outline #cmd-panel,
-body.cta-outline .cmd-panel.pane-shell {
+body.cta-outline #cmd-panel {
     background: transparent;
     border-top-color: var(--border-muted);
 }
 body.light-mode.cta-outline #cmd-panel,
-body.adaptive-light.cta-outline #cmd-panel,
-body.light-mode.cta-outline .cmd-panel.pane-shell,
-body.adaptive-light.cta-outline .cmd-panel.pane-shell {
+body.adaptive-light.cta-outline #cmd-panel {
     background: transparent;
     border-top-color: var(--border-muted);
 }
@@ -6681,8 +6661,7 @@ body.dock-top #cmd-panel {
     border-top: none;
     border-bottom: 1px solid var(--border-dark);
 }
-body.dock-top #cmd-panel .cmd-panel-resize-handle,
-body.dock-top .cmd-panel.pane-shell .cmd-panel-resize-handle { top: auto; bottom: -3px; }
+body.dock-top #cmd-panel .cmd-panel-resize-handle { top: auto; bottom: -3px; }
 
 :is(body.dock-left, body.dock-right) #terminal-view.active {
     flex-direction: row !important;
@@ -6716,10 +6695,8 @@ body.custom-titlebar-active.dock-left #cmd-panel,
 body.custom-titlebar-active.dock-right #cmd-panel {
     padding-top: 30px;
 }
-body.dock-left #cmd-panel .cmd-panel-resize-handle,
-body.dock-left .cmd-panel.pane-shell .cmd-panel-resize-handle { top: 0; bottom: 0; left: auto; right: -3px; width: 6px; height: auto; cursor: ew-resize; }
-body.dock-right #cmd-panel .cmd-panel-resize-handle,
-body.dock-right .cmd-panel.pane-shell .cmd-panel-resize-handle { top: 0; bottom: 0; right: auto; left: -3px; width: 6px; height: auto; cursor: ew-resize; }
+body.dock-left #cmd-panel .cmd-panel-resize-handle { top: 0; bottom: 0; left: auto; right: -3px; width: 6px; height: auto; cursor: ew-resize; }
+body.dock-right #cmd-panel .cmd-panel-resize-handle { top: 0; bottom: 0; right: auto; left: -3px; width: 6px; height: auto; cursor: ew-resize; }
 
 body.cta-blur.dock-top #cmd-panel,
 body.cta-glass.dock-top #cmd-panel {
@@ -8441,33 +8418,6 @@ body.divider-dragging { cursor: col-resize; user-select: none; }
 body.tab-dragging, body.tab-dragging .main-tab { cursor: grabbing; }
 .main-tab.dragging { opacity: 0.45; }
 .pane-root { position: absolute; inset: 0; display: flex; }
-.pane-slot.has-shell .main-tab-container { bottom: var(--cmd-panel-height, 200px); }
-
-/* --- Per-pane CMD panel shells (follow=per-pane) --- */
-.cmd-panel.pane-shell {
-    position: absolute;
-    left: 0; right: 0; bottom: 0;
-    height: var(--cmd-panel-height, 200px);
-    display: flex; flex-direction: column;
-    z-index: 5;
-    border-top: 1px solid var(--border-dark);
-    background: rgba(0, 0, 0, 0.3);
-}
-.cmd-panel.pane-shell .cmd-panel-resize-handle { top: -3px; bottom: auto; }
-body.dock-top .pane-slot.has-shell .main-tab-container { top: var(--cmd-panel-height, 200px); bottom: 0; }
-body.dock-top .cmd-panel.pane-shell { top: 0; bottom: auto; border-top: none; border-bottom: 1px solid var(--border-dark); }
-body.dock-left .pane-slot.has-shell .main-tab-container { bottom: 0; left: var(--cmd-panel-width, 200px); }
-body.dock-left .cmd-panel.pane-shell {
-    top: 0; bottom: 0; left: 0; right: auto;
-    width: var(--cmd-panel-width, 200px); height: auto;
-    border-top: none; border-right: 1px solid var(--border-dark);
-}
-body.dock-right .pane-slot.has-shell .main-tab-container { bottom: 0; right: var(--cmd-panel-width, 200px); }
-body.dock-right .cmd-panel.pane-shell {
-    top: 0; bottom: 0; right: 0; left: auto;
-    width: var(--cmd-panel-width, 200px); height: auto;
-    border-top: none; border-left: 1px solid var(--border-dark);
-}
 
 /* Main tab item enter/exit motion.
    Enter: pop-style scale + opacity from center, no side slide.

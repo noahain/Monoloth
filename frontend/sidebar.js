@@ -39,11 +39,9 @@
     var _panelWidth = 200;
     var _cmdPanelDock = 'bottom';
     var _cmdPanelOpen = false;
-    var _cmdPanelFollow = 'focused';
 
     var _mainTabPanels = new Map();
     var _activeMainTabId = null;
-    var _paneShells = new Map();
 
     function _ensurePanelGroup(mainTabId) {
         if (!_mainTabPanels.has(mainTabId)) {
@@ -63,28 +61,11 @@
     }
 
     function _getActiveMainTabId() {
-        if (_cmdPanelFollow === 'first' && typeof window.MonolithTerminal !== 'undefined' &&
-            typeof window.MonolithTerminal.getVisibleTabIds === 'function') {
-            var visible = window.MonolithTerminal.getVisibleTabIds();
-            if (visible && visible.length) return visible[0];
-        }
         if (typeof window.MonolithTerminal !== 'undefined' && typeof window.MonolithTerminal.getActiveTabId === 'function') {
             var id = window.MonolithTerminal.getActiveTabId();
             if (id) return id;
         }
         return 'mtab-1';
-    }
-
-    function _isPerPaneMode() { return _cmdPanelFollow === 'per-pane'; }
-
-    function _panelHostFor(mainTabId) {
-        var shell = _paneShells.get(mainTabId);
-        return (shell && shell._termHostEl) ? shell._termHostEl : cmdPanelTerminal;
-    }
-
-    function _panelTabsElFor(mainTabId) {
-        var shell = _paneShells.get(mainTabId);
-        return (shell && shell._tabsEl) ? shell._tabsEl : sharedPanelTabsEl;
     }
 
     function _insertBeforeNewTab(container, item) {
@@ -93,128 +74,6 @@
             container.insertBefore(item, newBtn);
         } else if (item.parentNode !== container) {
             container.appendChild(item);
-        }
-    }
-
-    function _createPaneShellEl(mainTabId) {
-        var shell = document.createElement('div');
-        shell.className = 'cmd-panel pane-shell';
-        shell.setAttribute('data-shell-for', mainTabId);
-
-        var handle = document.createElement('div');
-        handle.className = 'cmd-panel-resize-handle';
-        handle.addEventListener('mousedown', _startPanelResize);
-
-        var tabBar = document.createElement('div');
-        tabBar.className = 'cmd-panel-tab-bar';
-        tabBar.addEventListener('mousedown', _beginPanelDockDrag);
-
-        var tabs = document.createElement('div');
-        tabs.className = 'cmd-panel-tabs';
-        shell._tabsEl = tabs;
-
-        var newBtn = document.createElement('button');
-        newBtn.className = 'cmd-panel-new-tab';
-        newBtn.textContent = '+';
-        newBtn.addEventListener('click', function () { createTab(null, true, null, mainTabId); });
-        tabs.appendChild(newBtn);
-
-        var closeBtn = document.createElement('button');
-        closeBtn.className = 'cmd-panel-close';
-        closeBtn.textContent = '\u00d7';
-        closeBtn.addEventListener('click', function () { closePaneShell(mainTabId); });
-        tabBar.appendChild(tabs);
-        tabBar.appendChild(closeBtn);
-
-        var termHost = document.createElement('div');
-        termHost.className = 'cmd-panel-terminal';
-        termHost.id = 'cmd-panel-terminal-' + mainTabId;
-        shell._termHostEl = termHost;
-
-        shell.appendChild(handle);
-        shell.appendChild(tabBar);
-        shell.appendChild(termHost);
-        return shell;
-    }
-
-    function closePaneShell(mainTabId) {
-        var group = _mainTabPanels.get(mainTabId);
-        if (group) group.isOpen = false;
-        _syncPaneShells();
-    }
-
-    function _syncPaneShells() {
-        if (!_isPerPaneMode()) { _unmountPaneShells(); return; }
-        var MT = window.MonolithTerminal;
-        var visible = (MT && typeof MT.getVisibleTabIds === 'function') ? Array.from(MT.getVisibleTabIds()) : [];
-        // Drop shells whose pane disappeared.
-        Array.from(_paneShells.keys()).forEach(function (id) {
-            if (visible.indexOf(id) === -1) {
-                var shell = _paneShells.get(id);
-                if (shell.parentNode) {
-                    shell.parentNode.classList.remove('has-shell');
-                    shell.remove();
-                }
-                _paneShells.delete(id);
-            }
-        });
-        // In per-pane mode the shared panel chrome stays closed; shells replace it.
-        if (cmdPanel && cmdPanel.classList.contains('open')) cmdPanel.classList.remove('open');
-        if (!_cmdPanelOpen) { _unmountPaneShells(); return; }
-        visible.forEach(function (id) {
-            var slot = (MT && typeof MT.getPaneSlotEl === 'function') ? MT.getPaneSlotEl(id) : null;
-            if (!slot) return;
-            var group = _ensurePanelGroup(id);
-            var shell = _paneShells.get(id);
-            if (!shell) {
-                shell = _createPaneShellEl(id);
-                _paneShells.set(id, shell);
-            }
-            if (shell.parentNode !== slot) slot.appendChild(shell);
-            slot.classList.add('has-shell');
-            shell.style.display = group.isOpen ? '' : 'none';
-            // Home this group's DOM inside the shell.
-            group.tabs.forEach(function (tab) {
-                if (tab.tabItem) _insertBeforeNewTab(shell._tabsEl, tab.tabItem);
-                if (tab.container && tab.container.parentNode !== shell._termHostEl) shell._termHostEl.appendChild(tab.container);
-                if (tab.container) tab.container.style.display = '';
-            });
-        });
-        var active = _paneShells.get(_getActiveMainTabId());
-        var refit = active ? refitActiveTab : scheduleRefitActiveTab;
-        setTimeout(refit, 50);
-    }
-
-    function _unmountPaneShells() {
-        if (!_paneShells.size) return;
-        _paneShells.forEach(function (shell) {
-            if (shell.parentNode) {
-                shell.parentNode.classList.remove('has-shell');
-                shell.remove();
-            }
-        });
-        _paneShells.clear();
-        // Home every group's DOM back to the shared panel, then re-render the active group.
-        _mainTabPanels.forEach(function (group) {
-            group.tabs.forEach(function (tab) {
-                if (tab.tabItem && tab.tabItem.parentNode) tab.tabItem.remove();
-                if (tab.container) {
-                    if (tab.container.parentNode !== cmdPanelTerminal) cmdPanelTerminal.appendChild(tab.container);
-                    tab.container.style.display = 'none';
-                }
-            });
-        });
-        var activeId = _getActiveMainTabId();
-        var active = _mainTabPanels.get(activeId);
-        if (active) {
-            active.tabs.forEach(function (tab) {
-                if (tab.tabItem) _insertBeforeNewTab(sharedPanelTabsEl, tab.tabItem);
-                if (tab.container) tab.container.style.display = (tab.id === active.activeTabId) ? '' : 'none';
-            });
-        }
-        // Leaving per-pane: the shared panel takes over again.
-        if (_cmdPanelOpen && active && active.isOpen && cmdPanel) {
-            cmdPanel.classList.add('open');
         }
     }
 
@@ -571,11 +430,6 @@
         window.monolithApi.get_config('panelShell').then(function (val) {
             _panelShell = (typeof val === 'string') ? val : 'cmd';
         }).catch(function () {});
-        window.monolithApi.get_config('cmdPanelFollow').then(function (val) {
-            if (val === 'focused' || val === 'first' || val === 'per-pane') {
-                _cmdPanelFollow = val;
-            }
-        }).catch(function () {});
         window.monolithApi.get_config('cmdPanelOpen').then(function (val) {
             if (val === true) {
                 _panelRestoreNeeded = true;
@@ -659,7 +513,6 @@
         document.body.classList.add('dock-' + _cmdPanelDock);
         applyPanelSize();
         setTimeout(function () {
-            _syncPaneShells();
             if (window.MonolothApp && window.MonolothApp.refitTerminals) {
                 window.MonolothApp.refitTerminals();
             }
@@ -755,7 +608,7 @@
         terminalDiv.className = 'cmd-panel-tab-terminal';
         container.appendChild(terminalDiv);
 
-        _panelHostFor(mainTabId).appendChild(container);
+        cmdPanelTerminal.appendChild(container);
 
         var tabItem = document.createElement('div');
         tabItem.className = 'cmd-panel-tab';
@@ -766,7 +619,7 @@
             '<span class="cmd-panel-tab-dirty" style="display:none;">●</span>' +
             '<button class="cmd-panel-tab-close" data-tab-id="' + tabId + '">&times;</button>';
 
-        _insertBeforeNewTab(_panelTabsElFor(mainTabId), tabItem);
+        _insertBeforeNewTab(sharedPanelTabsEl, tabItem);
         tabItem.classList.add('entering');
 
         tabItem.addEventListener('click', function (e) {
@@ -891,24 +744,11 @@
         hideCmdPanel(false);
     }
 
-    function onMainTabFocusChanged(mainTabId) {
-        if (_isPerPaneMode()) {
-            _activeMainTabId = mainTabId;
-            _syncPaneShells();
-            return;
-        }
+    function onMainTabFocusChanged() {
         switchToMainTab(_getActiveMainTabId());
     }
 
-    function setCmdPanelFollow(mode) {
-        if (mode !== 'focused' && mode !== 'first' && mode !== 'per-pane') return;
-        _cmdPanelFollow = mode;
-        _syncPaneShells();
-        onMainTabFocusChanged(_getActiveMainTabId());
-    }
-
     function switchToMainTab(mainTabId) {
-        if (_isPerPaneMode()) { _activeMainTabId = mainTabId; _syncPaneShells(); return; }
         if (_activeMainTabId === mainTabId) return;
 
         var oldGroup = _activeMainTabId ? _mainTabPanels.get(_activeMainTabId) : null;
@@ -1342,14 +1182,6 @@
 
     function showCmdPanel() {
         _cmdPanelOpen = true;
-        if (_isPerPaneMode()) {
-            var MT = window.MonolithTerminal;
-            var visible = (MT && typeof MT.getVisibleTabIds === 'function') ? Array.from(MT.getVisibleTabIds()) : [_getActiveMainTabId()];
-            visible.forEach(function (id) { _ensurePanelGroup(id).isOpen = true; });
-            _syncPaneShells();
-            if (window.monolithApi) { window.monolithApi.set_config('cmdPanelOpen', true).catch(function () {}); }
-            return;
-        }
         var group = _getActiveGroup(); if (group) group.isOpen = true;
         if (cmdPanel) {
             cmdPanel.classList.add('open');
@@ -1368,12 +1200,6 @@
 
     function hideCmdPanel(persist) {
         _cmdPanelOpen = false;
-        if (_isPerPaneMode()) {
-            _mainTabPanels.forEach(function (group) { group.isOpen = false; });
-            _syncPaneShells();
-            if (persist !== false && window.monolithApi) { window.monolithApi.set_config('cmdPanelOpen', false).catch(function () {}); }
-            return;
-        }
         var group = _getActiveGroup(); if (group) group.isOpen = false;
         if (cmdPanel) {
             cmdPanel.classList.add('anim-close');
@@ -2092,10 +1918,6 @@
     SM.setCmdPanelDock = setCmdPanelDock;
     SM.getCmdPanelDock = getCmdPanelDock;
     SM.onMainTabFocusChanged = onMainTabFocusChanged;
-    SM.setCmdPanelFollow = setCmdPanelFollow;
-    SM.getPaneShell = function (mainTabId) { return _paneShells.get(mainTabId) || null; };
-    SM.closePaneShell = closePaneShell;
-    SM.onPaneTreeChanged = function () { _syncPaneShells(); };
     SM.restorePanelState = function () {
         if (typeof Terminal === 'undefined' || !window.monolithApi) return;
         var restore = function () {

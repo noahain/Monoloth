@@ -23,7 +23,10 @@ class FakeElement {
         this.dataset = {};
         this.eventListeners = {};
         this.parentNode = null;
-        this.style = {};
+        this.style = {
+            setProperty(name, value) { this[name] = value; },
+            removeProperty(name) { delete this[name]; }
+        };
         this.offsetParent = {};
         this.offsetWidth = 800;
         this.offsetHeight = 600;
@@ -822,7 +825,7 @@ test('ungroupTab collapses the pane but keeps the session alive', async () => {
     assert.equal(MT.getTab('mtab-2').container.parentNode, host);
 });
 
-test('stale drag flag does not swallow the next tab click', async () => {
+test('click after a lost drag release focuses the tab', async () => {
     const harness = createHarness({ type: 'none', layer: 'behind', transparency: 75 });
     const MT = harness.context.window.MonolithTerminal;
     const doc = harness.context.document;
@@ -882,8 +885,10 @@ test('refits terminals once document fonts settle', async () => {
 
 test('style.css keeps the solid-bg mask on the transparency overrides', () => {
     const css = fs.readFileSync('frontend/style.css', 'utf8');
-    assert.equal((css.match(/background: var\(--terminal-solid-bg, transparent\) !important;\r?/g) || []).length, 2,
-        'both .xterm transparency overrides must fall back through --terminal-solid-bg so opaque modes can mask the snap slack');
+    assert.equal((css.match(/background: var\(--terminal-solid-bg, transparent\) !important;\r?/g) || []).length, 1,
+        '.xterm transparency override must fall back through --terminal-solid-bg so opaque modes can mask the snap slack');
     assert.equal((css.match(/^ {4}background: var\(--terminal-solid-bg, transparent\);\r?$/gm) || []).length, 1,
         '.main-tab-terminal transparency override must fall back through --terminal-solid-bg');
+    assert.equal((css.match(/^ {4}background-color: var\(--terminal-solid-bg, transparent\);\r?$/gm) || []).length, 1,
+        '.cmd-panel-terminal must paint the snap slack in the terminal color');
 });

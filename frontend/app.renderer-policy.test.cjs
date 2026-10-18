@@ -38,7 +38,10 @@ class FakeElement {
         this.dataset = {};
         this.eventListeners = {};
         this.parentNode = null;
-        this.style = {};
+        this.style = {
+            setProperty(name, value) { this[name] = value; },
+            removeProperty(name) { delete this[name]; }
+        };
         this.offsetParent = {};
         this.offsetWidth = 800;
         this.offsetHeight = 600;

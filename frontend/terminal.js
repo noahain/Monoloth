@@ -143,7 +143,6 @@
         tabItem.classList.add('entering');
 
         tabItem.addEventListener('click', function (e) {
-            if (_suppressTabClick) { _suppressTabClick = false; return; }
             if (e.target.classList.contains('main-tab-close')) {
                 e.stopPropagation();
                 closeTab(tabId);
@@ -216,14 +215,16 @@
                 _paneTree = { type: 'leaf', tabId: tabId };
             }
         }
+        var previousTabId = _activeTabId;
+        _activeTabId = tabId;
         _focusedTabId = tabId;
         renderPaneTree();
 
-        if (_activeTabId && _activeTabId !== tabId) {
-            var oldTab = _tabs.get(_activeTabId);
+        if (previousTabId && previousTabId !== tabId) {
+            var oldTab = _tabs.get(previousTabId);
             if (oldTab) {
-                if (!_leafForTab(_paneTree, _activeTabId)) oldTab.container.classList.remove('active');
-                var oldItem = _findTabItem(_activeTabId);
+                if (!_leafForTab(_paneTree, previousTabId)) oldTab.container.classList.remove('active');
+                var oldItem = _findTabItem(previousTabId);
                 if (oldItem) oldItem.classList.remove('active');
                 updateBusyDot(oldTab);
             }
@@ -238,7 +239,6 @@
             void newItem.offsetWidth;
             newItem.classList.add('entering');
         }
-        _activeTabId = tabId;
         updateBusyDot(tab);
         if (window.MonolothApp && window.MonolothApp.setEditingProfile) {
             window.MonolothApp.setEditingProfile(tab.profile);
@@ -1000,7 +1000,6 @@
     }
 
     var _tabDrag = null;
-    var _suppressTabClick = false;
 
     function _slotRects() {
         var out = [];
@@ -1044,7 +1043,6 @@
         if (!_tabDrag.active) {
             if (Math.abs(e.clientX - _tabDrag.startX) < 5 && Math.abs(e.clientY - _tabDrag.startY) < 5) return;
             _tabDrag.active = true;
-            _suppressTabClick = true;
             document.body.classList.add('tab-dragging');
             var item = _findTabItem(_tabDrag.tabId);
             if (item) item.classList.add('dragging');
@@ -1066,7 +1064,6 @@
         var item = _findTabItem(drag.tabId);
         if (item) item.classList.remove('dragging');
         hideSnapOverlay();
-        _suppressTabClick = false;
         if (!commit || !drag.active) return;
         if (!drag.target) return;
         if (drag.target.type === 'pane') moveTabToPaneEdge(drag.tabId, drag.target.tabId, drag.target.edge);
@@ -1132,9 +1129,6 @@
                 tab.container.classList.remove('active');
             }
         });
-        if (window.SidebarManager && typeof window.SidebarManager.onPaneTreeChanged === 'function') {
-            window.SidebarManager.onPaneTreeChanged();
-        }
         _renderTabCapsule();
     }
 
@@ -1182,10 +1176,7 @@
     function refit() {
         applyResize();
     }
-
-    function refitActiveTab() {
-        applyResize();
-    }
+    var refitActiveTab = refit;
 
     // Global resize listener (once, for all tabs — applies to active tab).
     // window.resize and the ResizeObserver share the same debounce, so they

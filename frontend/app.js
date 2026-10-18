@@ -1525,6 +1525,11 @@
         return (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && !isXtermHelper;
     }
 
+    var SPLIT_ACTIONS = [
+        { shortcut: 'split_pane_right', direction: 'row' },
+        { shortcut: 'split_pane_down', direction: 'column' }
+    ];
+
     document.addEventListener('keydown', function (e) {
         if (_editingShortcutKey && shortcutEditMode && shortcutEditMode.style.display !== 'none') return;
         if (window.MonolithFilePicker && window.MonolithFilePicker.isActive()) return;
@@ -1562,18 +1567,14 @@
             }
             return;
         }
-        var splitActions = [
-            { shortcut: 'split_pane_right', direction: 'row' },
-            { shortcut: 'split_pane_down', direction: 'column' }
-        ];
-        for (var sp = 0; sp < splitActions.length; sp++) {
-            if (!window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut(splitActions[sp].shortcut))) continue;
+        for (var sp = 0; sp < SPLIT_ACTIONS.length; sp++) {
+            if (!window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut(SPLIT_ACTIONS[sp].shortcut))) continue;
             if (isTypingInInput()) continue;
             var splitView = document.getElementById('terminal-view');
             if (!splitView || !splitView.classList.contains('active')) continue;
             e.preventDefault();
             if (typeof window.MonolithTerminal !== 'undefined' && typeof window.MonolithTerminal.splitFocusedPane === 'function') {
-                window.MonolithTerminal.splitFocusedPane(splitActions[sp].direction);
+                window.MonolithTerminal.splitFocusedPane(SPLIT_ACTIONS[sp].direction);
             }
             return;
         }
@@ -2015,7 +2016,6 @@
                 }
             });
         }
-
     }
 
     // Add profile button â€” moved to profiles.js (window.MonolithProfiles)

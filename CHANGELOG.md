@@ -10,13 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Terminal tab split panes: split right/down from the tab context menu or keyboard, draggable dividers, drag a tab onto a pane edge (or back to the tab bar to ungroup), split groups render as capsules and park in the tab bar when unfocused, Escape cancels any drag.
 - Command panel dock positions: dock bottom (default) or top/left/right by dragging its tab bar against a window edge; the position is saved to the global config and restored on launch. Resize handles per axis, and sizes remembered separately for top/bottom (height) and left/right (width) docks.
-- Command panel Follow modes: focus the active pane, pin the first pane, or give each pane its own panel (`per-pane`) — set `cmdPanelFollow` in the config file.
 - `Ctrl+Alt+ArrowRight` / `Ctrl+ArrowDown` split shortcuts with Settings rows and reset.
 
 ### Fixed
 - Split shortcuts no longer swallow keystrokes outside the terminal view and no longer fire while typing in a UI input; keys reach the app with terminal focus.
 - Drag gestures (tab drag, pane divider, panel dock) no longer latch when the mouse button is released outside the window, and a lost release no longer swallows the next tab click.
-- Per-pane panel shells follow dock orientation and resize from the right edge when docked left/right.
 - Main terminal content now uses the full terminal area: the fit proposal no longer subtracts a phantom 14 px scrollbar gutter (xterm renders ~2 columns wider), and the transparency-override rules fall back through the solid terminal background var so the sub-cell slack left by grid snapping paints in the terminal color instead of the window backdrop.
 - Terminal grids refit themselves once web fonts finish loading, so a late `font-display: swap` no longer leaves columns/rows sized against stale cell metrics.
 

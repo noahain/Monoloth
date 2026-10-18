@@ -190,14 +190,8 @@
     function publishTerminalSolidBg(bg) {
         var root = document.documentElement;
         if (!root || !root.style) return;
-        if (bg === 'transparent') {
-            if (root.style.removeProperty) root.style.removeProperty('--terminal-solid-bg');
-            else delete root.style['--terminal-solid-bg'];
-        } else if (root.style.setProperty) {
-            root.style.setProperty('--terminal-solid-bg', bg);
-        } else {
-            root.style['--terminal-solid-bg'] = bg;
-        }
+        if (bg === 'transparent') root.style.removeProperty('--terminal-solid-bg');
+        else root.style.setProperty('--terminal-solid-bg', bg);
     }
 
     function computeTermBgColors(bgType, bgLayer) {

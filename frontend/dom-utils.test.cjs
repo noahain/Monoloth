@@ -12,6 +12,13 @@ function escapeBrowser(text) {
         .replace(/'/g, '&#39;');
 }
 
+function createStyleShim() {
+    return {
+        setProperty: function (name, value) { this[name] = value; },
+        removeProperty: function (name) { delete this[name]; }
+    };
+}
+
 function loadDomUtils(opts) {
     opts = opts || {};
     var userAgent = opts.userAgent || '';
@@ -39,7 +46,7 @@ function loadDomUtils(opts) {
                     contains: function (cls) { return (opts.bodyClasses || []).indexOf(cls) !== -1; }
                 }
             },
-            documentElement: { style: opts.documentElementStyle || {} }
+            documentElement: { style: opts.documentElementStyle || createStyleShim() }
         },
         navigator: { userAgent: userAgent },
         window: windowObj
@@ -131,7 +138,7 @@ test('getCore returns core when available', function () {
 });
 
 test('opaque none-mode background sets --terminal-solid-bg on the html root', function () {
-    var style = {};
+    var style = createStyleShim();
     var loaded = loadDomUtils({ documentElementStyle: style });
     var tc = loaded.UI.computeTermBgColors('none', 'behind');
     assert.equal(tc.background, '#0a0a0a');
@@ -139,7 +146,7 @@ test('opaque none-mode background sets --terminal-solid-bg on the html root', fu
 });
 
 test('light-mode opaque background publishes #f5f5f5 as --terminal-solid-bg', function () {
-    var style = {};
+    var style = createStyleShim();
     var loaded = loadDomUtils({ bodyClasses: ['adaptive-light'], documentElementStyle: style });
     var tc = loaded.UI.computeTermBgColors('none', 'behind');
     assert.equal(tc.background, '#f5f5f5');
@@ -147,7 +154,7 @@ test('light-mode opaque background publishes #f5f5f5 as --terminal-solid-bg', fu
 });
 
 test('swapping to a transparent terminal background clears --terminal-solid-bg', function () {
-    var style = {};
+    var style = createStyleShim();
     var loaded = loadDomUtils({ documentElementStyle: style });
     loaded.UI.computeTermBgColors('none', 'behind');
     assert.equal(style['--terminal-solid-bg'], '#0a0a0a');
@@ -156,7 +163,7 @@ test('swapping to a transparent terminal background clears --terminal-solid-bg',
 });
 
 test('overlay wallpaper keeps an opaque #000000 terminal background var', function () {
-    var style = {};
+    var style = createStyleShim();
     var loaded = loadDomUtils({ documentElementStyle: style });
     var tc = loaded.UI.computeTermBgColors('image', 'overlay');
     assert.equal(tc.background, '#000000');
