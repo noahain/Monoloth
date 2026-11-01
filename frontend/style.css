@@ -6821,6 +6821,14 @@ body.dock-left #terminal-view.sidebar-visible.has-sidebar-right #cmd-panel {
 
 .side-dock-view-container.active { display: flex; }
 
+body.custom-titlebar-active .side-dock {
+    padding-top: 30px;
+}
+
+#side-dock ::-webkit-scrollbar {
+    display: none;
+}
+
 body.light-mode .side-dock,
 body.adaptive-light .side-dock {
     background: rgba(255, 255, 255, 0.6);
