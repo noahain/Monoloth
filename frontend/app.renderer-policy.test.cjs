@@ -302,6 +302,9 @@ function createHarness(backgroundConfig) {
     const sideDockFilesSource = fs.readFileSync('frontend/side-dock-files.js', 'utf8');
     vm.runInContext(sideDockFilesSource, context, { filename: 'frontend/side-dock-files.js' });
 
+    const sideDockGitSource = fs.readFileSync('frontend/side-dock-git.js', 'utf8');
+    vm.runInContext(sideDockGitSource, context, { filename: 'frontend/side-dock-git.js' });
+
     const filePickerSource = fs.readFileSync('frontend/file-picker.js', 'utf8');
     vm.runInContext(filePickerSource, context, { filename: 'frontend/file-picker.js' });
 
