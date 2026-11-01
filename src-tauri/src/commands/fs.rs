@@ -347,6 +347,44 @@ fn get_volume_label(drive: &str) -> Option<String> {
     }
 }
 
+#[tauri::command]
+pub fn rename_path(from: String, to: String) -> Result<(), String> {
+    let trimmed = to.trim();
+    if trimmed.is_empty() {
+        return Err("Name cannot be empty".to_string());
+    }
+    if trimmed.contains('/') || trimmed.contains('\\') || trimmed == ".." || trimmed == "." {
+        return Err("Name cannot contain a path separator".to_string());
+    }
+    let source = parse_path(&from);
+    if !source.exists() {
+        return Err("Source does not exist".to_string());
+    }
+    let parent = source
+        .parent()
+        .ok_or_else(|| "Cannot rename a filesystem root".to_string())?;
+    let target = parent.join(trimmed);
+    if target.exists() {
+        return Err("A file or folder with that name already exists".to_string());
+    }
+    fs::rename(&source, &target).map_err(|e| format!("Failed to rename: {}", e))
+}
+
+#[tauri::command]
+pub fn delete_path(path: String) -> Result<(), String> {
+    let resolved = parse_path(&path);
+    if resolved.parent().is_none() {
+        return Err("Refusing to delete a filesystem root".to_string());
+    }
+    let meta = fs::symlink_metadata(&resolved)
+        .map_err(|e| format!("Failed to stat path: {}", e))?;
+    if meta.is_dir() {
+        fs::remove_dir_all(&resolved).map_err(|e| format!("Failed to delete folder: {}", e))
+    } else {
+        fs::remove_file(&resolved).map_err(|e| format!("Failed to delete file: {}", e))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -363,5 +401,68 @@ mod tests {
         let info = get_path_info("/__monoloth_test_definitely_does_not_exist__".to_string());
         assert!(info.success, "command must succeed even when the path is missing — success is for command success, not path existence");
         assert!(!info.exists, "non-existent path must report exists=false");
+    }
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("monoloth-test-{}-{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn rename_path_moves_a_file() {
+        let dir = temp_dir("rename-ok");
+        let from = dir.join("a.txt");
+        std::fs::write(&from, "x").unwrap();
+        rename_path(from.to_string_lossy().into(), "b.txt".into()).unwrap();
+        assert!(dir.join("b.txt").exists());
+        assert!(!dir.join("a.txt").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rename_path_refuses_an_existing_destination() {
+        let dir = temp_dir("rename-exists");
+        std::fs::write(dir.join("a.txt"), "x").unwrap();
+        std::fs::write(dir.join("b.txt"), "y").unwrap();
+        let err = rename_path(
+            dir.join("a.txt").to_string_lossy().into(),
+            "b.txt".into(),
+        )
+        .unwrap_err();
+        assert!(err.contains("already exists"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rename_path_refuses_a_separator() {
+        let dir = temp_dir("rename-sep");
+        std::fs::write(dir.join("a.txt"), "x").unwrap();
+        let err = rename_path(dir.join("a.txt").to_string_lossy().into(), "sub/b.txt".into())
+            .unwrap_err();
+        assert!(err.contains("separator"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn delete_path_removes_a_file() {
+        let dir = temp_dir("delete-file");
+        let target = dir.join("a.txt");
+        std::fs::write(&target, "x").unwrap();
+        delete_path(target.to_string_lossy().into()).unwrap();
+        assert!(!target.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn delete_path_removes_a_non_empty_directory() {
+        let dir = temp_dir("delete-dir");
+        let nested = dir.join("sub");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(nested.join("a.txt"), "x").unwrap();
+        delete_path(nested.to_string_lossy().into()).unwrap();
+        assert!(!nested.exists());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
