@@ -6870,6 +6870,40 @@ body.cta-outline .side-dock {
     }
 }
 
+.side-dock-breadcrumb {
+    padding: 6px 10px;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--modal-text-muted, #888);
+    white-space: nowrap;
+    overflow-x: auto;
+    flex-shrink: 0;
+}
+
+.side-dock-crumb-sep { margin: 0 4px; }
+
+.side-dock-tree {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+}
+
+.side-dock-row {
+    padding: 3px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--modal-text, #ddd);
+}
+
+.side-dock-row:hover { background: var(--modal-hover-bg, rgba(255, 255, 255, 0.08)); }
+.side-dock-row.is-dir .side-dock-row-name { font-weight: 500; }
+.side-dock-empty, .side-dock-error { padding: 12px; color: var(--modal-text-muted, #888); font-size: 0.75rem; }
+.side-dock-retry { margin-left: 8px; }
+
 .cmd-panel-toolbar {
     display: flex;
     align-items: center;
