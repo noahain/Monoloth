@@ -129,6 +129,7 @@
         { id: 'open_folder', name: 'Open Project Folder', icon: 'folder' },
         { id: 'open_cmd_project', name: 'Open CMD in Project', icon: 'external-terminal' },
         { id: 'open_cmd_panel', name: 'Open CMD Panel', icon: 'terminal' },
+        { id: 'toggle_side_dock', name: 'Toggle Side Dock (Ctrl+Shift+B)', icon: 'tab' },
         { id: 'copy_path', name: 'Copy Current Path', icon: 'copy' }
     ];
 
@@ -253,6 +254,7 @@
                     case 'open_folder': btn.addEventListener('click', handleOpenFolder); break;
                     case 'open_cmd_project': btn.addEventListener('click', handleOpenCmdProject); break;
                     case 'open_cmd_panel': btn.addEventListener('click', handleOpenCmdPanel); break;
+                    case 'toggle_side_dock': btn.addEventListener('click', function () { window.MonolithSideDock.toggle(); }); break;
                     case 'copy_path': btn.addEventListener('click', handleCopyPath); break;
                 }
             } else {
@@ -294,7 +296,8 @@
                 { id: 'open_folder', visible: true, order: 0 },
                 { id: 'open_cmd_project', visible: true, order: 1 },
                 { id: 'open_cmd_panel', visible: true, order: 2 },
-                { id: 'copy_path', visible: true, order: 3 }
+                { id: 'toggle_side_dock', visible: true, order: 3 },
+                { id: 'copy_path', visible: true, order: 4 }
             ],
             customButtons: [],
             customButtonCounter: 0
@@ -364,7 +367,13 @@
     function cleanSidebarButtons(buttons) {
         var validIds = {};
         DEFAULT_BUTTONS.forEach(function (b) { validIds[b.id] = true; });
-        return buttons.filter(function (b) { return validIds[b.id]; });
+        var cleaned = buttons.filter(function (b) { return validIds[b.id]; });
+        DEFAULT_BUTTONS.forEach(function (def, index) {
+            if (!cleaned.some(function (b) { return b.id === def.id; })) {
+                cleaned.push({ id: def.id, visible: true, order: 100 + index });
+            }
+        });
+        return cleaned;
     }
 
     // ---- Config ----
@@ -729,6 +738,9 @@
         if (!group) return;
         var snap = Array.from(group.tabs.keys());
         snap.forEach(function (tabId) { _doCloseTab(tabId); });
+        if (window.MonolithSideDock) {
+            window.MonolithSideDock.disposeGroup(mainTabId);
+        }
         _mainTabPanels.delete(mainTabId);
         if (window.monolithApi && typeof window.monolithApi.retire_panel_tabs_for_main_tab === 'function') {
             window.monolithApi.retire_panel_tabs_for_main_tab(mainTabId).catch(function () {});
@@ -740,6 +752,9 @@
             var snap = Array.from(group.tabs.keys());
             snap.forEach(function (tabId) { _doCloseTab(tabId); });
         });
+        if (window.MonolithSideDock) {
+            window.MonolithSideDock.disposeAll();
+        }
         _mainTabPanels.clear();
         hideCmdPanel(false);
     }
@@ -766,6 +781,9 @@
         }
 
         _activeMainTabId = mainTabId;
+        if (window.MonolithSideDock) {
+            window.MonolithSideDock.onMainTabChange(mainTabId, _getMainTabDir(mainTabId));
+        }
         var isNewGroup = !_mainTabPanels.has(mainTabId);
         var group = _ensurePanelGroup(mainTabId);
         if (isNewGroup && _cmdPanelOpen) {
@@ -1873,7 +1891,15 @@
     SM.hideTabExitBanner = hideTabExitBanner;
     SM.getTabCount = getTabCount;
     SM.getActiveTabId = function () { var g = _getActiveGroup(); return g ? g.activeTabId : null; };
-    SM.initForMainTab = function (mainTabId) { _activeMainTabId = mainTabId; _ensurePanelGroup(mainTabId); };
+    SM.initForMainTab = function (mainTabId) {
+        _activeMainTabId = mainTabId;
+        _ensurePanelGroup(mainTabId);
+        if (window.MonolithSideDock) {
+            window.MonolithSideDock.onMainTabChange(mainTabId, _getMainTabDir(mainTabId));
+        }
+    };
+    SM.getActiveMainTabId = function () { return _activeMainTabId; };
+    SM.getActiveMainTabDir = function () { return _activeMainTabId ? _getMainTabDir(_activeMainTabId) : ''; };
     SM.switchToMainTab = switchToMainTab;
     SM.initTabXterm = initTabXterm;
     SM.writeToTab = function (tabId, data, eof) {

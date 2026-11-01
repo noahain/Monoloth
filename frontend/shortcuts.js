@@ -16,6 +16,7 @@
         settings: 'Ctrl+,',
         toggle_sidebar: 'Ctrl+B',
         cmd_panel: 'Ctrl+J',
+        toggle_side_dock: 'Ctrl+Shift+B',
         clear_terminal: 'Ctrl+K',
         switch_profile: 'Ctrl+Shift+P',
         back_to_launcher: 'Ctrl+Shift+W',

@@ -1558,6 +1558,10 @@
             e.preventDefault();
             if (typeof window.SidebarManager !== 'undefined') window.SidebarManager.toggleCmdPanel();
         }
+        if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('toggle_side_dock'))) {
+            e.preventDefault();
+            window.MonolithSideDock.toggle();
+        }
         if (window.MonolithShortcuts.shortcutMatches(e, window.MonolithShortcuts.getShortcut('new_main_tab'))) {
             e.preventDefault();
             var isTermView = document.getElementById('terminal-view');
