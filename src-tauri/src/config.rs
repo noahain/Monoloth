@@ -148,6 +148,7 @@ const GLOBAL_KEYS: &[&str] = &[
     "use_custom_titlebar", "window_x", "window_y",
     "cmdPanelHeight", "cmdPanelWidth", "panelShell", "cmdPanelOpen", "sidebar_config",
     "cmdPanelDock",
+    "sideDockOpen", "sideDockWidth",
     "recent_directories", "confirm_dialog_prefs",
     "tabBarPosition", "preset_cache",
 ];

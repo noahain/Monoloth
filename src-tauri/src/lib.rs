@@ -309,6 +309,8 @@ pub fn run() {
             commands::get_drives,
             commands::get_path_info,
             commands::get_file_preview,
+            commands::rename_path,
+            commands::delete_path,
             commands::start_terminal,
             commands::send_input,
             commands::resize_terminal,

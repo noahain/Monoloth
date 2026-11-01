@@ -40,6 +40,15 @@
         });
     }
 
+    function callApiStrict(cmd, args, transform) {
+        return callApi(cmd, args, transform).then(function (response) {
+            if (response && response.success === false) {
+                throw new Error(response.error || 'Request failed');
+            }
+            return response;
+        });
+    }
+
     // callApiValue: invoke a command and return the raw result, with a fallback on error.
     function callApiValue(cmd, args, fallback) {
         return invoke(cmd, args || {}).catch(function () { return fallback; });
@@ -105,6 +114,14 @@
     // --- File Picker ---
     api.list_directory = function (path) {
         return callApi('list_directory', { path: path }, function (entries) { return { entries: entries }; });
+    };
+
+    api.rename_path = function (from, to) {
+        return callApiStrict('rename_path', { from: from, to: to });
+    };
+
+    api.delete_path = function (path) {
+        return callApiStrict('delete_path', { path: path });
     };
 
     api.get_drives = function () {
