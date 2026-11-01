@@ -124,6 +124,10 @@
         return callApiStrict('delete_path', { path: path });
     };
 
+    api.run_git = function (cwd, args) {
+        return callApiStrict('run_git', { cwd: cwd, args: args }, function (r) { return r; });
+    };
+
     api.get_drives = function () {
         return callApiValue('get_drives', {}, []);
     };

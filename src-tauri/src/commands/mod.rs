@@ -3,6 +3,7 @@ use std::process::Command;
 
 mod config;
 mod fs;
+mod git;
 mod history;
 mod image;
 mod profile;
@@ -13,6 +14,7 @@ mod window;
 
 pub use config::*;
 pub use fs::*;
+pub use git::*;
 pub use history::*;
 pub use image::*;
 pub use profile::*;
