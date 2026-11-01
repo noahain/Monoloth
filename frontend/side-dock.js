@@ -90,6 +90,9 @@
         isOpen = next;
         dock.classList.toggle('open', isOpen);
         persist('sideDockOpen', isOpen);
+        if (window.SidebarManager && typeof window.SidebarManager.syncSideDockButton === 'function') {
+            window.SidebarManager.syncSideDockButton();
+        }
         if (isOpen) {
             applyWidth();
             render();

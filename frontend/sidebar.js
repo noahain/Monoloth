@@ -279,9 +279,17 @@
             customButtons.forEach(appendButton);
         }
 
+        syncSideDockButton();
+
         if (window.MonolothTooltip) {
             window.MonolothTooltip.scan(sidebarButtons);
         }
+    }
+
+    function syncSideDockButton() {
+        var btn = sidebarButtons.querySelector('[data-btn-id="toggle_side_dock"]');
+        if (!btn) return;
+        btn.classList.toggle('active', !!(window.MonolithSideDock && window.MonolithSideDock.isOpen()));
     }
 
     function findDefaultButton(id) {
@@ -1900,6 +1908,7 @@
     };
     SM.getActiveMainTabId = function () { return _activeMainTabId; };
     SM.getActiveMainTabDir = function () { return _activeMainTabId ? _getMainTabDir(_activeMainTabId) : ''; };
+    SM.syncSideDockButton = syncSideDockButton;
     SM.switchToMainTab = switchToMainTab;
     SM.initTabXterm = initTabXterm;
     SM.writeToTab = function (tabId, data, eof) {
