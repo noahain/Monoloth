@@ -6269,9 +6269,19 @@ body:not(.custom-titlebar-active) { --titlebar-height: 0px; }
 #terminal-container {
     position: relative;
     flex: 1;
+    min-width: 0;
     min-height: 0;
     display: flex;
     flex-direction: column;
+    transition: margin-left 0.2s ease, margin-right 0.2s ease;
+}
+
+#workspace {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: row;
     transition: margin-left 0.2s ease, margin-right 0.2s ease;
 }
 
@@ -6566,13 +6576,13 @@ body.adaptive-light.cta-outline .monoloth-tooltip {
 
 /* Sidebar positioning (left/right) */
 #terminal-view.sidebar-visible.has-sidebar-left #sidebar { left: 0; right: auto; }
-#terminal-view.sidebar-visible.has-sidebar-left #terminal-container,
+#terminal-view.sidebar-visible.has-sidebar-left #workspace,
 #terminal-view.sidebar-visible.has-sidebar-left #cmd-panel {
     margin-left: 48px;
 }
 
 #terminal-view.sidebar-visible.has-sidebar-right #sidebar { left: auto; right: 0; }
-#terminal-view.sidebar-visible.has-sidebar-right #terminal-container,
+#terminal-view.sidebar-visible.has-sidebar-right #workspace,
 #terminal-view.sidebar-visible.has-sidebar-right #cmd-panel {
     margin-right: 48px;
 }
@@ -6721,13 +6731,13 @@ body.cta-outline.dock-right #cmd-panel {
 }
 
 /* Sidebar x side-dock: single rail inset, no cumulative margins */
-body.dock-left #terminal-view.sidebar-visible.has-sidebar-left #terminal-container {
+body.dock-left #terminal-view.sidebar-visible.has-sidebar-left #workspace {
     margin-left: 0;
 }
 body.dock-right #terminal-view.sidebar-visible.has-sidebar-left #cmd-panel {
     margin-left: 0;
 }
-body.dock-right #terminal-view.sidebar-visible.has-sidebar-right #terminal-container {
+body.dock-right #terminal-view.sidebar-visible.has-sidebar-right #workspace {
     margin-right: 0;
 }
 body.dock-left #terminal-view.sidebar-visible.has-sidebar-right #cmd-panel {

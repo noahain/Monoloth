@@ -577,6 +577,7 @@
     <div id="sidebar" class="sidebar" style="display:none;" data-tauri-drag-region>
         <div id="sidebar-buttons" class="sidebar-buttons" data-tauri-drag-region></div>
     </div>
+        <div id="workspace">
         <div class="terminal-container" id="terminal-container">
             <div class="main-tab-bar" id="main-tab-bar">
                 <div class="main-tab-tabs" id="main-tab-tabs">
@@ -586,6 +587,21 @@
             <div class="main-tab-host" id="main-tab-host">
                 <div id="terminal-bg-overlay"></div>
             </div>
+        </div>
+        <div id="side-dock" class="side-dock">
+            <div class="side-dock-resize-handle" id="side-dock-resize-handle"></div>
+            <div class="side-dock-header">
+                <div class="side-dock-views" id="side-dock-views">
+                    <button class="side-dock-view" data-view="files" data-tooltip="Files">Files</button>
+                    <button class="side-dock-view" data-view="git" data-tooltip="Git">Git</button>
+                </div>
+                <button class="side-dock-close" id="side-dock-close" data-tooltip="Close Side Dock (Ctrl+Shift+B)">&times;</button>
+            </div>
+            <div class="side-dock-body" id="side-dock-body">
+                <div class="side-dock-view-container" id="side-dock-files"></div>
+                <div class="side-dock-view-container" id="side-dock-git"></div>
+            </div>
+        </div>
         </div>
         <!-- CMD Panel -->
         <div id="cmd-panel" class="cmd-panel">
