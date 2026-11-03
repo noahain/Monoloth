@@ -121,6 +121,44 @@
         });
     }
 
+    var _choiceOverlay = null;
+
+    function showChoice(title, buttons) {
+        return new Promise(function (resolve) {
+            var overlay = document.createElement('div');
+            overlay.className = 'inline-dialog-choice';
+            overlay.innerHTML =
+                '<div class="id-modal">' +
+                    '<div class="id-header"><span class="id-title">' + escapeHtml(title) + '</span></div>' +
+                    '<div class="id-body id-choice-body">' +
+                        buttons.map(function (label, index) {
+                            return '<button class="id-btn-primary id-choice-btn" data-index="' + index + '">' + escapeHtml(label) + '</button>';
+                        }).join('') +
+                    '</div>' +
+                '</div>';
+            document.body.appendChild(overlay);
+            _choiceOverlay = overlay;
+
+            function done(index) {
+                overlay.remove();
+                _choiceOverlay = null;
+                document.removeEventListener('keydown', onKey);
+                resolve(index);
+            }
+
+            function onKey(event) {
+                if (event.key === 'Escape') done(buttons.length - 1);
+            }
+
+            overlay.addEventListener('click', function (event) {
+                var btn = event.target.closest('.id-choice-btn');
+                if (btn) done(Number(btn.getAttribute('data-index')));
+            });
+
+            document.addEventListener('keydown', onKey);
+        });
+    }
+
     function confirmBackToLauncher() {
         return showConfirm('Return to Launcher', 'Return to launcher? The current session will be terminated.', 'return_to_launcher');
     }
@@ -141,12 +179,13 @@
     }
 
     function isDialogActive() {
-        return !!(idEl && idEl.classList.contains('active'));
+        return !!_choiceOverlay || !!(idEl && idEl.classList.contains('active'));
     }
 
     window.MonolithDialog = {
         showPrompt: showPrompt,
         showConfirm: showConfirm,
+        showChoice: showChoice,
         confirmBackToLauncher: confirmBackToLauncher,
         closeDialog: closeDialog,
         loadConfirmPrefs: loadConfirmPrefs,

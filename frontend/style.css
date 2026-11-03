@@ -3994,6 +3994,18 @@ body.light-mode .id-btn-primary:hover {
     background: rgba(0, 0, 0, 0.04);
 }
 
+.inline-dialog-choice {
+    position: fixed;
+    inset: 0;
+    z-index: 25000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.id-choice-body { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 16px; }
+
 .id-error {
     font-family: var(--font-mono);
     font-size: 0.7rem;
