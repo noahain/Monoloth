@@ -522,13 +522,33 @@
         var tab = _tabs.get(tabId);
         if (!tab) return;
         force = force || false;
-        if (tab.running && tab.busy && !force) {
-            window.MonolothApp.showConfirm('Close Tab', 'This tab has a running process. Close anyway?', 'close_main_tab')
-                .then(function (confirmed) { if (confirmed) _doCloseTab(tabId); })
-                .catch(function () {});
+
+        function afterDirty() {
+            if (tab.running && tab.busy && !force) {
+                window.MonolothApp.showConfirm('Close Tab', 'This tab has a running process. Close anyway?', 'close_main_tab')
+                    .then(function (confirmed) { if (confirmed) _doCloseTab(tabId); })
+                    .catch(function () {});
+                return;
+            }
+            _doCloseTab(tabId);
+        }
+
+        if (!force && window.MonolithSideDock && window.MonolithSideDock.hasDirty(tabId)) {
+            window.MonolithDialog.showChoice('Unsaved changes', ['Save', 'Discard', 'Cancel']).then(function (choice) {
+                if (choice === 2) return;
+                if (choice === 0) {
+                    window.MonolithSideDockFiles.saveActive(tabId).then(function (ok) {
+                        if (ok) afterDirty();
+                    });
+                    return;
+                }
+                window.MonolithSideDockFiles.discardActive(tabId);
+                afterDirty();
+            });
             return;
         }
-        _doCloseTab(tabId);
+
+        afterDirty();
     }
 
     function _doCloseTab(tabId) {

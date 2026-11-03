@@ -180,6 +180,18 @@
         return group ? group.root : null;
     }
 
+    function saveAll() {
+        var tasks = [];
+        groups.forEach(function (_group, mainTabId) {
+            if (window.MonolithSideDockFiles && window.MonolithSideDockFiles.hasDirty(mainTabId)) {
+                tasks.push(window.MonolithSideDockFiles.saveActive(mainTabId));
+            }
+        });
+        return Promise.all(tasks).then(function (results) {
+            return results.every(Boolean);
+        });
+    }
+
     function loadPersistedState() {
         if (!window.monolithApi || typeof window.monolithApi.get_config !== 'function') return;
         window.monolithApi.get_config('sideDockWidth').then(function (value) {
@@ -237,7 +249,8 @@
         disposeGroup: disposeGroup,
         disposeAll: disposeAll,
         hasDirty: hasDirty,
-        getGroupRoot: getGroupRoot
+        getGroupRoot: getGroupRoot,
+        saveAll: saveAll
     };
 
     loadPersistedState();

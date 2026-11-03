@@ -1471,6 +1471,24 @@
 
     // --- Back to Landing ---
     function backToLanding() {
+        if (window.MonolithSideDock && window.MonolithSideDock.hasDirty()) {
+            window.MonolithDialog.showChoice('Unsaved changes', ['Save', 'Discard', 'Cancel'])
+                .then(function (choice) {
+                    if (choice === 2) return;
+                    if (choice === 0) {
+                        window.MonolithSideDock.saveAll().then(function (ok) {
+                            if (ok) doBackToLanding();
+                        });
+                        return;
+                    }
+                    doBackToLanding();
+                });
+            return;
+        }
+        doBackToLanding();
+    }
+
+    function doBackToLanding() {
         setCurrentView('landing');
         _editingProfile = null;
         loadStartupConfig();
@@ -1981,13 +1999,31 @@
         var tbClose = document.getElementById('tb-close');
         if (tbClose) {
             tbClose.addEventListener('click', function() {
-                if (window.MonolithTerminal.anyRunning()) {
-                    window.MonolithDialog.showConfirm('Exit Monoloth', 'A terminal session is running. Exit anyway?', 'exit_monoloth')
-                        .then(function() { if (window.monolithApi) window.monolithApi.close_window(); })
-                        .catch(function() {});
-                } else {
-                    if (window.monolithApi) window.monolithApi.close_window().catch(function () {});
+                function doExit() {
+                    if (window.MonolithTerminal.anyRunning()) {
+                        window.MonolithDialog.showConfirm('Exit Monoloth', 'A terminal session is running. Exit anyway?', 'exit_monoloth')
+                            .then(function() { if (window.monolithApi) window.monolithApi.close_window(); })
+                            .catch(function() {});
+                    } else {
+                        if (window.monolithApi) window.monolithApi.close_window().catch(function () {});
+                    }
                 }
+
+                if (window.MonolithSideDock && window.MonolithSideDock.hasDirty()) {
+                    window.MonolithDialog.showChoice('Unsaved changes', ['Save', 'Discard', 'Cancel'])
+                        .then(function (choice) {
+                            if (choice === 2) return;
+                            if (choice === 0) {
+                                window.MonolithSideDock.saveAll().then(function (ok) {
+                                    if (ok) doExit();
+                                });
+                                return;
+                            }
+                            doExit();
+                        });
+                    return;
+                }
+                doExit();
             });
         }
 
