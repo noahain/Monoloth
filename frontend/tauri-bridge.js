@@ -128,6 +128,14 @@
         return callApiStrict('run_git', { cwd: cwd, args: args }, function (r) { return r; });
     };
 
+    api.read_text_file = function (path, maxBytes) {
+        return callApiStrict('read_text_file', { path: path, maxBytes: maxBytes }, function (f) { return f; });
+    };
+
+    api.write_text_file = function (path, content) {
+        return callApiStrict('write_text_file', { path: path, content: content });
+    };
+
     api.get_drives = function () {
         return callApiValue('get_drives', {}, []);
     };

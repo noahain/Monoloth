@@ -385,6 +385,48 @@ pub fn delete_path(path: String) -> Result<(), String> {
     }
 }
 
+#[derive(Debug, serde::Serialize)]
+pub struct TextFile {
+    pub content: String,
+    pub truncated: bool,
+    pub size: u64,
+}
+
+#[tauri::command]
+pub fn read_text_file(path: String, max_bytes: u64) -> Result<TextFile, String> {
+    let resolved = parse_path(&path);
+    let meta = fs::metadata(&resolved).map_err(|e| format!("Failed to stat file: {}", e))?;
+    if meta.is_dir() {
+        return Err("Path is a directory".to_string());
+    }
+    let mut reader = fs::File::open(&resolved)
+        .map_err(|e| format!("Failed to open file: {}", e))?
+        .take(max_bytes.saturating_add(1));
+    let mut buf = Vec::new();
+    reader
+        .read_to_end(&mut buf)
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+    let truncated = buf.len() as u64 > max_bytes;
+    if truncated {
+        buf.truncate(max_bytes as usize);
+    }
+    let content = match String::from_utf8(buf) {
+        Ok(text) => text,
+        Err(err) if truncated => {
+            let valid = err.utf8_error().valid_up_to();
+            String::from_utf8_lossy(&err.into_bytes()[..valid]).into_owned()
+        }
+        Err(_) => return Err("binary or non-UTF-8 file".to_string()),
+    };
+    Ok(TextFile { content, truncated, size: meta.len() })
+}
+
+#[tauri::command]
+pub fn write_text_file(path: String, content: String) -> Result<(), String> {
+    let resolved = parse_path(&path);
+    fs::write(&resolved, content).map_err(|e| format!("Failed to write file: {}", e))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -463,6 +505,48 @@ mod tests {
         std::fs::write(nested.join("a.txt"), "x").unwrap();
         delete_path(nested.to_string_lossy().into()).unwrap();
         assert!(!nested.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_text_file_round_trips() {
+        let dir = temp_dir("read-ok");
+        let file = dir.join("a.txt");
+        std::fs::write(&file, "hello").unwrap();
+        let out = read_text_file(file.to_string_lossy().into(), 1024).unwrap();
+        assert_eq!(out.content, "hello");
+        assert!(!out.truncated);
+        assert_eq!(out.size, 5);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_text_file_reports_truncation() {
+        let dir = temp_dir("read-trunc");
+        let file = dir.join("a.txt");
+        std::fs::write(&file, "abcdefghij").unwrap();
+        let out = read_text_file(file.to_string_lossy().into(), 4).unwrap();
+        assert_eq!(out.content, "abcd");
+        assert!(out.truncated);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_text_file_rejects_invalid_utf8() {
+        let dir = temp_dir("read-binary");
+        let file = dir.join("a.bin");
+        std::fs::write(&file, [0xFF, 0xFE, 0x00]).unwrap();
+        let err = read_text_file(file.to_string_lossy().into(), 1024).unwrap_err();
+        assert!(err.contains("binary"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_text_file_round_trips() {
+        let dir = temp_dir("write-ok");
+        let file = dir.join("a.txt");
+        write_text_file(file.to_string_lossy().into(), "saved".into()).unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "saved");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

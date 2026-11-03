@@ -312,6 +312,8 @@ pub fn run() {
             commands::rename_path,
             commands::delete_path,
             commands::run_git,
+            commands::read_text_file,
+            commands::write_text_file,
             commands::start_terminal,
             commands::send_input,
             commands::resize_terminal,
