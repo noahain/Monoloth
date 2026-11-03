@@ -6965,6 +6965,26 @@ body.cta-outline .side-dock {
     max-height: 40%;
 }
 
+.side-dock-editor-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border-dark);
+    flex-shrink: 0;
+    font-size: 0.72rem;
+}
+
+.side-dock-editor-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-dock-dirty { color: var(--accent-blue, #7aa2f7); }
+.side-dock-readonly { padding: 6px 10px; font-size: 0.7rem; color: var(--accent-warning, #e0af68); }
+.side-dock-editor { flex: 1; min-height: 0; overflow: hidden; }
+.side-dock-editor .CodeMirror { height: 100%; font-family: var(--font-mono); font-size: 0.75rem; background: transparent; color: var(--modal-text, #ddd); }
+.side-dock-editor .CodeMirror-gutters { background: transparent; border-right: 1px solid var(--border-dark); }
+.side-dock-editor .CodeMirror-linenumber { color: var(--modal-text-muted, #888); }
+.side-dock-editor .CodeMirror-cursor { border-left: 1px solid var(--modal-text, #ddd); }
+.side-dock-editor .CodeMirror-selected { background: var(--modal-active-bg, rgba(128, 128, 128, 0.3)); }
+
 .cmd-panel-toolbar {
     display: flex;
     align-items: center;
